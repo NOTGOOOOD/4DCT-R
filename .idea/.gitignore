@@ -6,3 +6,9 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+*.xml
+*.pt
+*.png
+*.jpg
+*.mhd
+*.raw
