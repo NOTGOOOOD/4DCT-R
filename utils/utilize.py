@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import cv2
 import process.processing
+from PIL import Image
 import torchvision.transforms as transform
 
 
@@ -71,12 +72,14 @@ def showimg(image: list, cmap='gray'):
         plt.show()
 
 
-def plot_ct_scan(scan, num_column=4, jump=1):
+def plotorsave_ct_scan(scan, option: "str", num_column=4, jump=1, **cfg):
     '''
     画出3D-CT 所有的横断面切片
     :param scan: A NumPy ndarray from a SimpleITK Image
+    :param option:plot or save
     :param num_column:
     :param jump: 间隔多少画图
+    :param cfg: option=plot时启用{head, case, phase ,path} 图像名 head_Case_Phase
     :return:
     '''
     num_slices = len(scan)
@@ -86,7 +89,14 @@ def plot_ct_scan(scan, num_column=4, jump=1):
         plot = plots[i % num_column] if num_row == 1 else plots[i // num_column, i % num_column]
         plot.axis('off')
         if i < num_slices // jump:
-            plot.imshow(scan[i * jump], cmap="gray")
+            if option == 'plot':
+                plot.imshow(scan[i * jump], cmap="gray")
+            elif option == 'save':
+                img = Image.fromarray(scan[i * jump])
+                img_name = cfg["head"] + "_" + f"Case{cfg['case']}" + "_" + f"T{cfg['phase']}.png"
+                img.save(os.path.join(cfg["path"], img_name))
+            else:
+                AssertionError("option: {} ,aug error".format(option))
 
 
 def transform_convert(img, transform):
