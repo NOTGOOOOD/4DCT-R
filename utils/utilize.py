@@ -29,7 +29,14 @@ def get_project_path(project_name):
     return root_path
 
 
-def loadfileToarray(file_folder, datatype, shape=None):
+def loadfile(filename, datatype='float32', shape=None):
+    file_array = np.fromfile(filename, dtype=datatype)
+    if shape:
+        file_array.reshape(shape)
+    return file_array
+
+
+def loadfileFromFolderToarray(file_folder, datatype, shape=None):
     file_name_list = os.listdir(file_folder)
     file_list = []
     for i, file_name in enumerate(file_name_list):
@@ -51,12 +58,13 @@ def loadfileToarray(file_folder, datatype, shape=None):
     return files_array
 
 
-def dvf_save_nii(project_name, dvf_file):
+def dvf_save_nii(project_name, dvf_file, dvf_name):
     project_path = get_project_path(project_name)
-    dvf_path = os.path.join(project_path, dvf_file)
-    dvf = loadfileToarray(dvf_path, np.float32).reshape(3, 150, 256, 256).transpose(2, 3, 1, 0)
+    dvf_path = os.path.abspath(os.path.join(project_path, dvf_file, dvf_name))
+    dvf = loadfile(dvf_path, np.float32).reshape(3, 150, 256, 256).transpose(2, 3, 1, 0)
     sitk_dvf = sitk.GetImageFromArray(dvf)
-    sitk.WriteImage(sitk_dvf, "dvf.nii")
+    sitk.WriteImage(sitk_dvf, f"{dvf_name}.nii")
+    print(f"{dvf_name}.nii 已保存")
 
 
 def showimg(image: list, cmap='gray'):
@@ -79,7 +87,7 @@ def plotorsave_ct_scan(scan, option: "str", num_column=4, jump=1, **cfg):
     :param option:plot or save
     :param num_column:
     :param jump: 间隔多少画图
-    :param cfg: option=plot时启用{head, case, phase ,path} 图像名 head_Case_Phase
+    :param cfg: option=plot时启用{head, case, phase ,path, epoch} 图像名 epoch_head_Case_Phase_i_slice
     :return:
     '''
     num_slices = len(scan)
@@ -93,7 +101,7 @@ def plotorsave_ct_scan(scan, option: "str", num_column=4, jump=1, **cfg):
                 plot.imshow(scan[i * jump], cmap="gray")
             elif option == 'save':
                 img = Image.fromarray(scan[i * jump])
-                img_name = cfg["head"] + "_" + f"Case{cfg['case']}" + "_" + f"T{cfg['phase']}.png"
+                img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice.png"
                 img.save(os.path.join(cfg["path"], img_name))
             else:
                 AssertionError("option: {} ,aug error".format(option))
@@ -129,15 +137,26 @@ def transform_convert(img, transform):
     return img
 
 
+def compute_tre(mov_lmk, ref_lmk, spacing):
+    # TRE, unit: mm
+
+    diff = (ref_lmk - mov_lmk) * spacing
+    diff = torch.Tensor(diff)
+    tre = diff.pow(2).sum(1).sqrt()
+    mean, std = tre.mean(), tre.std()
+    return mean, std, diff
+
+
 if __name__ == '__main__':
     # simpleITK x, y, z
     # numpy z, y, x
 
-    case = 3
-    shape = (104, 256, 256)
-    img_path = f'/home/cqut-415/project/xxf/datasets/dirlab/Case{case}Pack/Images'
-    img_array = loadfileToarray(img_path, np.float16, shape)
-    # showimg(img_array, cmap='gray')
-    img = sitk.GetImageFromArray(img_array[0])
-    scan = sitk.GetArrayFromImage(img)
-    print("1")
+    # case = 3
+    # shape = (104, 256, 256)
+    # img_path = f'/home/cqut-415/project/xxf/datasets/dirlab/Case{case}Pack/Images'
+    # img_array = loadfileToarray(img_path, np.float16, shape)
+    # # showimg(img_array, cmap='gray')
+    # img = sitk.GetImageFromArray(img_array[0])
+    # scan = sitk.GetArrayFromImage(img)
+    # print("1")
+    dvf_save_nii("4DCT-R", "result/general_reg/dvf/", "dvf_phase2")

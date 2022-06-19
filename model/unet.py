@@ -14,7 +14,6 @@ class UNet(nn.Module):
 
     Adapted from https://github.com/jvanvugt/pytorch-unet/blob/master/unet.py
 
-
     Parameters
     ----------
     in_channels : int

@@ -1,1 +1,1 @@
-dirlab权重
+dirlab训练权重

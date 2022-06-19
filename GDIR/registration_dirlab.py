@@ -112,7 +112,6 @@ config = dict(
     dim=3,  # dimension of the input image
     intensity_scale_const=1000.,  # (image - intensity_shift_const)/intensity_scale_const
     intensity_shift_const=1000.,
-    # scale = 0.7,
     scale=0.5,
     initial_channels=32,
     depth=4,
@@ -160,7 +159,7 @@ input_image = (input_image - config.intensity_shift_const) / config.intensity_sc
 # for i in range(10):
 #     utils.utilize.plot_ct_scan(normal_image.clone().detach().numpy()[i, 0, crop_range[0], crop_range[1], crop_range[2]])
 
-# input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
+input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
 image_shape = np.array(input_image.shape[2:])  # (d, h, w)
 num_image = input_image.shape[0]  # number of image in the group
 regnet = model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
@@ -197,9 +196,21 @@ for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
     utils.utilize.plotorsave_ct_scan(res['warped_input_image'], "save", {
+        "epoch": "",
         "head": "tem",
-        "case": "", #########################################################################
+        "case": f"{case}",
+        "phase": "50",
+        "path": "../result/general_reg/dirlab/warped_image"
     })
+
+    utils.utilize.plotorsave_ct_scan(res['template'], "save", {
+        "epoch": "",
+        "head": "tem",
+        "case": f"{case}",
+        "phase": "50",
+        "path": "../result/general_reg/dirlab/template_image"
+    })
+
     total_loss = 0.
     if 'disp_i2t' in res:
         simi_loss = (ncc_loss(res['warped_input_image'], res['template']) + ncc_loss(input_image,
