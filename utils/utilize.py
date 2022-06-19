@@ -90,23 +90,31 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
     :param cfg: option=plot时启用{head, case, phase ,path, epoch} 图像名 epoch_head_Case_Phase_i_slice
     :return:
     '''
-    num_column = 4
-    jump = 1
-    num_slices = len(scan)
-    num_row = (num_slices // jump + num_column - 1) // num_column
-    f, plots = plt.subplots(num_row, num_column, figsize=(num_column * 5, num_row * 5))
-    for i in range(0, num_row * num_column):
-        plot = plots[i % num_column] if num_row == 1 else plots[i // num_column, i % num_column]
-        plot.axis('off')
-        if i < num_slices // jump:
-            if option == 'plot':
-                plot.imshow(scan[i * jump], cmap="gray")
-            elif option == 'save':
-                img = Image.fromarray(scan[i * jump])
-                img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice.png"
-                img.save(os.path.join(cfg["path"], img_name))
-            else:
-                AssertionError("option: {} ,aug error".format(option))
+    if torch.is_tensor(scan):
+        scan_c = scan.clone().cpu()
+        scan_c = scan_c.detach().numpy()
+        # print(scan_c.dtype)
+    else:
+        scan_c = scan
+
+    num_slices = len(scan_c)
+    if option == 'plot':
+        num_column = 4
+        jump = 1
+        num_row = (num_slices // jump + num_column - 1) // num_column
+        f, plots = plt.subplots(num_row, num_column, figsize=(num_column * 5, num_row * 5))
+        for i in range(0, num_row * num_column):
+            plot = plots[i % num_column] if num_row == 1 else plots[i // num_column, i % num_column]
+            plot.axis('off')
+            if i < num_slices // jump:
+                    plot.imshow(scan_c[i * jump], cmap="gray")
+    elif option == 'save':
+        for i in range(0, num_slices, 4):
+            img_ndarry = scan_c[i]
+            img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice.png"
+            save_png(img_ndarry, cfg["path"], img_name)
+    else:
+        AssertionError("option: {} ,aug error".format(option))
 
 
 def transform_convert(img, transform):

@@ -3,7 +3,6 @@ import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 
-
 plot_dpi = 300
 import numpy as np
 import logging, tqdm
@@ -153,14 +152,20 @@ if config.group_index_list is not None:
     input_image = input_image[config.group_index_list]
 
 cp_input_image = input_image.clone()
-normal_image = (cp_input_image - config.intensity_shift_const) / config.intensity_scale_const
+# normal_image = (cp_input_image - config.intensity_shift_const) / config.intensity_scale_const
 input_image = (input_image - config.intensity_shift_const) / config.intensity_scale_const
 
 # after normalize
-# for i in range(10):
-#     utils.utilize.plot_ct_scan(normal_image.clone().detach().numpy()[i, 0, crop_range[0], crop_range[1], crop_range[2]])
-
 input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
+# for i in range(10):
+#     utils.utilize.plotorsave_ct_scan(input_image[i, 0, :, :, :], "plot")
+# for i in range(10):
+#     utils.utilize.plotorsave_ct_scan(input_image[i, 0, :, :, :], "save",
+#                                      epoch=i,
+#                                      head="input_image",
+#                                      case=case,
+#                                      phase=i * 10,
+#                                      path="../result/general_reg/dirlab/warped_image")
 image_shape = np.array(input_image.shape[2:])  # (d, h, w)
 num_image = input_image.shape[0]  # number of image in the group
 regnet = model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
@@ -193,24 +198,26 @@ landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
 diff_stats = []
 stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
+
 for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
-    utils.utilize.plotorsave_ct_scan(res['warped_input_image'], "save", {
-        "epoch": i,
-        "head": "tem",
-        "case": f"{case}",
-        "phase": "50",
-        "path": "../result/general_reg/dirlab/warped_image"
-    })
+    for j in range(10):
+        utils.utilize.plotorsave_ct_scan(res['warped_input_image'][i, 0, :, :, :], "save",
+                                         epoch=i,
+                                         head="warped",
+                                         case=case,
+                                         phase=i * 10,
+                                         path="../result/general_reg/dirlab/warped_image")
 
-    utils.utilize.plotorsave_ct_scan(res['template'], "save", {
-        "epoch": i,
-        "head": "tem",
-        "case": f"{case}",
-        "phase": "50",
-        "path": "../result/general_reg/dirlab/template_image"
-    })
+        utils.utilize.plotorsave_ct_scan(res['warped_input_image'][i, 0, :, :, :], "plot")
+
+    # utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
+    #                                  epoch=i,
+    #                                  head="tem",
+    #                                  case=case,
+    #                                  phase=50,
+    #                                  path="../result/general_reg/dirlab/template_image")
 
     total_loss = 0.
     if 'disp_i2t' in res:
