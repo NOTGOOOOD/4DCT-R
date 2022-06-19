@@ -12,7 +12,7 @@ for i in range(1, 11):
     disp_00_50 = (landmark_50 - landmark_00).astype(np.float32)  # (n, 3)
 
     landmark = {'landmark_00': landmark_00, 'landmark_50': landmark_50, 'disp_00_50': disp_00_50}
-    torch.save(landmark, f'data/Case{case}_300_00_50.pt')
+    torch.save(landmark, f'../data/dirlab/Case{case}_300_00_50.pt')
 
 print("done")
 

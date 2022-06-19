@@ -146,7 +146,7 @@ image_list = [sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, fi
               image_file_list]
 
 #  before normalize
-utils.utilize.plot_ct_scan(image_list[0])
+# utils.utilize.plot_ct_scan(image_list[0])
 
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
@@ -157,9 +157,10 @@ normal_image = (cp_input_image - config.intensity_shift_const) / config.intensit
 input_image = (input_image - config.intensity_shift_const) / config.intensity_scale_const
 
 # after normalize
-utils.utilize.plot_ct_scan(normal_image.clone().detach().numpy()[0, 0, :, :, :])
+# for i in range(10):
+#     utils.utilize.plot_ct_scan(normal_image.clone().detach().numpy()[i, 0, crop_range[0], crop_range[1], crop_range[2]])
 
-input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
+# input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
 image_shape = np.array(input_image.shape[2:])  # (d, h, w)
 num_image = input_image.shape[0]  # number of image in the group
 regnet = model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
@@ -195,7 +196,10 @@ pbar = tqdm.tqdm(range(config.max_num_iteration))
 for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
-
+    utils.utilize.plotorsave_ct_scan(res['warped_input_image'], "save", {
+        "head": "tem",
+        "case": "", #########################################################################
+    })
     total_loss = 0.
     if 'disp_i2t' in res:
         simi_loss = (ncc_loss(res['warped_input_image'], res['template']) + ncc_loss(input_image,
