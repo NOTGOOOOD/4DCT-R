@@ -3,6 +3,7 @@ import torch
 import SimpleITK as sitk
 import numpy as np
 from matplotlib import pyplot as plt
+import ants
 
 # DIRLAB 4DCT 1-10例的 z y x
 case_cfg = {
@@ -40,6 +41,7 @@ def imgTomhd(file_folder, datatype, shape):
 
     print("{} convert done".format(file_folder))
 
+
 def data_standardization_0_255(img):
     ymax = 255
     ymin = 0
@@ -47,6 +49,13 @@ def data_standardization_0_255(img):
     xmin = min(map(min, img))
     img_standardization_0_255 = np.round((ymax - ymin) * (img - xmin) / (xmax - xmin) + ymin)
     return img_standardization_0_255
+
+
+def affiine(move_img, fix_img, save_path):
+    outs = ants.registration(fix_img, move_img, type_of_transforme='Affine')
+    reg_img = outs['warpedmovout']
+    ants.image_write(reg_img, save_path)
+
 
 if __name__ == '__main__':
     print(case_cfg.items())

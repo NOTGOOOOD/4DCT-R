@@ -3,6 +3,7 @@ import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 
+
 plot_dpi = 300
 import numpy as np
 import logging, tqdm
@@ -105,7 +106,7 @@ pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
 
 data_folder = f'/home/cqut-415/project/xxf/datasets/dirlab/Case{case}Pack/Images_mhd/'
 project_path = utils.utilize.get_project_path("4DCT")
-landmark_file = os.path.join(project_path, f'data/Case{case}_300_00_50.pt')
+landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 
 config = dict(
@@ -196,7 +197,7 @@ for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
     utils.utilize.plotorsave_ct_scan(res['warped_input_image'], "save", {
-        "epoch": "",
+        "epoch": i,
         "head": "tem",
         "case": f"{case}",
         "phase": "50",
@@ -204,7 +205,7 @@ for i in pbar:
     })
 
     utils.utilize.plotorsave_ct_scan(res['template'], "save", {
-        "epoch": "",
+        "epoch": i,
         "head": "tem",
         "case": f"{case}",
         "phase": "50",

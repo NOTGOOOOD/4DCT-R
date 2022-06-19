@@ -80,7 +80,7 @@ def showimg(image: list, cmap='gray'):
         plt.show()
 
 
-def plotorsave_ct_scan(scan, option: "str", num_column=4, jump=1, **cfg):
+def plotorsave_ct_scan(scan, option: "str", **cfg):
     '''
     画出3D-CT 所有的横断面切片
     :param scan: A NumPy ndarray from a SimpleITK Image
@@ -90,6 +90,8 @@ def plotorsave_ct_scan(scan, option: "str", num_column=4, jump=1, **cfg):
     :param cfg: option=plot时启用{head, case, phase ,path, epoch} 图像名 epoch_head_Case_Phase_i_slice
     :return:
     '''
+    num_column = 4
+    jump = 1
     num_slices = len(scan)
     num_row = (num_slices // jump + num_column - 1) // num_column
     f, plots = plt.subplots(num_row, num_column, figsize=(num_column * 5, num_row * 5))
