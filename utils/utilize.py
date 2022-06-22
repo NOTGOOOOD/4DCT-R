@@ -111,10 +111,10 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
     elif option == 'save':
         for i in range(0, num_slices, 4):
             img_ndarry = scan_c[i]
-            img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice.png"
+            img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice"
             save_png(img_ndarry, cfg["path"], img_name)
     else:
-        AssertionError("option: {} ,aug error".format(option))
+        ValueError("option: {} ,aug error".format(option))
 
 
 def transform_convert(img, transform):

@@ -210,3 +210,5 @@ class SpatialTransformer(nn.Module):
         warped_input_img = F.grid_sample(input_image, new_grid * norm_coeff - 1., mode='bilinear', align_corners=True,
                                          padding_mode='border')
         return warped_input_img
+
+

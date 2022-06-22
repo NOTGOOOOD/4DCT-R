@@ -103,8 +103,8 @@ pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
 # pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
 
 
-data_folder = f'/home/cqut-415/project/xxf/datasets/dirlab/Case{case}Pack/Images_mhd/'
 project_path = utils.utilize.get_project_path("4DCT")
+data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}Pack/Images_mhd/')
 landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 
@@ -202,16 +202,14 @@ pbar = tqdm.tqdm(range(config.max_num_iteration))
 for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
-    for j in range(10):
-        utils.utilize.plotorsave_ct_scan(res['warped_input_image'][i, 0, :, :, :], "save",
-                                         epoch=i,
-                                         head="warped",
-                                         case=case,
-                                         phase=i * 10,
-                                         path="../result/general_reg/dirlab/warped_image")
-
-        utils.utilize.plotorsave_ct_scan(res['warped_input_image'][i, 0, :, :, :], "plot")
-
+    # for j in (0, 5):
+    #     utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
+    #                                      epoch=i,
+    #                                      head="warped",
+    #                                      case=case,
+    #                                      phase=j * 10,
+    #                                      path="../result/general_reg/dirlab/warped_image")
+    #
     # utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
     #                                  epoch=i,
     #                                  head="tem",

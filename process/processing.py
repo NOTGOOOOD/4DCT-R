@@ -1,9 +1,8 @@
 import os
-import torch
 import SimpleITK as sitk
 import numpy as np
-from matplotlib import pyplot as plt
-import ants
+import utils.utilize as ut
+# import ants
 
 # DIRLAB 4DCT 1-10例的 z y x
 case_cfg = {
@@ -51,18 +50,17 @@ def data_standardization_0_255(img):
     return img_standardization_0_255
 
 
-def affiine(move_img, fix_img, save_path):
-    outs = ants.registration(fix_img, move_img, type_of_transforme='Affine')
-    reg_img = outs['warpedmovout']
-    ants.image_write(reg_img, save_path)
+# def affiine(move_img, fix_img, save_path):
+#     outs = ants.registration(fix_img, move_img, type_of_transforme='Affine')
+#     reg_img = outs['warpedmovout']
+#     ants.image_write(reg_img, save_path)
 
 
 if __name__ == '__main__':
     print(case_cfg.items())
+    project_folder = ut.get_project_path("4DCT").split("4DCT")[0]
     for item in case_cfg.items():
         case = item[0]
         shape = item[1]
-        img_path = f'D:/project/xxf/datasets/dirlab/Case{case}Pack/Images'
-        if case == 8:
-            img_path = f'D:/project/xxf/datasets/dirlab/Case8Deploy/Images'
+        img_path = os.path.join(project_folder, f'datasets/dirlab/Case{case}Pack/Images')
         imgTomhd(img_path, np.float16, shape)

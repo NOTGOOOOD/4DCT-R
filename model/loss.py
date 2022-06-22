@@ -104,3 +104,7 @@ def smooth_loss(disp, image):
     loss = torch.mean(torch.sum(torch.abs(d_disp), dim=2, keepdims=True) * torch.exp(-torch.abs(d_image)))
 
     return loss
+
+
+if __name__ == "__main__":
+    ncc_loss = NCC(3, 5)
