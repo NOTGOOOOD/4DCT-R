@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import scipy.ndimage
 import numpy as np
+import math
 
 torch.backends.cudnn.deterministic = True
 
@@ -18,7 +19,7 @@ class NCC(nn.Module):
         Side length of the square window to calculate the local NCC.
     '''
 
-    def __init__(self, dim, windows_size=11):
+    def __init__(self, dim, windows_size=9):
         super().__init__()
         assert dim in (2, 3)
         self.dim = dim
@@ -39,9 +40,8 @@ class NCC(nn.Module):
         ----------
         I and J : (n, 1, h, w) or (n, 1, d, h, w)
             Torch tensor of same shape. The number of image in the first dimension can be different, in which broadcasting will be used.
-        windows_size : int
-            Side length of the square window to calculate the local NCC.
-
+        I: y_pred warped image
+        J: y_true implict template
         Returns
         -------
         NCC : scalar
@@ -54,15 +54,23 @@ class NCC(nn.Module):
             I_sum = self.conv(I, self.sum_filter, padding=self.pad)
 
         J_sum = self.conv(J, self.sum_filter, padding=self.pad)  # (n, 1, h, w) or (n, 1, d, h, w)
-        I2_sum = self.conv(I * I, self.sum_filter, padding=self.pad)
-        J2_sum = self.conv(J * J, self.sum_filter, padding=self.pad)
-        IJ_sum = self.conv(I * J, self.sum_filter, padding=self.pad)
+        I2_sum = self.conv(I * I, self.sum_filter, padding=self.pad, stride=(1, 1, 1))
+        J2_sum = self.conv(J * J, self.sum_filter, padding=self.pad, stride=(1, 1, 1))
+        IJ_sum = self.conv(I * J, self.sum_filter, padding=self.pad, stride=(1, 1, 1))
 
-        cross = torch.clamp(IJ_sum - I_sum * J_sum / self.window_volume, min=self.num_stab_const)
-        I_var = torch.clamp(I2_sum - I_sum ** 2 / self.window_volume, min=self.num_stab_const)
-        J_var = torch.clamp(J2_sum - J_sum ** 2 / self.window_volume, min=self.num_stab_const)
+        E_I = I_sum / self.window_volume
+        E_J = J_sum / self.window_volume
 
-        cc = cross / ((I_var * J_var) ** 0.5)
+        # cross = torch.clamp(IJ_sum - I_sum * J_sum / self.window_volume, min=self.num_stab_const)
+        cross = IJ_sum - I_sum * E_J - J_sum * E_I + E_I * E_J * self.window_volume
+
+        # I_var = torch.clamp(I2_sum - I_sum ** 2 / self.window_volume, min=self.num_stab_const)
+        # J_var = torch.clamp(J2_sum - J_sum ** 2 / self.window_volume, min=self.num_stab_const)
+
+        I_var = I2_sum - 2 * E_I * I_sum + E_I * E_I * self.window_volume
+        J_var = J2_sum - 2 * E_J * J_sum + E_J * E_J * self.window_volume
+
+        cc = cross * cross / (I_var * J_var + 1e-5)
 
         return -torch.mean(cc)
 
@@ -108,3 +116,9 @@ def smooth_loss(disp, image):
 
 if __name__ == "__main__":
     ncc_loss = NCC(3, 5)
+    a1 = np.random.rand(10, 1, 90, 150, 150)
+    a2 = np.random.rand(1, 1, 90, 150, 150)
+    a1 = torch.Tensor(a1)
+    a2 = torch.Tensor(a2)
+    loss = ncc_loss(a1, a2)
+    print(loss)

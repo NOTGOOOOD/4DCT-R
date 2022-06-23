@@ -69,9 +69,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # crop_range = [slice(0, 95), slice(42, 209), slice(10, 248)]
 # pixel_spacing = np.array([1.15, 1.15, 2.5], dtype=np.float32)
 
-case = 4
-crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
-pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
+# case = 4
+# crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
+# pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
 
 # case = 5
 # crop_range = [slice(0, 90), slice(60, 222), slice(16, 237)]
@@ -88,10 +88,9 @@ pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
 # pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
 
 
-# case = 8
-# crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
+case = 8
+crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
+pixel_spacing = np.array([0.97, 0.97, 2.5], dtype=np.float32)
 
 # case = 9
 # crop_range = [slice(0, 70), slice(126, 334), slice(128, 390)]
@@ -120,7 +119,7 @@ config = dict(
     learning_rate=1e-2,
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
-    ncc_window_size=5,
+    ncc_window_size=9,
     load=False,
     load_optimizer=False,
     group_index_list=None,
@@ -151,9 +150,9 @@ input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list
 if config.group_index_list is not None:
     input_image = input_image[config.group_index_list]
 
-cp_input_image = input_image.clone()
+# cp_input_image = input_image.clone()
 # normal_image = (cp_input_image - config.intensity_shift_const) / config.intensity_scale_const
-input_image = (input_image - config.intensity_shift_const) / config.intensity_scale_const
+# input_image = (input_image - config.intensity_shift_const) / config.intensity_scale_const
 
 # after normalize
 input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
@@ -199,23 +198,31 @@ diff_stats = []
 stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
 
+warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
+temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
+if not os.path.exists(warp_case_path):
+    os.mkdir(warp_case_path)
+if not os.path.exists(temp_case_path):
+    os.mkdir(temp_case_path)
+
 for i in pbar:
     optimizer.zero_grad()
     res = regnet(input_image)
-    # for j in (0, 5):
-    #     utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
-    #                                      epoch=i,
-    #                                      head="warped",
-    #                                      case=case,
-    #                                      phase=j * 10,
-    #                                      path="../result/general_reg/dirlab/warped_image")
-    #
-    # utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
-    #                                  epoch=i,
-    #                                  head="tem",
-    #                                  case=case,
-    #                                  phase=50,
-    #                                  path="../result/general_reg/dirlab/template_image")
+    if i % 10 == 0:
+        for j in (0, 5):
+            utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
+                                             epoch=i,
+                                             head="warped",
+                                             case=case,
+                                             phase=j * 10,
+                                             path=f"../result/general_reg/dirlab/warped_image/Case{case}")
+
+        utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
+                                         epoch=i,
+                                         head="tem",
+                                         case=case,
+                                         phase=50,
+                                         path=f"../result/general_reg/dirlab/template_image/Case{case}")
 
     total_loss = 0.
     if 'disp_i2t' in res:
@@ -258,7 +265,7 @@ for i in pbar:
         break
 
     pbar.set_description(
-        f'{i}, simi. loss {simi_loss.item():.4f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
+        f'{i}, simi. loss {simi_loss.item():.8f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
     if i % config.pair_disp_calc_interval == 0:
         if 'disp_i2t' in res:

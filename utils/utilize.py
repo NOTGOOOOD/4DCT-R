@@ -107,12 +107,16 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
             plot = plots[i % num_column] if num_row == 1 else plots[i // num_column, i % num_column]
             plot.axis('off')
             if i < num_slices // jump:
-                    plot.imshow(scan_c[i * jump], cmap="gray")
+                plot.imshow(scan_c[i * jump], cmap="gray")
     elif option == 'save':
+        save_path = os.path.join(cfg["path"], f"epoch{cfg['epoch']}")
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
+
         for i in range(0, num_slices, 4):
             img_ndarry = scan_c[i]
             img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice"
-            save_png(img_ndarry, cfg["path"], img_name)
+            save_png(img_ndarry, save_path, img_name)
     else:
         ValueError("option: {} ,aug error".format(option))
 
