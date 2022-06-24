@@ -4,7 +4,7 @@ import torch
 
 
 class StopCriterion(object):
-    def __init__(self, stop_std=0.001, query_len=100, num_min_iter=200):
+    def __init__(self, stop_std=0.001, query_len=100, num_min_iter=2500):
         self.query_len = query_len
         self.stop_std = stop_std
         self.loss_list = []

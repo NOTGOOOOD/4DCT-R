@@ -69,9 +69,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # crop_range = [slice(0, 95), slice(42, 209), slice(10, 248)]
 # pixel_spacing = np.array([1.15, 1.15, 2.5], dtype=np.float32)
 
-# case = 4
-# crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
-# pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
+case = 4
+crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
+pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
 
 # case = 5
 # crop_range = [slice(0, 90), slice(60, 222), slice(16, 237)]
@@ -88,9 +88,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
 
 
-case = 8
-crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
-pixel_spacing = np.array([0.97, 0.97, 2.5], dtype=np.float32)
+# case = 8
+# crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
+# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype=np.float32)
 
 # case = 9
 # crop_range = [slice(0, 70), slice(126, 334), slice(128, 390)]
@@ -116,7 +116,7 @@ config = dict(
     depth=4,
     max_num_iteration=3000,
     normalization=True,  # whether use normalization layer
-    learning_rate=1e-2,
+    learning_rate=0.001,
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
     ncc_window_size=9,
@@ -125,8 +125,8 @@ config = dict(
     group_index_list=None,
     pair_disp_indexes=[0, 5],
     pair_disp_calc_interval=20,
-    stop_std=0.0007,
-    stop_query_len=100,
+    stop_std=0.0001,
+    stop_query_len=300,
 )
 config = utils.structure.Struct(**config)
 
@@ -176,6 +176,7 @@ regnet = regnet.to(device)
 input_image = input_image.to(device)
 ncc_loss = ncc_loss.to(device)
 optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=5e-5)
 calcdisp = model.util.CalcDisp(dim=config.dim, calc_device='cuda')
 
 if config.load:
@@ -259,13 +260,14 @@ for i in pbar:
 
     total_loss.backward()
     optimizer.step()
+    scheduler.step()
 
     stop_criterion.add(simi_loss.item())
     if stop_criterion.stop():
         break
 
     pbar.set_description(
-        f'{i}, simi. loss {simi_loss.item():.8f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
+        f'{i}, lr {scheduler.get_lr()[0]:.6f}, simi loss {simi_loss.item():.8f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
     if i % config.pair_disp_calc_interval == 0:
         if 'disp_i2t' in res:

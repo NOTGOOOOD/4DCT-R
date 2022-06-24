@@ -65,6 +65,7 @@ class RegNet_single(nn.Module):
         else:
             scaled_image = torch.transpose(input_image, 0, 1)
 
+        # scaled_image = torch.transpose(input_image, 0, 1)
         scaled_image_shape = scaled_image.shape[2:]
         scaled_disp_t2i = torch.squeeze(self.unet(scaled_image), 0).reshape(self.n, self.dim,
                                                                             *scaled_image_shape)  # (n, 2, h, w) or (n, 3, d, h, w)
@@ -74,10 +75,11 @@ class RegNet_single(nn.Module):
                                                        align_corners=True)
         else:
             disp_t2i = scaled_disp_t2i
+        # disp_t2i = scaled_disp_t2i
 
         warped_input_image = self.spatial_transform(input_image, disp_t2i)  # (n, 1, h, w) or (n, 1, d, h, w)
         template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
-
+        # template = torch.unsqueeze(warped_input_image[5], 0)
         res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
                'template': template}
 
