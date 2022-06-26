@@ -3,7 +3,6 @@ import torch
 import SimpleITK as sitk
 import numpy as np
 from matplotlib import pyplot as plt
-from PIL import Image
 import cv2
 import process.processing
 from PIL import Image

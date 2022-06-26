@@ -2,7 +2,7 @@ import model.regnet, model.loss, model.util, utils.structure, utils.utilize
 import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
-
+from process.processing import data_standardization_0_255
 plot_dpi = 300
 import numpy as np
 import logging, tqdm
@@ -140,8 +140,11 @@ print(crop_min)
 print(crop_max)
 
 image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
-image_list = [sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name))) for file_name in
-              image_file_list]
+image_list = []
+for file_name in image_file_list:
+    stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
+    stkimg = data_standardization_0_255(stkimg)
+    image_list.append(stkimg)
 
 #  before normalize
 # utils.utilize.plot_ct_scan(image_list[0])
@@ -149,6 +152,9 @@ image_list = [sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, fi
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
     input_image = input_image[config.group_index_list]
+
+# flow_image = torch.unsqueeze(input_image[0], 0).to(device)
+# ncc_loss = model.loss.NCC2().loss(flow_image, flow_image)
 
 # cp_input_image = input_image.clone()
 # normal_image = (cp_input_image - config.intensity_shift_const) / config.intensity_scale_const
@@ -199,6 +205,7 @@ diff_stats = []
 stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
 
+# 保存固定图像和扭曲图像路径
 warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
 temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
 if not os.path.exists(warp_case_path):
@@ -267,7 +274,7 @@ for i in pbar:
         break
 
     pbar.set_description(
-        f'{i}, lr {scheduler.get_lr()[0]:.6f}, simi loss {simi_loss.item():.8f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
+        f'{i}, lr {scheduler.get_lr()[0]:.6f}, totalloss {total_loss}:.6f, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
     if i % config.pair_disp_calc_interval == 0:
         if 'disp_i2t' in res:

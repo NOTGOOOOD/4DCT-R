@@ -2,6 +2,7 @@ import os
 import SimpleITK as sitk
 import numpy as np
 import utils.utilize as ut
+
 # import ants
 
 # DIRLAB 4DCT 1-10例的 z y x
@@ -42,12 +43,14 @@ def imgTomhd(file_folder, datatype, shape):
 
 
 def data_standardization_0_255(img):
-    ymax = 255
-    ymin = 0
-    xmax = max(map(max, img))  # 进行两次求max值
-    xmin = min(map(min, img))
-    img_standardization_0_255 = np.round((ymax - ymin) * (img - xmin) / (xmax - xmin) + ymin)
-    return img_standardization_0_255
+    array = 255 * (img - np.min(img)) / (np.max(img) - np.min(img))
+    return array
+    # ymax = 255
+    # ymin = 0
+    # xmax = max(map(max, img))  # 进行两次求max值
+    # xmin = min(map(min, img))
+    # img_standardization_0_255 = np.round((ymax - ymin) * (img - xmin) / (xmax - xmin) + ymin)
+    # return img_standardization_0_255
 
 
 # def affiine(move_img, fix_img, save_path):
