@@ -20,6 +20,23 @@ case_cfg = {
 }
 
 
+def window(img):
+    win_min = -400
+    win_max = 1500
+
+    for i in range(img.shape[0]):
+        img[i] = 255.0 * (img[i] - win_min) / (win_max - win_min)
+        min_index = img[i] < 0
+        img[i][min_index] = 0
+        max_index = img[i] > 255
+        img[i][max_index] = 255
+        img[i] = img[i] - img[i].min()
+        c = float(255) / img[i].max()
+        img[i] = img[i] * c
+
+    return img.astype(np.uint8)
+
+
 def imgTomhd(file_folder, datatype, shape):
     for file_name in os.listdir(file_folder):
         file_path = os.path.join(file_folder, file_name)
@@ -29,7 +46,8 @@ def imgTomhd(file_folder, datatype, shape):
         if shape:
             file = file.reshape(shape)
 
-        img = sitk.GetImageFromArray(file)
+        img = window(file)
+        img = sitk.GetImageFromArray(img)
 
         target_path = os.path.join(os.path.dirname(file_folder), "Images_mhd")
         if not os.path.exists(target_path):
