@@ -2,7 +2,7 @@ import os
 import SimpleITK as sitk
 import numpy as np
 import utils.utilize as ut
-
+from matplotlib import pyplot as plt
 # import ants
 
 # DIRLAB 4DCT 1-10例的 z y x
@@ -46,8 +46,7 @@ def imgTomhd(file_folder, datatype, shape):
         if shape:
             file = file.reshape(shape)
 
-        img = window(file)
-        img = sitk.GetImageFromArray(img)
+        img = sitk.GetImageFromArray(file)
 
         target_path = os.path.join(os.path.dirname(file_folder), "Images_mhd")
         if not os.path.exists(target_path):
@@ -76,12 +75,58 @@ def data_standardization_0_255(img):
 #     reg_img = outs['warpedmovout']
 #     ants.image_write(reg_img, save_path)
 
+def set_window(img_data, win_width, win_center):
+    img_temp = img_data
+    min = (2 * win_center - win_width) / 2.0 + 0.5
+    max = (2 * win_center + win_width) / 2.0 + 0.5
+    dFactor = 255.0 / (max - min)
+
+    img_temp = ((img_temp - min) * dFactor).astype(np.int)
+    img_temp = np.clip(img_temp, 0, 255)
+    return img_temp
+
+
+def read_mhd(mhd_dir):
+    for file_name in os.listdir(mhd_dir):
+        mhd_file = os.path.join(mhd_dir, file_name)
+        itkimage = sitk.ReadImage(mhd_file)
+        ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
+        direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
+        origin = np.array(itkimage.GetOrigin())
+        spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
+
+        img_arr = ct_value.copy()  # ndarray
+
+        level = -200  # 窗位
+        window = 1600  # 窗宽
+
+        window_minimum = level - window / 2
+        window_maximum = level + window / 2
+        img_arr[img_arr < window_minimum] = window_minimum
+        img_arr[img_arr > window_maximum] = window_maximum
+
+        ut.plotorsave_ct_scan(ct_value, "plot")
+        ut.plotorsave_ct_scan(img_arr, "plot")
+
+        mha_img = sitk.GetImageFromArray(img_arr)
+        sitk.WriteImage(mha_img, 'test1.mhd')
+
+        test2 = set_window(ct_value, window, level)
+        ut.plotorsave_ct_scan(test2, "plot")
+        mha_img = sitk.GetImageFromArray(test2)
+        sitk.WriteImage(mha_img, 'test2.mhd')
+
+        plt.show()
+        break
+
 
 if __name__ == '__main__':
     print(case_cfg.items())
     project_folder = ut.get_project_path("4DCT").split("4DCT")[0]
-    for item in case_cfg.items():
-        case = item[0]
-        shape = item[1]
-        img_path = os.path.join(project_folder, f'datasets/dirlab/Case{case}Pack/Images')
-        imgTomhd(img_path, np.float16, shape)
+    read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
+
+    # for item in case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #     img_path = os.path.join(project_folder, f'datasets/dirlab/Case{case}Pack/Images')
+    #     imgTomhd(img_path, np.float16, shape)
