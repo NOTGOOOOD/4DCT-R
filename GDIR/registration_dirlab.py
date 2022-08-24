@@ -2,7 +2,8 @@ import model.regnet, model.loss, model.util, utils.structure, utils.utilize
 import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
-from process.processing import data_standardization_0_255
+from process.processing import data_standardization_0_n
+
 plot_dpi = 300
 import numpy as np
 import logging, tqdm
@@ -12,98 +13,95 @@ from scipy import interpolate
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# cfg = [
-#     {"case": 1,
-#      "crop_range": [slice(0, 83), slice(43, 200), slice(10, 250)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 2,
-#      "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
-#      "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
-#      },
-#     {"case": 3,
-#      "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
-#      "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
-#      },
-#     {"case": 4,
-#      "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 5,
-#      "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
-#      "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
-#      },
-#     {"case": 6,
-#      "crop_range": [slice(10, 107), slice(144, 328), slice(132, 426)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 7,
-#      "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 8,
-#      "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 9,
-#      "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      },
-#     {"case": 10,
-#      "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
-#      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#      }
-#
-# ]
+# cfg = [{},
+#        {"case": 1,
+#         "crop_range": [[slice(8, 33), slice(37, 83)], slice(51, 200), [slice(16, 136), slice(144, 250)]],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 2,
+#         "crop_range": [slice(6, 93), slice(40, 195), [slice(8, 129), slice(135, 252)]],
+#         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
+#         },
+#        {"case": 3,
+#         "crop_range": [[slice(0, 34), slice(39, 97)], slice(53, 209), [slice(10, 123), slice(130, 248)]],
+#         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
+#         },
+#        {"case": 4,
+#         "crop_range": [[slice(5, 33), slice(36, 90)], slice(45, 209), [slice(10, 113), slice(119, 242)]],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 5,
+#         "crop_range": [slice(0, 90), slice(60, 223), slice(16, 244)],
+#         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
+#         },
+#        {"case": 6,
+#         "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 7,
+#         "crop_range": [slice(13, 108), slice(158, 331), slice(120, 413)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 8,
+#         "crop_range": [slice(18, 118), slice(94, 299), slice(120, 390)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 9,
+#         "crop_range": [slice(0, 70), slice(153, 323), slice(149, 390)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         },
+#        {"case": 10,
+#         "crop_range": [slice(0, 90), slice(153, 330), slice(154, 382)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+#         }]
 
-# case = 1
-# crop_range = [slice(0, 83), slice(43, 200), slice(10, 250)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype=np.float32)
+cfg = [{},
+       {"case": 1,
+        "crop_range": [slice(0, 83), slice(43, 200), slice(10, 250)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 2,
+        "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
+        "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
+        },
+       {"case": 3,
+        "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
+        "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
+        },
+       {"case": 4,
+        "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 5,
+        "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
+        "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
+        },
+       {"case": 6,
+        "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 7,
+        "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 8,
+        "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 9,
+        "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        },
+       {"case": 10,
+        "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
+        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
+        }
 
-# case = 2
-# crop_range = [slice(5, 98), slice(30, 195), slice(8, 243)]
-# pixel_spacing = np.array([1.16, 1.16, 2.5], dtype = np.float32)
+       ]
 
-
-# case = 3
-# crop_range = [slice(0, 95), slice(42, 209), slice(10, 248)]
-# pixel_spacing = np.array([1.15, 1.15, 2.5], dtype=np.float32)
-
-case = 4
-crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
-pixel_spacing = np.array([1.13, 1.13, 2.5], dtype=np.float32)
-
-# case = 5
-# crop_range = [slice(0, 90), slice(60, 222), slice(16, 237)]
-# pixel_spacing = np.array([1.10, 1.10, 2.5], dtype = np.float32)
-
-
-# case = 6
-# crop_range = [slice(10, 107), slice(144, 328), slice(132, 426)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 7
-# crop_range = [slice(13, 108), slice(141, 331), slice(114, 423)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 8
-# crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype=np.float32)
-
-# case = 9
-# crop_range = [slice(0, 70), slice(126, 334), slice(128, 390)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 10
-# crop_range = [slice(0, 90), slice(119, 333), slice(140, 382)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
+case = 1
 project_path = utils.utilize.get_project_path("4DCT")
-data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}Pack/Images_mhd/')
+data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
 landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 
@@ -114,12 +112,12 @@ config = dict(
     scale=0.5,
     initial_channels=32,
     depth=4,
-    max_num_iteration=3000,
+    max_num_iteration=400,
     normalization=True,  # whether use normalization layer
     learning_rate=0.001,
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
-    ncc_window_size=9,
+    ncc_window_size=5,
     load=False,
     load_optimizer=False,
     group_index_list=None,
@@ -133,44 +131,48 @@ config = utils.structure.Struct(**config)
 landmark_info = torch.load(landmark_file)
 landmark_disp = landmark_info['disp_00_50']  # w, h, d
 landmark_00 = landmark_info['landmark_00']
-landmark_50 = landmark_info['landmark_50']
-crop_min = np.min(np.concatenate((landmark_00, landmark_50), axis=0), axis=0) - 8
-crop_max = np.max(np.concatenate((landmark_00, landmark_50), axis=0), axis=0) + 8
-print(crop_min)
-print(crop_max)
 
 image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
 image_list = []
 for file_name in image_file_list:
     stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
-    stkimg = data_standardization_0_255(stkimg)
     image_list.append(stkimg)
-
-#  before normalize
-# utils.utilize.plot_ct_scan(image_list[0])
 
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
     input_image = input_image[config.group_index_list]
 
-# flow_image = torch.unsqueeze(input_image[0], 0).to(device)
-# ncc_loss = model.loss.NCC2().loss(flow_image, flow_image)
+# normalize [0,1]
+input_image = data_standardization_0_n(1, input_image)
 
-# cp_input_image = input_image.clone()
-# normal_image = (cp_input_image - config.intensity_shift_const) / config.intensity_scale_const
-# input_image = (input_image - config.intensity_shift_const) / config.intensity_scale_const
+# normalize crop
+crop_range0 = cfg[case]["crop_range"][0]
+crop_range1 = cfg[case]["crop_range"][1]
+crop_range2 = cfg[case]["crop_range"][2]
+try:
+    crop_range0_start = cfg[case]["crop_range"][0].start
+except:
+    crop_range0_start = cfg[case]["crop_range"][0][0].start
 
-# after normalize
-input_image = input_image[:, :, crop_range[0], crop_range[1], crop_range[2]]
-# for i in range(10):
-#     utils.utilize.plotorsave_ct_scan(input_image[i, 0, :, :, :], "plot")
-# for i in range(10):
-#     utils.utilize.plotorsave_ct_scan(input_image[i, 0, :, :, :], "save",
-#                                      epoch=i,
-#                                      head="input_image",
-#                                      case=case,
-#                                      phase=i * 10,
-#                                      path="../result/general_reg/dirlab/warped_image")
+crop_range1_start = cfg[case]["crop_range"][1].start
+
+try:
+    crop_range2_start = cfg[case]["crop_range"][2].start
+except:
+    crop_range2_start = cfg[case]["crop_range"][2][0].start
+
+# if len(cfg[case]["crop_range"][0]) == 2:
+#     slicearr = cfg[case]["crop_range"][0]
+#     input_image = torch.cat((input_image[:, :, slicearr[0], :, :], input_image[:, :, slicearr[1], :, :]), 2)
+#     crop_range0 = slice(input_image.shape[2])
+#
+# if len(cfg[case]["crop_range"][2]) == 2:
+#     slicearr = cfg[case]["crop_range"][2]
+#     input_image = torch.cat((input_image[:, :, :, :, slicearr[0]], input_image[:, :, :, :, slicearr[1]]), -1)
+#     crop_range2 = slice(input_image.shape[-1])
+
+input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
+
 image_shape = np.array(input_image.shape[2:])  # (d, h, w)
 num_image = input_image.shape[0]  # number of image in the group
 regnet = model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
@@ -198,8 +200,9 @@ if config.load:
             logging.info(f'load model state {config.load}.pth')
 
 grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
+
 landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
-    [crop_range[0].start, crop_range[1].start, crop_range[2].start], dtype=np.float32)
+    [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
 diff_stats = []
 stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
@@ -223,14 +226,14 @@ for i in pbar:
                                              head="warped",
                                              case=case,
                                              phase=j * 10,
-                                             path=f"../result/general_reg/dirlab/warped_image/Case{case}")
+                                             path=f"../result/general_reg/dirlab/warped_image")
 
         utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
                                          epoch=i,
                                          head="tem",
                                          case=case,
                                          phase=50,
-                                         path=f"../result/general_reg/dirlab/template_image/Case{case}")
+                                         path=f"../result/general_reg/dirlab/template_image")
 
     total_loss = 0.
     if 'disp_i2t' in res:
@@ -274,7 +277,7 @@ for i in pbar:
         break
 
     pbar.set_description(
-        f'{i}, lr {scheduler.get_lr()[0]:.6f}, totalloss {total_loss}:.6f, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
+        f'{i}, totalloss {total_loss:.6f}, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
     if i % config.pair_disp_calc_interval == 0:
         if 'disp_i2t' in res:
@@ -287,7 +290,9 @@ for i in pbar:
         inter = interpolate.RegularGridInterpolator(grid_tuple, np.moveaxis(composed_disp_np[0, 1], 0, -1))
         calc_landmark_disp = inter(landmark_00_converted)
 
-        diff = (np.sum(((calc_landmark_disp - landmark_disp) * pixel_spacing) ** 2, 1)) ** 0.5
+        diff = (np.sum(((calc_landmark_disp - landmark_disp) * cfg[case]["pixel_spacing"]) ** 2, 1)) ** 0.5
+        diff = diff[~np.isnan(diff)]
+
         diff_stats.append([i, np.mean(diff), np.std(diff)])
         print(f'\ndiff: {np.mean(diff):.2f}+-{np.std(diff):.2f}({np.max(diff):.2f})')
 
@@ -301,7 +306,8 @@ composed_disp_np = composed_disp.cpu().numpy()  # (2, 2, 3, d, h, w)
 inter = interpolate.RegularGridInterpolator(grid_tuple, np.moveaxis(composed_disp_np[0, 1], 0, -1))
 calc_landmark_disp = inter(landmark_00_converted)
 
-diff = (np.sum(((calc_landmark_disp - landmark_disp) * pixel_spacing) ** 2, 1)) ** 0.5
+diff = (np.sum(((calc_landmark_disp - landmark_disp) * cfg[case]["pixel_spacing"]) ** 2, 1)) ** 0.5
+diff = diff[~np.isnan(diff)]
 diff_stats.append([i, np.mean(diff), np.std(diff)])
 print(f'\ndiff: {np.mean(diff):.2f}+-{np.std(diff):.2f}({np.max(diff):.2f})')
 diff_stats = np.array(diff_stats)

@@ -12,8 +12,8 @@ import torchvision.transforms as transform
 def save_png(imgs_numpy, save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    img_numpy = process.processing.data_standardization_0_255(imgs_numpy)
-    cv2.imwrite(os.path.join(save_path, save_name + ".png"), img_numpy)
+    # img_numpy = process.processing.data_standardization_0_n(255, imgs_numpy)
+    cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
 def make_dir(log_dir):
@@ -57,13 +57,30 @@ def loadfileFromFolderToarray(file_folder, datatype, shape=None):
     return files_array
 
 
-def dvf_save_nii(project_name, dvf_file, dvf_name):
+def dvf_save_nii(project_name, dvf_file):
     project_path = get_project_path(project_name)
-    dvf_path = os.path.abspath(os.path.join(project_path, dvf_file, dvf_name))
-    dvf = loadfile(dvf_path, np.float32).reshape(3, 150, 256, 256).transpose(2, 3, 1, 0)
+    dvf_file_path = os.path.join(project_path, dvf_file)
+    image_file_list = sorted(
+        [file_name for file_name in os.listdir(dvf_file_path) if file_name.lower().endswith('mhd')])
+    image_list = []
+    for file_name in image_file_list:
+        stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(dvf_file_path, file_name)))
+        # sitk_dvf = sitk.GetImageFromArray(stkimg)
+        # sitk.WriteImage(sitk_dvf, f"{file_name}.nii")
+        # print(f"{file_name}.nii 已保存")
+
+        image_list.append(stkimg)
+
+    dvf = np.stack([image for image in image_list], 0).transpose(1, 2, 3, 0)
     sitk_dvf = sitk.GetImageFromArray(dvf)
-    sitk.WriteImage(sitk_dvf, f"{dvf_name}.nii")
-    print(f"{dvf_name}.nii 已保存")
+    sitk.WriteImage(sitk_dvf, "dvf.nii")
+    print("dvf.nii 已保存")
+
+    # dvf_path = os.path.abspath(os.path.join(project_path, dvf_file, dvf_name))
+    # dvf = loadfile(dvf_path, np.float32).reshape(3, 150, 256, 256).transpose(2, 3, 1, 0)
+    # sitk_dvf = sitk.GetImageFromArray(dvf)
+    # sitk.WriteImage(sitk_dvf, f"{dvf_name}.nii")
+    # print(f"{dvf_name}.nii 已保存")
 
 
 def showimg(image: list, cmap='gray'):
@@ -108,14 +125,26 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
             if i < num_slices // jump:
                 plot.imshow(scan_c[i * jump], cmap="gray")
     elif option == 'save':
-        save_path = os.path.join(cfg["path"], f"epoch{cfg['epoch']}")
+        if not os.path.exists(cfg["path"]):
+            os.mkdir(cfg["path"])
+
+        case_path = os.path.join(cfg["path"], f"Case{cfg['case']}")
+        if not os.path.exists(case_path):
+            os.mkdir(case_path)
+
+        phase_path = os.path.join(case_path, f"T{cfg['phase']}")
+        if not os.path.exists(phase_path):
+            os.mkdir(phase_path)
+
+        save_path = os.path.join(phase_path, f"epoch{cfg['epoch']}")
         if not os.path.exists(save_path):
             os.mkdir(save_path)
 
-        for i in range(0, num_slices, 4):
-            img_ndarry = scan_c[i]
-            img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice"
-            save_png(img_ndarry, save_path, img_name)
+        for i in range(0, num_slices):
+            img_ndarry = scan_c[i, :, :]
+            if np.max(img_ndarry) > 0:
+                img_name = f"{cfg['epoch']}_{cfg['head']}_Case{cfg['case']}_T{cfg['phase']}_{i}_slice"
+                save_png(img_ndarry, save_path, img_name)
     else:
         ValueError("option: {} ,aug error".format(option))
 
@@ -150,7 +179,7 @@ def transform_convert(img, transform):
     return img
 
 
-def compute_tre(mov_lmk, ref_lmk, spacing):
+def tre(mov_lmk, ref_lmk, spacing):
     # TRE, unit: mm
 
     diff = (ref_lmk - mov_lmk) * spacing
@@ -172,4 +201,4 @@ if __name__ == '__main__':
     # img = sitk.GetImageFromArray(img_array[0])
     # scan = sitk.GetArrayFromImage(img)
     # print("1")
-    dvf_save_nii("4DCT-R", "result/general_reg/dvf/", "dvf_phase2")
+    dvf_save_nii("4DCT", "result/general_reg/dvf/")

@@ -1,4 +1,4 @@
-from . import unet
+from model import unet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -65,7 +65,6 @@ class RegNet_single(nn.Module):
         else:
             scaled_image = torch.transpose(input_image, 0, 1)
 
-        # scaled_image = torch.transpose(input_image, 0, 1)
         scaled_image_shape = scaled_image.shape[2:]
         scaled_disp_t2i = torch.squeeze(self.unet(scaled_image), 0).reshape(self.n, self.dim,
                                                                             *scaled_image_shape)  # (n, 2, h, w) or (n, 3, d, h, w)

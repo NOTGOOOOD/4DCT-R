@@ -1,4 +1,4 @@
-from . import regnet
+from model import regnet
 import numpy as np
 import torch
 
