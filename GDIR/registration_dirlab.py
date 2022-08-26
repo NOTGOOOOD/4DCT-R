@@ -138,6 +138,7 @@ for file_name in image_file_list:
     stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
     image_list.append(stkimg)
 
+# 1(number of group),B,D,H,W
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
     input_image = input_image[config.group_index_list]
@@ -211,10 +212,9 @@ pbar = tqdm.tqdm(range(config.max_num_iteration))
 # 保存固定图像和扭曲图像路径
 warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
 temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
-if not os.path.exists(warp_case_path):
-    os.mkdir(warp_case_path)
-if not os.path.exists(temp_case_path):
-    os.mkdir(temp_case_path)
+
+utils.utilize.make_dir(warp_case_path)
+utils.utilize.make_dir(temp_case_path)
 
 for i in pbar:
     optimizer.zero_grad()

@@ -62,8 +62,7 @@ def imgTomhd(file_folder, datatype, shape, case):
         img = sitk.GetImageFromArray(file)
 
         target_path = os.path.join(os.path.dirname(os.path.dirname(file_folder)), f"Case{case}_mhd")
-        if not os.path.exists(target_path):
-            os.mkdir(os.path.join(target_path))
+        ut.make_dir(target_path)
 
         target_filename = os.path.join(target_path, file_name.split('.')[0] + ".mhd")
         if not os.path.exists(target_filename):

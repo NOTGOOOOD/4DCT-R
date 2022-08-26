@@ -16,10 +16,9 @@ def save_png(imgs_numpy, save_path, save_name):
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
-def make_dir(log_dir):
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    return log_dir
+def make_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 
 def get_project_path(project_name):
@@ -125,20 +124,10 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
             if i < num_slices // jump:
                 plot.imshow(scan_c[i * jump], cmap="gray")
     elif option == 'save':
-        if not os.path.exists(cfg["path"]):
-            os.mkdir(cfg["path"])
-
         case_path = os.path.join(cfg["path"], f"Case{cfg['case']}")
-        if not os.path.exists(case_path):
-            os.mkdir(case_path)
-
         phase_path = os.path.join(case_path, f"T{cfg['phase']}")
-        if not os.path.exists(phase_path):
-            os.mkdir(phase_path)
-
         save_path = os.path.join(phase_path, f"epoch{cfg['epoch']}")
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
+        make_dir(save_path)
 
         for i in range(0, num_slices):
             img_ndarry = scan_c[i, :, :]

@@ -1,208 +1,145 @@
-#!/usr/bin/env python
-
-"""
-Example script to train a VoxelMorph model.
-
-You will likely have to customize this script slightly to accommodate your own data. All images
-should be appropriately cropped and scaled to values between 0 and 1.
-
-If an atlas file is provided with the --atlas flag, then scan-to-atlas training is performed.
-Otherwise, registration will be scan-to-scan.
-"""
-
 import os
-import random
-import argparse
-import time
-import numpy as np
+import glob
+import warnings
+
 import torch
+import numpy as np
+import SimpleITK as sitk
+from torch.optim import Adam
+import torch.utils.data as Data
+import utils.utilize as ut
+from process.processing import data_standardization_0_n
 
-# import voxelmorph with pytorch backend
-os.environ['VXM_BACKEND'] = 'pytorch'
-import voxelmorph as vxm  # nopep8
+import losses
+from config import args
+from datagenerators import Dataset
+from model import U_Network, SpatialTransformer
 
-# parse the commandline
-parser = argparse.ArgumentParser()
 
-# data organization parameters
-parser.add_argument('--img-list', required=True, help='line-seperated list of training files')
-parser.add_argument('--img-prefix', help='optional input image file prefix')
-parser.add_argument('--img-suffix', help='optional input image file suffix')
-parser.add_argument('--atlas', help='atlas filename (default: data/atlas_norm.npz)')
-parser.add_argument('--model-dir', default='models',
-                    help='model output directory (default: models)')
-parser.add_argument('--multichannel', action='store_true',
-                    help='specify that data has multiple channels')
+def count_parameters(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    return params
 
-# training parameters
-parser.add_argument('--gpu', default='0', help='GPU ID number(s), comma-separated (default: 0)')
-parser.add_argument('--batch-size', type=int, default=1, help='batch size (default: 1)')
-parser.add_argument('--epochs', type=int, default=1500,
-                    help='number of training epochs (default: 1500)')
-parser.add_argument('--steps-per-epoch', type=int, default=100,
-                    help='frequency of model saves (default: 100)')
-parser.add_argument('--load-model', help='optional model file to initialize with')
-parser.add_argument('--initial-epoch', type=int, default=0,
-                    help='initial epoch number (default: 0)')
-parser.add_argument('--lr', type=float, default=1e-4, help='learning rate (default: 1e-4)')
-parser.add_argument('--cudnn-nondet', action='store_true',
-                    help='disable cudnn determinism - might slow down training')
 
-# network architecture parameters
-parser.add_argument('--enc', type=int, nargs='+',
-                    help='list of unet encoder filters (default: 16 32 32 32)')
-parser.add_argument('--dec', type=int, nargs='+',
-                    help='list of unet decorder filters (default: 32 32 32 32 32 16 16)')
-parser.add_argument('--int-steps', type=int, default=7,
-                    help='number of integration steps (default: 7)')
-parser.add_argument('--int-downsize', type=int, default=2,
-                    help='flow downsample factor for integration (default: 2)')
-parser.add_argument('--bidir', action='store_true', help='enable bidirectional cost function')
+def make_dirs():
+    if not os.path.exists(args.model_dir):
+        os.makedirs(args.model_dir)
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    if not os.path.exists(args.result_dir):
+        os.makedirs(args.result_dir)
 
-# loss hyperparameters
-parser.add_argument('--image-loss', default='mse',
-                    help='image reconstruction loss - can be mse or ncc (default: mse)')
-parser.add_argument('--lambda', type=float, dest='weight', default=0.01,
-                    help='weight of deformation loss (default: 0.01)')
-args = parser.parse_args()
 
-bidir = args.bidir
+def save_image(img, ref_img, name):
+    img = sitk.GetImageFromArray(img[0, 0, ...].cpu().detach().numpy())
+    img.SetOrigin(ref_img.GetOrigin())
+    img.SetDirection(ref_img.GetDirection())
+    img.SetSpacing(ref_img.GetSpacing())
+    sitk.WriteImage(img, os.path.join(args.result_dir, name))
 
-# load and prepare training data
-train_files = vxm.py.utils.read_file_list(args.img_list, prefix=args.img_prefix,
-                                          suffix=args.img_suffix)
-assert len(train_files) > 0, 'Could not find any training data.'
 
-# no need to append an extra feature axis if data is multichannel
-add_feat_axis = not args.multichannel
+def train():
+    # 创建需要的文件夹并指定gpu
+    make_dirs()
+    device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu')
 
-if args.atlas:
-    # scan-to-atlas generator
-    atlas = vxm.py.utils.load_volfile(args.atlas, np_var='vol',
-                                      add_batch_axis=True, add_feat_axis=add_feat_axis)
-    generator = vxm.generators.scan_to_atlas(train_files, atlas,
-                                             batch_size=args.batch_size, bidir=args.bidir,
-                                             add_feat_axis=add_feat_axis)
-else:
-    # scan-to-scan generator
-    generator = vxm.generators.scan_to_scan(
-        train_files, batch_size=args.batch_size, bidir=args.bidir, add_feat_axis=add_feat_axis)
+    # 日志文件
+    log_name = str(args.n_iter) + "_" + str(args.lr) + "_" + str(args.alpha)
+    print("log_name: ", log_name)
+    f = open(os.path.join(args.log_dir, log_name + ".txt"), "w")
 
-# extract shape from sampled input
-inshape = next(generator)[0][0].shape[1:-1]
+    # 读取相应的文件
+    case = 1
+    project_path = ut.get_project_path("4DCT")
+    data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
+    image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
+    image_list = []
+    fixed_img = None
+    i = 0
+    for file_name in image_file_list:
+        stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
+        if i != 4:
+            image_list.append(stkimg)
+        else:
+            fixed_img = stkimg
+        i += 1
 
-# prepare model folder
-model_dir = args.model_dir
-os.makedirs(model_dir, exist_ok=True)
+    # [B, C, D, W, H]
+    input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
+    fixed_img = fixed_img[np.newaxis, np.newaxis, ...]
+    input_fixed = np.repeat(fixed_img, args.batch_size, axis=0)
 
-# device handling
-gpus = args.gpu.split(',')
-nb_gpus = len(gpus)
-device = 'cuda'
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-assert np.mod(args.batch_size, nb_gpus) == 0, \
-    'Batch size (%d) should be a multiple of the nr of gpus (%d)' % (args.batch_size, nb_devices)
+    # normalize
+    moving_image = data_standardization_0_n(1, input_image)
+    fixed_img = data_standardization_0_n(1, fixed_img)
 
-# enabling cudnn determinism appears to speed up training by a lot
-torch.backends.cudnn.deterministic = not args.cudnn_nondet
+    vol_size = fixed_img.shape[2:]
+    input_fixed = torch.from_numpy(input_fixed).to(device).float()
 
-# unet architecture
-enc_nf = args.enc if args.enc else [16, 32, 32, 32]
-dec_nf = args.dec if args.dec else [32, 32, 32, 32, 32, 16, 16]
+    # 创建配准网络（UNet）和STN
+    nf_enc = [16, 32, 32, 32]
+    if args.model == "vm1":
+        nf_dec = [32, 32, 32, 32, 8, 8]
+    else:
+        nf_dec = [32, 32, 32, 32, 32, 16, 16]   # vm2
+    UNet = U_Network(len(vol_size), nf_enc, nf_dec).to(device)
+    STN = SpatialTransformer(vol_size).to(device)
+    UNet.train()
+    STN.train()
+    # 模型参数个数
+    print("UNet: ", count_parameters(UNet))
+    print("STN: ", count_parameters(STN))
 
-if args.load_model:
-    # load initial model (if specified)
-    model = vxm.networks.VxmDense.load(args.load_model, device)
-else:
-    # otherwise configure new model
-    model = vxm.networks.VxmDense(
-        inshape=inshape,
-        nb_unet_features=[enc_nf, dec_nf],
-        bidir=bidir,
-        int_steps=args.int_steps,
-        int_downsize=args.int_downsize
-    )
+    # Set optimizer and losses
+    opt = Adam(UNet.parameters(), lr=args.lr)
+    sim_loss_fn = losses.ncc_loss if args.sim_loss == "ncc" else losses.mse_loss
+    grad_loss_fn = losses.gradient_loss
 
-if nb_gpus > 1:
-    # use multiple GPUs via DataParallel
-    model = torch.nn.DataParallel(model)
-    model.save = model.module.save
+    # Get all the names of the training data
+    train_files = glob.glob(os.path.join(args.train_dir, '*.mhd'))
+    DS = Dataset(files=train_files)
+    print("Number of training images: ", len(DS))
+    DL = Data.DataLoader(DS, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 
-# prepare the model for training and send to device
-model.to(device)
-model.train()
+    # Training loop.
+    for i in range(1, args.n_iter + 1):
+        # Generate the moving images and convert them to tensors.
+        input_moving = iter(DL).next()
+        # [B, C, D, W, H]
+        input_moving = input_moving.to(device).float()
 
-# set optimizer
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        # Run the data through the model to produce warp and flow field
+        flow_m2f = UNet(input_moving, input_fixed)
+        m2f = STN(input_moving, flow_m2f)
 
-# prepare image loss
-if args.image_loss == 'ncc':
-    image_loss_func = vxm.losses.NCC().loss
-elif args.image_loss == 'mse':
-    image_loss_func = vxm.losses.MSE().loss
-else:
-    raise ValueError('Image loss should be "mse" or "ncc", but found "%s"' % args.image_loss)
+        # Calculate loss
+        sim_loss = sim_loss_fn(m2f, input_fixed)
+        grad_loss = grad_loss_fn(flow_m2f)
+        loss = sim_loss + args.alpha * grad_loss
+        print("i: %d  loss: %f  sim: %f  grad: %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), flush=True)
+        print("%d, %f, %f, %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), file=f)
 
-# need two image loss functions if bidirectional
-if bidir:
-    losses = [image_loss_func, image_loss_func]
-    weights = [0.5, 0.5]
-else:
-    losses = [image_loss_func]
-    weights = [1]
-
-# prepare deformation loss
-losses += [vxm.losses.Grad('l2', loss_mult=args.int_downsize).loss]
-weights += [args.weight]
-
-# training loops
-for epoch in range(args.initial_epoch, args.epochs):
-
-    # save model checkpoint
-    if epoch % 20 == 0:
-        model.save(os.path.join(model_dir, '%04d.pt' % epoch))
-
-    epoch_loss = []
-    epoch_total_loss = []
-    epoch_step_time = []
-
-    for step in range(args.steps_per_epoch):
-
-        step_start_time = time.time()
-
-        # generate inputs (and true outputs) and convert them to tensors
-        inputs, y_true = next(generator)
-        inputs = [torch.from_numpy(d).to(device).float().permute(0, 4, 1, 2, 3) for d in inputs]
-        y_true = [torch.from_numpy(d).to(device).float().permute(0, 4, 1, 2, 3) for d in y_true]
-
-        # run inputs through the model to produce a warped image and flow field
-        y_pred = model(*inputs)
-
-        # calculate total loss
-        loss = 0
-        loss_list = []
-        for n, loss_function in enumerate(losses):
-            curr_loss = loss_function(y_true[n], y_pred[n]) * weights[n]
-            loss_list.append(curr_loss.item())
-            loss += curr_loss
-
-        epoch_loss.append(loss_list)
-        epoch_total_loss.append(loss.item())
-
-        # backpropagate and optimize
-        optimizer.zero_grad()
+        # Backwards and optimize
+        opt.zero_grad()
         loss.backward()
-        optimizer.step()
+        opt.step()
 
-        # get compute time
-        epoch_step_time.append(time.time() - step_start_time)
+        if i % args.n_save_iter == 0:
+            # Save model checkpoint
+            save_file_name = os.path.join(args.model_dir, '%d.pth' % i)
+            torch.save(UNet.state_dict(), save_file_name)
+            # Save images
+            m_name = str(i) + "_m.nii.gz"
+            m2f_name = str(i) + "_m2f.nii.gz"
+            save_image(input_moving, fixed_img, m_name)
+            save_image(m2f, fixed_img, m2f_name)
+            print("warped images have saved.")
 
-    # print epoch info
-    epoch_info = 'Epoch %d/%d' % (epoch + 1, args.epochs)
-    time_info = '%.4f sec/step' % np.mean(epoch_step_time)
-    losses_info = ', '.join(['%.4e' % f for f in np.mean(epoch_loss, axis=0)])
-    loss_info = 'loss: %.4e  (%s)' % (np.mean(epoch_total_loss), losses_info)
-    print(' - '.join((epoch_info, time_info, loss_info)), flush=True)
+    f.close()
 
-# final model save
-model.save(os.path.join(model_dir, '%04d.pt' % args.epochs))
+
+if __name__ == "__main__":
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+    train()
