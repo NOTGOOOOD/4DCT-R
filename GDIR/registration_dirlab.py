@@ -105,6 +105,12 @@ data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case
 landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 
+# 保存固定图像和扭曲图像路径
+warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
+temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
+utils.utilize.make_dir(warp_case_path)
+utils.utilize.make_dir(temp_case_path)
+
 config = dict(
     dim=3,  # dimension of the input image
     intensity_scale_const=1000.,  # (image - intensity_shift_const)/intensity_scale_const
@@ -138,6 +144,10 @@ for file_name in image_file_list:
     stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
     image_list.append(stkimg)
 
+
+# tensor B,(C),D,H,W
+# numpy D,H,W,C
+# itk W,H,D
 # 1(number of group),B,D,H,W
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
@@ -146,7 +156,7 @@ if config.group_index_list is not None:
 # normalize [0,1]
 input_image = data_standardization_0_n(1, input_image)
 
-# normalize crop
+# crop
 crop_range0 = cfg[case]["crop_range"][0]
 crop_range1 = cfg[case]["crop_range"][1]
 crop_range2 = cfg[case]["crop_range"][2]
@@ -161,16 +171,6 @@ try:
     crop_range2_start = cfg[case]["crop_range"][2].start
 except:
     crop_range2_start = cfg[case]["crop_range"][2][0].start
-
-# if len(cfg[case]["crop_range"][0]) == 2:
-#     slicearr = cfg[case]["crop_range"][0]
-#     input_image = torch.cat((input_image[:, :, slicearr[0], :, :], input_image[:, :, slicearr[1], :, :]), 2)
-#     crop_range0 = slice(input_image.shape[2])
-#
-# if len(cfg[case]["crop_range"][2]) == 2:
-#     slicearr = cfg[case]["crop_range"][2]
-#     input_image = torch.cat((input_image[:, :, :, :, slicearr[0]], input_image[:, :, :, :, slicearr[1]]), -1)
-#     crop_range2 = slice(input_image.shape[-1])
 
 input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
 
@@ -202,6 +202,7 @@ if config.load:
 
 grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
 
+# d,h,w
 landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
     [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
@@ -209,15 +210,8 @@ diff_stats = []
 stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
 
-# 保存固定图像和扭曲图像路径
-warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
-temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
-
-utils.utilize.make_dir(warp_case_path)
-utils.utilize.make_dir(temp_case_path)
-
 for i in pbar:
-    optimizer.zero_grad()
+
     res = regnet(input_image)
     if i % 10 == 0:
         for j in (0, 5):
@@ -268,6 +262,7 @@ for i in pbar:
     else:
         cyclic_loss_item = 0
 
+    optimizer.zero_grad()
     total_loss.backward()
     optimizer.step()
     scheduler.step()
