@@ -90,11 +90,10 @@ class SpatialTransformer(nn.Module):
         # Create sampling grid
         vectors = [torch.arange(0, s) for s in size]
         grids = torch.meshgrid(vectors)
-        grid = torch.stack(grids)  # y, x, z
-        grid = torch.unsqueeze(grid, 0)  # add batch
+        grid = torch.stack(grids)  # [C D H W] 扩张成一个三维张量
+        grid = torch.unsqueeze(grid, 0)  # add batch [B C D H W]
         grid = grid.type(torch.FloatTensor)
-        self.register_buffer('grid', grid)
-
+        self.register_buffer('grid', grid)  # 将grid写入内存且不随优化器优化而改变
         self.mode = mode
 
     def forward(self, src, flow):
@@ -109,7 +108,11 @@ class SpatialTransformer(nn.Module):
             new_locs = new_locs.permute(0, 2, 3, 1)
             new_locs = new_locs[..., [1, 0]]
         elif len(shape) == 3:
+            # [B C D H W] -> [B D H W C] (1,3,...)->(1,...,3)
             new_locs = new_locs.permute(0, 2, 3, 4, 1)
+            # 神奇索引，(...,2) (...,1) (...,0) 拼成的新数组
             new_locs = new_locs[..., [2, 1, 0]]
 
+        # grid_sample是一个采样函数，提供一个input的Tensor以及一个对应的网格grid，然后根据grid中每个位置
+        # 提供的坐标信息(这里指input中像素的坐标)，将input中对应位置的像素值填充到grid指定的位置，得到最终的输出
         return F.grid_sample(src, new_locs, mode=self.mode)

@@ -10,7 +10,7 @@ import numpy as np
 from config import args
 import torch.nn.functional as F
 
-
+# 平滑正则损失
 def gradient_loss(s, penalty='l2'):
     dy = torch.abs(s[:, :, 1:, :, :] - s[:, :, :-1, :, :])
     dx = torch.abs(s[:, :, :, 1:, :] - s[:, :, :, :-1, :])
