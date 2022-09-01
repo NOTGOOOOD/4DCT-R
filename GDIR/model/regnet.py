@@ -1,4 +1,4 @@
-from model import unet
+from GDIR.model import unet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -1,5 +1,4 @@
 import os
-import glob
 import warnings
 
 import torch
@@ -8,12 +7,13 @@ import SimpleITK as sitk
 from torch.optim import Adam
 import torch.utils.data as Data
 import utils.utilize as ut
-from process.processing import data_standardization_0_n
 
 import losses
 from config import args
 from datagenerators import Dataset
 from model import U_Network, SpatialTransformer
+from process.processing import data_standardization_0_n
+
 
 
 def count_parameters(model):
@@ -50,31 +50,31 @@ def train():
     f = open(os.path.join(args.log_dir, log_name + ".txt"), "w")
 
     # 读取相应的文件
-    case = 1
+    case = 2
     project_path = ut.get_project_path("4DCT")
+    fixed_folder = ''
+    moving_folder = ''
     data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
     image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
-    image_list = []
-    fixed_img = None
-    i = 0
-    for file_name in image_file_list:
-        stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
-        if i != 4:
-            image_list.append(stkimg)
-        else:
-            fixed_img = stkimg
-        i += 1
 
+    train_files = []
+    fixed_img = None
+    for img in image_file_list:
+        # fixed img and moving img
+        if 'T50' in img:
+            fixed_img = os.path.join(data_folder, img)
+        else:
+            train_files.append(os.path.join(data_folder, img))
+
+    # [D, W, H]
+    fixed_img = sitk.ReadImage(fixed_img)
     # [B, C, D, W, H]
-    input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
-    fixed_img = fixed_img[np.newaxis, np.newaxis, ...]
-    input_fixed = np.repeat(fixed_img, args.batch_size, axis=0)
+    input_fixed = sitk.GetArrayFromImage(fixed_img)[np.newaxis, np.newaxis, ...]
+    input_fixed = np.repeat(input_fixed, args.batch_size, axis=0)
 
     # normalize
-    moving_image = data_standardization_0_n(1, input_image)
-    fixed_img = data_standardization_0_n(1, fixed_img)
-
-    vol_size = fixed_img.shape[2:]
+    input_fixed = data_standardization_0_n(1, input_fixed)
+    vol_size = input_fixed.shape[2:]
     input_fixed = torch.from_numpy(input_fixed).to(device).float()
 
     # 创建配准网络（UNet）和STN
@@ -97,7 +97,8 @@ def train():
     grad_loss_fn = losses.gradient_loss
 
     # Get all the names of the training data
-    train_files = glob.glob(os.path.join(args.train_dir, '*.mhd'))
+    # train_files = glob.glob(os.path.join(args.train_dir, '*.mhd'))
+
     DS = Dataset(files=train_files)
     print("Number of training images: ", len(DS))
     DL = Data.DataLoader(DS, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
@@ -114,7 +115,7 @@ def train():
         m2f = STN(input_moving, flow_m2f)
 
         # Calculate loss
-        sim_loss = sim_loss_fn(m2f, input_fixed)
+        sim_loss = sim_loss_fn(m2f, input_fixed, [9]*3)
         grad_loss = grad_loss_fn(flow_m2f)
         loss = sim_loss + args.alpha * grad_loss
         print("i: %d  loss: %f  sim: %f  grad: %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), flush=True)

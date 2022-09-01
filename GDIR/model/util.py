@@ -1,4 +1,4 @@
-from model import regnet
+from GDIR.model import regnet
 import numpy as np
 import torch
 

@@ -1,4 +1,4 @@
-import model.regnet, model.loss, model.util, utils.structure, utils.utilize
+import GDIR.model.regnet, GDIR.model.loss, GDIR.model.util, utils.structure, utils.utilize
 import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
@@ -176,17 +176,17 @@ input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
 
 image_shape = np.array(input_image.shape[2:])  # (d, h, w)
 num_image = input_image.shape[0]  # number of image in the group
-regnet = model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
-                                    initial_channels=config.initial_channels, normalization=config.normalization)
+regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
+                                         initial_channels=config.initial_channels, normalization=config.normalization)
 
 # n = 5
-ncc_loss = model.loss.NCC(config.dim, config.ncc_window_size)
+ncc_loss = GDIR.model.loss.NCC(config.dim, config.ncc_window_size)
 regnet = regnet.to(device)
 input_image = input_image.to(device)
 ncc_loss = ncc_loss.to(device)
 optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=5e-5)
-calcdisp = model.util.CalcDisp(dim=config.dim, calc_device='cuda')
+calcdisp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
 
 if config.load:
     state_file = os.path.join(states_folder, config.load)
@@ -207,7 +207,7 @@ landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
     [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
 diff_stats = []
-stop_criterion = model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
+stop_criterion = GDIR.model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
 
 for i in pbar:
@@ -240,11 +240,11 @@ for i in pbar:
 
     if config.smooth_reg > 0:
         if 'disp_i2t' in res:
-            smooth_loss = (model.loss.smooth_loss(res['scaled_disp_t2i']) + model.loss.smooth_loss(
+            smooth_loss = (GDIR.model.loss.smooth_loss(res['scaled_disp_t2i']) + GDIR.model.loss.smooth_loss(
                 res['scaled_disp_i2t'])) / 2.
         else:
             # smooth_loss = model.loss.smooth_loss(res['scaled_disp_t2i'])
-            smooth_loss = model.loss.smooth_loss(res['scaled_disp_t2i'], res['scaled_template'])
+            smooth_loss = GDIR.model.loss.smooth_loss(res['scaled_disp_t2i'], res['scaled_template'])
         total_loss += config.smooth_reg * smooth_loss
         smooth_loss_item = smooth_loss.item()
     else:
