@@ -21,6 +21,7 @@ def gradient_loss(s, penalty='l2'):
         dx = dx * dx
         dz = dz * dz
 
+    # 各个方向上每个像素上的平均梯度
     d = torch.mean(dx) + torch.mean(dy) + torch.mean(dz)
     return d / 3.0
 

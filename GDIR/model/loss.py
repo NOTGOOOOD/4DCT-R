@@ -76,9 +76,16 @@ class NCC(nn.Module):
         return -torch.mean(cc)
 
 
+def gradient(data):
+    dy = data[:, :, 1:, :, :] - data[:, :, :-1, :, :]
+    dx = data[:, :, :, 1:, :] - data[:, :, :, :-1, :]
+    dz = data[:, :, :, :, 1:] - data[:, :, :, :, :-1]
+    return dx, dy, dz
+
+
 def smooth_loss(disp, image):
     '''
-    Calculate the smooth loss. Return mean of absolute or squared of the forward difference of  flow field.
+    Calculate the smooth loss. Return mean of absolute or squared of the forward difference of flow field.
 
     Parameters
     ----------
@@ -110,7 +117,16 @@ def smooth_loss(disp, image):
         d_image[:, 1, :, :, :-1, :] = (image[:, :, :, 1:, :] - image[:, :, :, :-1, :])
         d_image[:, 0, :, :, :, :-1] = (image[:, :, :, :, 1:] - image[:, :, :, :, :-1])
 
-    loss = torch.mean(torch.sum(torch.abs(d_disp), dim=2, keepdims=True) * torch.exp(-torch.abs(d_image)))
+        img_dx, img_dy, img_dz = gradient(image)
+        flow_dx, flow_dy, flow_dz = gradient(d_disp)
+
+        loss_x = torch.exp(-torch.abs(img_dx)) * torch.norm(flow_dx, p=1)
+        loss_y = torch.exp(-torch.abs(img_dy)) * torch.norm(flow_dy, p=1)
+        loss_z = torch.exp(-torch.abs(img_dz)) * torch.norm(flow_dz, p=1)
+
+    loss_new = (torch.mean(loss_x) / 3. + torch.mean(loss_y) / 3. + torch.mean(loss_z) / 3.)
+
+    loss = torch.mean(torch.sum(torch.abs(d_disp)), dim=2, keepdims=True) * torch.exp(-torch.abs(d_image))
 
     return loss
 

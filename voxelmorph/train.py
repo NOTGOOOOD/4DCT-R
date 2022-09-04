@@ -11,9 +11,7 @@ import utils.utilize as ut
 import losses
 from config import args
 from datagenerators import Dataset
-from model import U_Network, SpatialTransformer
-from process.processing import data_standardization_0_n
-
+from model import U_Network, SpatialTransformer, SpatialTransformer_new
 
 
 def count_parameters(model):
@@ -33,6 +31,8 @@ def make_dirs():
 
 def save_image(img, ref_img, name):
     img = sitk.GetImageFromArray(img[0, 0, ...].cpu().detach().numpy())
+    ref_img = sitk.GetImageFromArray(ref_img[0, 0, ...].cpu().detach().numpy())
+
     img.SetOrigin(ref_img.GetOrigin())
     img.SetDirection(ref_img.GetDirection())
     img.SetSpacing(ref_img.GetSpacing())
@@ -50,32 +50,33 @@ def train():
     f = open(os.path.join(args.log_dir, log_name + ".txt"), "w")
 
     # 读取相应的文件
-    case = 2
+    # case = 2
+    # data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
     project_path = ut.get_project_path("4DCT")
-    fixed_folder = ''
-    moving_folder = ''
-    data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
-    image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
+    fixed_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/registration/fixed/')
+    moving_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/registration/moving/')
+    f_img_file_list = sorted([file_name for file_name in os.listdir(fixed_folder) if file_name.lower().endswith('mhd')])
+    m_img_file_list = sorted([file_name for file_name in os.listdir(moving_folder) if file_name.lower().endswith('mhd')])
 
-    train_files = []
-    fixed_img = None
-    for img in image_file_list:
-        # fixed img and moving img
-        if 'T50' in img:
-            fixed_img = os.path.join(data_folder, img)
-        else:
-            train_files.append(os.path.join(data_folder, img))
+    # train_files = []
+    # fixed_img = None
+    # for img in image_file_list:
+    #     # fixed img and moving img
+    #     if 'T50' in img:
+    #         fixed_img = os.path.join(data_folder, img)
+    #     else:
+    #         train_files.append(os.path.join(data_folder, img))
 
-    # [D, W, H]
-    fixed_img = sitk.ReadImage(fixed_img)
-    # [B, C, D, W, H]
-    input_fixed = sitk.GetArrayFromImage(fixed_img)[np.newaxis, np.newaxis, ...]
-    input_fixed = np.repeat(input_fixed, args.batch_size, axis=0)
-
-    # normalize
-    input_fixed = data_standardization_0_n(1, input_fixed)
-    vol_size = input_fixed.shape[2:]
-    input_fixed = torch.from_numpy(input_fixed).to(device).float()
+    # # [D, W, H]
+    # fixed_img = sitk.ReadImage(fixed_img)
+    # # [B, C, D, W, H]
+    # input_fixed = sitk.GetArrayFromImage(fixed_img)[np.newaxis, np.newaxis, ...]
+    # input_fixed = np.repeat(input_fixed, args.batch_size, axis=0)
+    #
+    # # normalize
+    # input_fixed = data_standardization_0_n(1, input_fixed)
+    # vol_size = input_fixed.shape[2:]
+    # input_fixed = torch.from_numpy(input_fixed).to(device).float()
 
     # 创建配准网络（UNet）和STN
     nf_enc = [16, 32, 32, 32]
@@ -83,13 +84,18 @@ def train():
         nf_dec = [32, 32, 32, 32, 8, 8]
     else:
         nf_dec = [32, 32, 32, 32, 32, 16, 16]   # vm2
-    UNet = U_Network(len(vol_size), nf_enc, nf_dec).to(device)
-    STN = SpatialTransformer(vol_size).to(device)
+    temp = [112, 256, 256]
+    UNet = U_Network(3, nf_enc, nf_dec).to(device)
+    STN = SpatialTransformer(temp).to(device)
+    STN2 = SpatialTransformer_new(3).to(device)
     UNet.train()
     STN.train()
+    STN2.train()
+
     # 模型参数个数
     print("UNet: ", count_parameters(UNet))
     print("STN: ", count_parameters(STN))
+    print("STN2: ", count_parameters(STN2))
 
     # Set optimizer and losses
     opt = Adam(UNet.parameters(), lr=args.lr)
@@ -99,26 +105,28 @@ def train():
     # Get all the names of the training data
     # train_files = glob.glob(os.path.join(args.train_dir, '*.mhd'))
 
-    DS = Dataset(files=train_files)
+    DS = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     print("Number of training images: ", len(DS))
     DL = Data.DataLoader(DS, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 
     # Training loop.
     for i in range(1, args.n_iter + 1):
         # Generate the moving images and convert them to tensors.
-        input_moving = iter(DL).next()
+        input_moving, input_fixed = iter(DL).next()
         # [B, C, D, W, H]
         input_moving = input_moving.to(device).float()
 
         # Run the data through the model to produce warp and flow field
         flow_m2f = UNet(input_moving, input_fixed)
         m2f = STN(input_moving, flow_m2f)
+        m2f_new = STN2(input_moving, flow_m2f)
 
         # Calculate loss
         sim_loss = sim_loss_fn(m2f, input_fixed, [9]*3)
+        sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9]*3)
         grad_loss = grad_loss_fn(flow_m2f)
         loss = sim_loss + args.alpha * grad_loss
-        print("i: %d  loss: %f  sim: %f  grad: %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), flush=True)
+        print("i: %d  loss: %f  sim: %f  sim2: %f  grad: %f" % (i, loss.item(), sim_loss.item(), sim_loss2.item(), grad_loss.item()), flush=True)
         print("%d, %f, %f, %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), file=f)
 
         # Backwards and optimize
@@ -133,8 +141,8 @@ def train():
             # Save images
             m_name = str(i) + "_m.nii.gz"
             m2f_name = str(i) + "_m2f.nii.gz"
-            save_image(input_moving, fixed_img, m_name)
-            save_image(m2f, fixed_img, m2f_name)
+            save_image(input_moving, input_fixed, m_name)
+            save_image(m2f, input_fixed, m2f_name)
             print("warped images have saved.")
 
     f.close()

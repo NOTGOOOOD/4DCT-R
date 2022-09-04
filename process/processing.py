@@ -122,7 +122,7 @@ def read_mhd(mhd_dir):
         break
 
 
-def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkNearestNeighbor):
+def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     resampler = sitk.ResampleImageFilter()
     originSize = itkimage.GetSize()  # 原来的体素块尺寸
     originSpacing = itkimage.GetSpacing()

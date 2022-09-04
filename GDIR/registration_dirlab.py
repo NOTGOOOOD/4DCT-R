@@ -135,7 +135,7 @@ config = dict(
 config = utils.structure.Struct(**config)
 
 landmark_info = torch.load(landmark_file)
-landmark_disp = landmark_info['disp_00_50']  # w, h, d
+landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
 landmark_00 = landmark_info['landmark_00']
 
 image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])

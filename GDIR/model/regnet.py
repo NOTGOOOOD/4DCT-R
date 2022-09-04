@@ -187,8 +187,7 @@ class SpatialTransformer(nn.Module):
             norm_coeff = self.norm_coeff_dict[img_shape]
         else:
             grids = torch.meshgrid([torch.arange(0, s) for s in img_shape])
-            grid = torch.stack(grids[::-1],
-                               dim=0)  # 2 x h x w or 3 x d x h x w, the data in second dimension is in the order of [w, h, d]
+            grid = torch.stack(grids[::-1], dim=0)  # 2 x h x w or 3 x d x h x w, the data in second dimension is in the order of [w, h, d]
             grid = torch.unsqueeze(grid, 0)
             grid = grid.to(dtype=flow.dtype, device=flow.device)
             norm_coeff = 2. / (torch.tensor(img_shape[::-1], dtype=flow.dtype,

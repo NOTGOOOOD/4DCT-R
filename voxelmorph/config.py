@@ -23,7 +23,7 @@ parser.add_argument("--n_iter", type=int, help="number of iterations",
 parser.add_argument("--sim_loss", type=str, help="image similarity loss: mse or ncc",
                     dest="sim_loss", default='ncc')
 parser.add_argument("--alpha", type=float, help="regularization parameter",
-                    dest="alpha", default=1.0)  # recommend 1.0 for ncc, 0.01 for mse
+                    dest="alpha", default=0.001)  # recommend 1.0 for ncc, 0.01 for mse
 parser.add_argument("--batch_size", type=int, help="batch_size",
                     dest="batch_size", default=1)
 parser.add_argument("--n_save_iter", type=int, help="frequency of model saves",
