@@ -134,10 +134,6 @@ config = dict(
 )
 config = utils.structure.Struct(**config)
 
-landmark_info = torch.load(landmark_file)
-landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
-landmark_00 = landmark_info['landmark_00']
-
 image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
 image_list = []
 for file_name in image_file_list:
@@ -201,18 +197,22 @@ if config.load:
             logging.info(f'load model state {config.load}.pth')
 
 grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
-
-# d,h,w
-landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
-    [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
-
 diff_stats = []
 stop_criterion = GDIR.model.util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
 pbar = tqdm.tqdm(range(config.max_num_iteration))
 
-for i in pbar:
+# landmark
+landmark_info = torch.load(landmark_file)
+landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
+landmark_00 = landmark_info['landmark_00']
+# d,h,w
+landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
+    [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
+for i in pbar:
     res = regnet(input_image)
+
+    # 保存前六个阶段图片
     if i % 10 == 0:
         for j in (0, 5):
             utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",

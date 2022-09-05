@@ -12,6 +12,7 @@ import losses
 from config import args
 from datagenerators import Dataset
 from model import U_Network, SpatialTransformer, SpatialTransformer_new
+from utils.utilize import tre
 
 
 def count_parameters(model):
@@ -111,39 +112,45 @@ def train():
 
     # Training loop.
     for i in range(1, args.n_iter + 1):
-        # Generate the moving images and convert them to tensors.
-        input_moving, input_fixed = iter(DL).next()
-        # [B, C, D, W, H]
-        input_moving = input_moving.to(device).float()
 
-        # Run the data through the model to produce warp and flow field
-        flow_m2f = UNet(input_moving, input_fixed)
-        m2f = STN(input_moving, flow_m2f)
-        m2f_new = STN2(input_moving, flow_m2f)
+        for i_step, (m_img, f_img) in enumerate(DL):
+            if i_step > args.n_iter:
+                break
 
-        # Calculate loss
-        sim_loss = sim_loss_fn(m2f, input_fixed, [9]*3)
-        sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9]*3)
-        grad_loss = grad_loss_fn(flow_m2f)
-        loss = sim_loss + args.alpha * grad_loss
-        print("i: %d  loss: %f  sim: %f  sim2: %f  grad: %f" % (i, loss.item(), sim_loss.item(), sim_loss2.item(), grad_loss.item()), flush=True)
-        print("%d, %f, %f, %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), file=f)
+            input_moving, input_fixed = m_img, f_img
+            # [B, C, D, W, H]
+            input_moving = input_moving.to(device).float()
+            input_fixed = input_fixed.to(device).float()
 
-        # Backwards and optimize
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+            # Run the data through the model to produce warp and flow field
+            flow_m2f = UNet(input_moving, input_fixed)
+            m2f = STN(input_moving, flow_m2f)
+            m2f_new = STN2(input_moving, flow_m2f)
 
-        if i % args.n_save_iter == 0:
-            # Save model checkpoint
-            save_file_name = os.path.join(args.model_dir, '%d.pth' % i)
-            torch.save(UNet.state_dict(), save_file_name)
-            # Save images
-            m_name = str(i) + "_m.nii.gz"
-            m2f_name = str(i) + "_m2f.nii.gz"
-            save_image(input_moving, input_fixed, m_name)
-            save_image(m2f, input_fixed, m2f_name)
-            print("warped images have saved.")
+            # Calculate loss
+            sim_loss = sim_loss_fn(m2f, input_fixed, [9]*3)
+            sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9]*3)
+            grad_loss = grad_loss_fn(flow_m2f)
+            loss = sim_loss + args.alpha * grad_loss
+            tre_score = tre()
+            print("i: %d  loss: %f  sim: %f  sim2: %f  grad: %f" % (i, loss.item(), sim_loss.item(), sim_loss2.item(), grad_loss.item()), flush=True)
+            print("%d, %f, %f, %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), file=f)
+
+            # Backwards and optimize
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+            if i % args.n_save_iter == 0:
+                # Save model checkpoint
+                save_file_name = os.path.join(args.model_dir, '%d.pth' % i)
+                torch.save(UNet.state_dict(), save_file_name)
+                # Save images
+                m_name = str(i) + "_m.nii.gz"
+                m2f_name = str(i) + "_m2f.nii.gz"
+                save_image(input_moving, input_fixed, m_name)
+                save_image(m2f, input_fixed, m2f_name)
+                print("warped images have saved.")
 
     f.close()
 

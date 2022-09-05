@@ -168,7 +168,7 @@ def transform_convert(img, transform):
     return img
 
 
-def tre(mov_lmk, ref_lmk, spacing):
+def tre(mov_lmk, ref_lmk, spacing=1):
     # TRE, unit: mm
 
     diff = (ref_lmk - mov_lmk) * spacing
