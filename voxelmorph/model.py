@@ -115,6 +115,7 @@ class SpatialTransformer(nn.Module):
 
         # grid_sample是一个采样函数，提供一个input的Tensor以及一个对应的网格grid，然后根据grid中每个位置
         # 提供的坐标信息(这里指input中像素的坐标)，将input中对应位置的像素值填充到grid指定的位置，得到最终的输出
+        # 即实现坐标求解的可微性
         return F.grid_sample(src, new_locs, mode=self.mode)
 
 
@@ -135,6 +136,7 @@ class SpatialTransformer_new(nn.Module):
         return:
             warped moving image, (n, 1, h, w) or (n, 1, d, h, w)
         '''
+        # Grid generator 建立体素坐标对应关系
         img_shape = input_image.shape[2:]
         if img_shape in self.grid_dict:
             grid = self.grid_dict[img_shape]
@@ -148,7 +150,7 @@ class SpatialTransformer_new(nn.Module):
                                             device=flow.device) - 1.)  # the coefficients to map image coordinates to [-1, 1]
             self.grid_dict[img_shape] = grid
             self.norm_coeff_dict[img_shape] = norm_coeff
-            logging.info(f'\nAdd grid shape {tuple(img_shape)}')
+
         new_grid = grid + flow
 
         if self.dim == 2:

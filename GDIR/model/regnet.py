@@ -79,8 +79,6 @@ class RegNet_single(nn.Module):
         warped_input_image = self.spatial_transform(input_image, disp_t2i)  # (n, 1, h, w) or (n, 1, d, h, w)
         template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
         # template = torch.unsqueeze(warped_input_image[5], 0)
-        res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
-               'template': template}
 
         if self.scale < 1:
             scaled_template = torch.nn.functional.interpolate(template, size=scaled_image_shape,
@@ -187,7 +185,9 @@ class SpatialTransformer(nn.Module):
             norm_coeff = self.norm_coeff_dict[img_shape]
         else:
             grids = torch.meshgrid([torch.arange(0, s) for s in img_shape])
-            grid = torch.stack(grids[::-1], dim=0)  # 2 x h x w or 3 x d x h x w, the data in second dimension is in the order of [w, h, d]
+            # grid = torch.stack(grids)
+            grid = torch.stack(grids[::-1],
+                               dim=0)  # 2 x h x w or 3 x d x h x w, the data in second dimension is in the order of [w, h, d]
             grid = torch.unsqueeze(grid, 0)
             grid = grid.to(dtype=flow.dtype, device=flow.device)
             norm_coeff = 2. / (torch.tensor(img_shape[::-1], dtype=flow.dtype,
@@ -201,6 +201,7 @@ class SpatialTransformer(nn.Module):
             new_grid = new_grid.permute(0, 2, 3, 1)  # n x h x w x 2
         elif self.dim == 3:
             new_grid = new_grid.permute(0, 2, 3, 4, 1)  # n x d x h x w x 3
+            # new_grid = new_grid[..., [2, 1, 0]]
 
         if len(input_image) != len(new_grid):
             # make the image shape compatable by broadcasting
@@ -210,5 +211,3 @@ class SpatialTransformer(nn.Module):
         warped_input_img = F.grid_sample(input_image, new_grid * norm_coeff - 1., mode='bilinear', align_corners=True,
                                          padding_mode='border')
         return warped_input_img
-
-

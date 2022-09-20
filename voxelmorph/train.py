@@ -12,7 +12,7 @@ import losses
 from config import args
 from datagenerators import Dataset
 from model import U_Network, SpatialTransformer, SpatialTransformer_new
-from utils.utilize import tre
+from utils.utilize import tre, save_image
 
 
 def count_parameters(model):
@@ -29,15 +29,6 @@ def make_dirs():
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
 
-
-def save_image(img, ref_img, name):
-    img = sitk.GetImageFromArray(img[0, 0, ...].cpu().detach().numpy())
-    ref_img = sitk.GetImageFromArray(ref_img[0, 0, ...].cpu().detach().numpy())
-
-    img.SetOrigin(ref_img.GetOrigin())
-    img.SetDirection(ref_img.GetDirection())
-    img.SetSpacing(ref_img.GetSpacing())
-    sitk.WriteImage(img, os.path.join(args.result_dir, name))
 
 
 def train():
@@ -59,25 +50,6 @@ def train():
     f_img_file_list = sorted([file_name for file_name in os.listdir(fixed_folder) if file_name.lower().endswith('mhd')])
     m_img_file_list = sorted([file_name for file_name in os.listdir(moving_folder) if file_name.lower().endswith('mhd')])
 
-    # train_files = []
-    # fixed_img = None
-    # for img in image_file_list:
-    #     # fixed img and moving img
-    #     if 'T50' in img:
-    #         fixed_img = os.path.join(data_folder, img)
-    #     else:
-    #         train_files.append(os.path.join(data_folder, img))
-
-    # # [D, W, H]
-    # fixed_img = sitk.ReadImage(fixed_img)
-    # # [B, C, D, W, H]
-    # input_fixed = sitk.GetArrayFromImage(fixed_img)[np.newaxis, np.newaxis, ...]
-    # input_fixed = np.repeat(input_fixed, args.batch_size, axis=0)
-    #
-    # # normalize
-    # input_fixed = data_standardization_0_n(1, input_fixed)
-    # vol_size = input_fixed.shape[2:]
-    # input_fixed = torch.from_numpy(input_fixed).to(device).float()
 
     # 创建配准网络（UNet）和STN
     nf_enc = [16, 32, 32, 32]
@@ -113,11 +85,10 @@ def train():
     # Training loop.
     for i in range(1, args.n_iter + 1):
 
-        for i_step, (m_img, f_img) in enumerate(DL):
+        for i_step, (input_moving, input_fixed) in enumerate(DL):
             if i_step > args.n_iter:
                 break
 
-            input_moving, input_fixed = m_img, f_img
             # [B, C, D, W, H]
             input_moving = input_moving.to(device).float()
             input_fixed = input_fixed.to(device).float()

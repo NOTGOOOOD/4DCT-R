@@ -94,7 +94,6 @@ def smooth_loss(disp, image):
 
     image : (n, 1, d, h, w) or (1, 1, d, h, w)
     '''
-
     image_shape = disp.shape
     dim = len(image_shape[2:])
 
@@ -117,22 +116,30 @@ def smooth_loss(disp, image):
         d_image[:, 1, :, :, :-1, :] = (image[:, :, :, 1:, :] - image[:, :, :, :-1, :])
         d_image[:, 0, :, :, :, :-1] = (image[:, :, :, :, 1:] - image[:, :, :, :, :-1])
 
-        img_dx, img_dy, img_dz = gradient(image)
-        flow_dx, flow_dy, flow_dz = gradient(d_disp)
+    #     img_dx, img_dy, img_dz = gradient(image)
+    #     flow_dx, flow_dy, flow_dz = gradient(disp)
+    #
+    #     loss_x = torch.exp(-torch.mean(torch.abs(img_dx), 1, keepdim=True)) * torch.abs(flow_dx) / 2.
+    #     loss_y = torch.exp(-torch.mean(torch.abs(img_dy), 1, keepdim=True)) * torch.abs(flow_dy) / 2.
+    #     loss_z = torch.exp(-torch.mean(torch.abs(img_dz), 1, keepdim=True)) * torch.abs(flow_dz) / 2.
+    #
+    # loss_new = torch.mean(loss_x) / 3. + torch.mean(loss_y) / 3. + torch.mean(loss_z) / 3.
 
-        loss_x = torch.exp(-torch.abs(img_dx)) * torch.norm(flow_dx, p=1)
-        loss_y = torch.exp(-torch.abs(img_dy)) * torch.norm(flow_dy, p=1)
-        loss_z = torch.exp(-torch.abs(img_dz)) * torch.norm(flow_dz, p=1)
-
-    loss_new = (torch.mean(loss_x) / 3. + torch.mean(loss_y) / 3. + torch.mean(loss_z) / 3.)
-
-    loss = torch.mean(torch.sum(torch.abs(d_disp)), dim=2, keepdims=True) * torch.exp(-torch.abs(d_image))
+    loss = torch.mean(torch.sum(torch.abs(d_disp), dim=2, keepdim=True) * torch.exp(-torch.abs(d_image)))
 
     return loss
 
 
 def mse(y_true, y_pred):
     return torch.mean((y_true - y_pred) ** 2)
+
+
+def DSC(target, pred):
+    smooth = 1e-5
+    m1 = pred.flatten()
+    m2 = target.flatten()
+    intersection = (m1 * m2).sum()
+    return (2. * intersection + smooth) / (m1.sum() + m2.sum() + smooth)
 
 
 def dice(y_true, y_pred):

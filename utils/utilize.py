@@ -4,17 +4,26 @@ import SimpleITK as sitk
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2
-import process.processing
 from PIL import Image
-import torchvision.transforms as transform
 
 
 def save_png(imgs_numpy, save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    # img_numpy = process.processing.data_standardization_0_n(255, imgs_numpy)
+    # imgs_numpy = process.processing.data_standardization_0_n(255, imgs_numpy)
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
+def save_image(img:"Tensor", ref_img:"Tensor", save_path, save_name):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    img = sitk.GetImageFromArray(img.cpu().detach().numpy())
+    ref_img = sitk.GetImageFromArray(ref_img.cpu().detach().numpy())
+
+    img.SetOrigin(ref_img.GetOrigin())
+    img.SetDirection(ref_img.GetDirection())
+    img.SetSpacing(ref_img.GetSpacing())
+    sitk.WriteImage(img, os.path.join(save_path, save_name))
 
 def make_dir(path):
     if not os.path.exists(path):

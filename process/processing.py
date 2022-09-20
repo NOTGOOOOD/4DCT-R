@@ -1,9 +1,10 @@
 import os
 import SimpleITK as sitk
 import numpy as np
-import utils.utilize as ut
 from matplotlib import pyplot as plt
 import torch
+
+from utils.utilize import plotorsave_ct_scan, get_project_path
 
 # import ants
 
@@ -50,23 +51,30 @@ def set_window(img_data, win_width, win_center):
     return img_temp
 
 
-def imgTomhd(file_folder, datatype, shape, case):
+def imgTomhd(file_folder, m_path, f_path, datatype, shape, case):
     for file_name in os.listdir(file_folder):
+        is_fixed = False
+        if 'T50' in file_name:
+            is_fixed = True
         file_path = os.path.join(file_folder, file_name)
         file = np.memmap(file_path, dtype=datatype, mode='r')
-        # if datatype != np.float32:
-        #     file = file.astype('float32')
         if shape:
             file = file.reshape(shape)
 
         img = sitk.GetImageFromArray(file)
+        target_filepath = os.path.join(m_path, file_name.split('.')[0] + "_moving.mhd")
+        if is_fixed:
+            for i in range(10):
+                if i == 5:
+                    continue
+                new_name = f'dirlab_case{case}_T' + str(i) + '0_fixed.mhd'
+                target_filepath = os.path.join(f_path, new_name)
+                if not os.path.exists(target_filepath):
+                    sitk.WriteImage(img, target_filepath)
+            continue
 
-        target_path = os.path.join(os.path.dirname(os.path.dirname(file_folder)), f"Case{case}_mhd")
-        ut.make_dir(target_path)
-
-        target_filename = os.path.join(target_path, file_name.split('.')[0] + ".mhd")
-        if not os.path.exists(target_filename):
-            sitk.WriteImage(img, target_filename)
+        if not os.path.exists(target_filepath):
+            sitk.WriteImage(img, target_filepath)
 
     print("{} convert done".format(file_folder))
 
@@ -107,14 +115,14 @@ def read_mhd(mhd_dir):
         img_arr[img_arr < window_minimum] = window_minimum
         img_arr[img_arr > window_maximum] = window_maximum
 
-        ut.plotorsave_ct_scan(ct_value, "plot")
-        ut.plotorsave_ct_scan(img_arr, "plot")
+        plotorsave_ct_scan(ct_value, "plot")
+        plotorsave_ct_scan(img_arr, "plot")
 
         mha_img = sitk.GetImageFromArray(img_arr)
         sitk.WriteImage(mha_img, 'test1.mhd')
 
         test2 = set_window(ct_value, window, level)
-        ut.plotorsave_ct_scan(test2, "plot")
+        plotorsave_ct_scan(test2, "plot")
         mha_img = sitk.GetImageFromArray(test2)
         sitk.WriteImage(mha_img, 'test2.mhd')
 
@@ -122,13 +130,44 @@ def read_mhd(mhd_dir):
         break
 
 
+def img_resmaple(ori_img_file, new_spacing, resamplemethod=sitk.sitkLinear):
+    """
+        @param ori_img_file: 原始的itk图像路径，一般为.mhd
+        @param target_img_file: 保存路径
+        @param new_spacing: 目标重采样的spacing，如[0.585938, 0.585938, 0.4]
+        @param resamplemethod: itk插值⽅法: sitk.sitkLinear-线性、sitk.sitkNearestNeighbor-最近邻、sitk.sitkBSpline等，SimpleITK源码中会有各种插值的方法，直接复制调用即可
+    """
+    data = sitk.ReadImage(ori_img_file)  # 根据路径读取mhd文件
+    original_spacing = data.GetSpacing()  # 获取图像重采样前的spacing
+    original_size = data.GetSize()  # 获取图像重采样前的分辨率
+
+    # 有原始图像size和spacing得到真实图像大小，用其除以新的spacing,得到变化后新的size
+    new_shape = [
+        int(np.round(original_spacing[0] * original_size[0] / new_spacing[0])),
+        int(np.round(original_spacing[1] * original_size[1] / new_spacing[1])),
+        int(np.round(original_spacing[2] * original_size[2] / new_spacing[2])),
+    ]
+    print("处理后新的分辨率:{}".format(new_shape))
+
+    # 重采样构造器
+    resample = sitk.ResampleImageFilter()
+
+    resample.SetOutputSpacing(new_spacing)  # 设置新的spacing
+    resample.SetOutputOrigin(data.GetOrigin())  # 原点坐标没有变，所以还用之前的就可以了
+    resample.SetOutputDirection(data.GetDirection())  # 方向也未变
+    resample.SetSize(new_shape)  # 分辨率发生改变
+    resample.SetInterpolator(resamplemethod)  # 插值算法
+    data = resample.Execute(data)  # 执行操作
+
+    sitk.WriteImage(data, target_img_file)  # 将处理后的数据，保存到一个新的mhdw文件中
+
+
 def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     resampler = sitk.ResampleImageFilter()
     originSize = itkimage.GetSize()  # 原来的体素块尺寸
     originSpacing = itkimage.GetSpacing()
     newSize = np.array(newSize, float)
-    factor = originSize / newSize
-    newSpacing = originSpacing * factor
+    newSpacing = originSpacing * originSize / newSize
     newSize = newSize.astype(np.int)  # spacing肯定不能是整数
     resampler.SetReferenceImage(itkimage)  # 需要重新采样的目标图像
     resampler.SetSize(newSize.tolist())
@@ -140,134 +179,35 @@ def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
 
 
 if __name__ == '__main__':
-    project_folder = ut.get_project_path("4DCT").split("4DCT")[0]
+
+    project_folder = get_project_path("4DCT").split("4DCT")[0]
+
+    pass
+
     # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
 
+    # # dirlab数据集img转mhd
     # for item in case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/Case{case}Pack/Images')
-    #     imgTomhd(img_path, np.int16, shape, case)
-
-    # cfg = [
-    #     {"case": 1,
-    #      "crop_range": [[slice(8, 33), slice(37, 83)], slice(51, 200), [slice(16, 136), slice(144, 250)]],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 2,
-    #      "crop_range": [slice(6, 93), slice(40, 195), [slice(8, 129), slice(135, 252)]],
-    #      "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 3,
-    #      "crop_range": [[slice(0, 34), slice(39, 97)], slice(53, 209), [slice(10, 123), slice(130, 248)]],
-    #      "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 4,
-    #      "crop_range": [[slice(5, 33), slice(36, 90)], slice(45, 209), [slice(10, 113), slice(119, 242)]],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 5,
-    #      "crop_range": [slice(0, 90), slice(60, 223), slice(16, 244)],
-    #      "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 6,
-    #      "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 7,
-    #      "crop_range": [slice(13, 108), slice(158, 331), slice(120, 413)],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 8,
-    #      "crop_range": [slice(18, 118), slice(94, 299), slice(120, 390)],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 9,
-    #      "crop_range": [slice(0, 70), slice(153, 323), slice(149, 390)],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      },
-    #     {"case": 10,
-    #      "crop_range": [slice(0, 90), slice(153, 330), slice(154, 382)],
-    #      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-    #      }
+    #     moving_path = os.path.join(project_folder, f'datasets/registration/moving')
+    #     fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
+    #     ut.make_dir(moving_path)
+    #     ut.make_dir(fixed_path)
     #
-    # ]
+    #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case)
 
-    cfg = [
-        {"case": 1,
-         "crop_range": [slice(0, 83), slice(43, 200), slice(10, 250)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 2,
-         "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
-         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
-         },
-        {"case": 3,
-         "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
-         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
-         },
-        {"case": 4,
-         "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 5,
-         "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
-         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
-         },
-        {"case": 6,
-         "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 7,
-         "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 8,
-         "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 9,
-         "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         },
-        {"case": 10,
-         "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
-         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-         }
-
-    ]
-
-    # 10个病人
-    for i in range(10):
-        case = i + 1
-        data_folder = os.path.join(project_folder.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
-        image_file_list = sorted(
-            [file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
-        image_list = []
-
-        # 10个呼吸阶段
-        for file_name in image_file_list:
-            stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
-
-            # if type(cfg[i]["crop_range"][0]) != slice and len(cfg[i]["crop_range"][0]) == 2:
-            #     slicearr = cfg[i]["crop_range"][0]
-            #     stkimg = np.concatenate((stkimg[slicearr[0], :, :], stkimg[slicearr[1], :, :]), 0)
-            #     cfg[i]["crop_range"][0] = slice(len(stkimg))
-            #
-            # if type(cfg[i]["crop_range"][2]) != slice and len(cfg[i]["crop_range"][2]) == 2:
-            #     slicearr = cfg[i]["crop_range"][2]
-            #     stkimg = np.concatenate((stkimg[:, :, slicearr[0]], stkimg[:, :, slicearr[1]]), 2)
-            #     cfg[i]["crop_range"][2] = slice(len(stkimg[1, 1]))
-            #
-            stkimg = stkimg[cfg[i]["crop_range"][0], cfg[i]["crop_range"][1], cfg[i]["crop_range"][2]]
-            image_list.append(stkimg)
-
-        for i in range(len(image_list)):
-            image_list[i] = data_standardization_0_n(255, image_list[i])
-            ut.plotorsave_ct_scan(image_list[i], 'save', epoch=0,
-                                  head="input_image",
-                                  case=case,
-                                  phase=i * 10,
-                                  path="../result/general_reg/dirlab/slice")
-
-        print(f"{case} converted")
+    # import shutil
+    #
+    # # 10个病人
+    # for i in range(10):
+    #     case = i + 1
+    #     data_folder = os.path.join(project_folder.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
+    #
+    #     for file in os.listdir(data_folder):
+    #         filename = f'Case{case}'
+    #         os.rename(file, filename)
+    #         shutil.copy()
+    #
+    #     print(f"{case} converted")

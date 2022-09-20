@@ -12,6 +12,17 @@ import torch.nn.functional as F
 
 # 平滑正则损失
 def gradient_loss(s, penalty='l2'):
+    '''
+
+    Parameters
+    ----------
+    s size of b*c*h*w*d 传对了吗
+    penalty
+
+    Returns
+    -------
+
+    '''
     dy = torch.abs(s[:, :, 1:, :, :] - s[:, :, :-1, :, :])
     dx = torch.abs(s[:, :, :, 1:, :] - s[:, :, :, :-1, :])
     dz = torch.abs(s[:, :, :, :, 1:] - s[:, :, :, :, :-1])
@@ -88,14 +99,59 @@ def Get_Ja(flow):
     Calculate the Jacobian value at each point of the displacement map having
     size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
     '''
-    D_y = (flow[:, 1:, :-1, :-1, :] - flow[:, :-1, :-1, :-1, :])
-    D_x = (flow[:, :-1, 1:, :-1, :] - flow[:, :-1, :-1, :-1, :])
-    D_z = (flow[:, :-1, :-1, 1:, :] - flow[:, :-1, :-1, :-1, :])
+    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b 3 d h w -> b h w d 3
+    D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
     D1 = (D_x[..., 0] + 1) * ((D_y[..., 1] + 1) * (D_z[..., 2] + 1) - D_z[..., 1] * D_y[..., 2])
-    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_x[..., 0])
+    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_z[..., 0])
     D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
     return D1 - D2 + D3
 
+def jacobian_determinant(disp):
+    """
+    jacobian determinant of a displacement field.
+    NB: to compute the spatial gradients, we use np.gradient.
+
+    Parameters:
+        disp: 2D or 3D displacement field of size [*vol_shape, nb_dims],
+              where vol_shape is of len nb_dims
+
+    Returns:
+        jacobian determinant (scalar)
+    """
+
+    # check inputs
+    volshape = disp.shape[:-1]
+    nb_dims = len(volshape)
+    assert len(volshape) in (2, 3), 'flow has to be 2D or 3D'
+
+    # compute grid
+    grid_lst = nd.volsize2ndgrid(volshape)
+    grid = np.stack(grid_lst, len(volshape))
+
+    # compute gradients
+    J = np.gradient(disp + grid)
+
+    # 3D glow
+    if nb_dims == 3:
+        dx = J[0]
+        dy = J[1]
+        dz = J[2]
+
+        # compute jacobian components
+        Jdet0 = dx[..., 0] * (dy[..., 1] * dz[..., 2] - dy[..., 2] * dz[..., 1])
+        Jdet1 = dx[..., 1] * (dy[..., 0] * dz[..., 2] - dy[..., 2] * dz[..., 0])
+        Jdet2 = dx[..., 2] * (dy[..., 0] * dz[..., 1] - dy[..., 1] * dz[..., 0])
+
+        return Jdet0 - Jdet1 + Jdet2
+
+    else:  # must be 2
+
+        dfdx = J[0]
+        dfdy = J[1]
+
+        return dfdx[..., 0] * dfdy[..., 1] - dfdy[..., 0] * dfdx[..., 1]
 
 def NJ_loss(ypred):
     '''

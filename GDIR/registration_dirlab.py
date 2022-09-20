@@ -10,51 +10,25 @@ import logging, tqdm
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 from scipy import interpolate
+from utils.utilize import tre, save_image,get_project_path,make_dir
+
+
+def calc_tre(pair_disp_indexes):
+    # x' = u(x) + x
+    composed_disp = calcdisp.compose_disp(disp_i2t, res['disp_t2i'][pair_disp_indexes], mode='all')
+    composed_disp_np = composed_disp.cpu().numpy()  # (2, 2, 3, d, h, w)
+
+    inter = interpolate.RegularGridInterpolator(grid_tuple, np.moveaxis(composed_disp_np[0, 1], 0, -1))
+    calc_landmark_disp = inter(landmark_00_converted)
+
+    diff = (np.sum(((calc_landmark_disp - landmark_disp) * cfg[case]["pixel_spacing"]) ** 2, 1)) ** 0.5
+    diff = diff[~np.isnan(diff)]
+
+    return np.mean(diff), np.std(diff), diff, composed_disp_np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# cfg = [{},
-#        {"case": 1,
-#         "crop_range": [[slice(8, 33), slice(37, 83)], slice(51, 200), [slice(16, 136), slice(144, 250)]],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 2,
-#         "crop_range": [slice(6, 93), slice(40, 195), [slice(8, 129), slice(135, 252)]],
-#         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32)
-#         },
-#        {"case": 3,
-#         "crop_range": [[slice(0, 34), slice(39, 97)], slice(53, 209), [slice(10, 123), slice(130, 248)]],
-#         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32)
-#         },
-#        {"case": 4,
-#         "crop_range": [[slice(5, 33), slice(36, 90)], slice(45, 209), [slice(10, 113), slice(119, 242)]],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 5,
-#         "crop_range": [slice(0, 90), slice(60, 223), slice(16, 244)],
-#         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
-#         },
-#        {"case": 6,
-#         "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 7,
-#         "crop_range": [slice(13, 108), slice(158, 331), slice(120, 413)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 8,
-#         "crop_range": [slice(18, 118), slice(94, 299), slice(120, 390)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 9,
-#         "crop_range": [slice(0, 70), slice(153, 323), slice(149, 390)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         },
-#        {"case": 10,
-#         "crop_range": [slice(0, 90), slice(153, 330), slice(154, 382)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
-#         }]
-
+# z y x
 cfg = [{},
        {"case": 1,
         "crop_range": [slice(0, 83), slice(43, 200), slice(10, 250)],
@@ -100,7 +74,7 @@ cfg = [{},
        ]
 
 case = 1
-project_path = utils.utilize.get_project_path("4DCT")
+project_path = get_project_path("4DCT")
 data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
 landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
@@ -108,13 +82,11 @@ states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 # 保存固定图像和扭曲图像路径
 warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
 temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
-utils.utilize.make_dir(warp_case_path)
-utils.utilize.make_dir(temp_case_path)
+make_dir(warp_case_path)
+make_dir(temp_case_path)
 
 config = dict(
     dim=3,  # dimension of the input image
-    intensity_scale_const=1000.,  # (image - intensity_shift_const)/intensity_scale_const
-    intensity_shift_const=1000.,
     scale=0.5,
     initial_channels=32,
     depth=4,
@@ -137,13 +109,15 @@ config = utils.structure.Struct(**config)
 image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
 image_list = []
 for file_name in image_file_list:
-    stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(data_folder, file_name)))
+    # xyz W H D
+    img_sitk = sitk.ReadImage(os.path.join(data_folder, file_name))
+    # zyx D H W
+    stkimg = sitk.GetArrayFromImage(img_sitk)
     image_list.append(stkimg)
 
 
-# tensor B,(C),D,H,W
-# numpy D,H,W,C
-# itk W,H,D
+# numpy D,H,W  zyx
+# simpleitk W,H,D  xyz
 # 1(number of group),B,D,H,W
 input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
 if config.group_index_list is not None:
@@ -170,7 +144,7 @@ except:
 
 input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
 
-image_shape = np.array(input_image.shape[2:])  # (d, h, w)
+image_shape = np.array(input_image.shape[2:])  # (d, h, w) z y x
 num_image = input_image.shape[0]  # number of image in the group
 regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
                                          initial_channels=config.initial_channels, normalization=config.normalization)
@@ -211,23 +185,22 @@ landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
 
 for i in pbar:
     res = regnet(input_image)
-
-    # 保存前六个阶段图片
-    if i % 10 == 0:
-        for j in (0, 5):
-            utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
-                                             epoch=i,
-                                             head="warped",
-                                             case=case,
-                                             phase=j * 10,
-                                             path=f"../result/general_reg/dirlab/warped_image")
-
-        utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
-                                         epoch=i,
-                                         head="tem",
-                                         case=case,
-                                         phase=50,
-                                         path=f"../result/general_reg/dirlab/template_image")
+    # # 保存前六个阶段图片
+    # if i % 10 == 0:
+    #     for j in (0, 5):
+    #         utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
+    #                                          epoch=i,
+    #                                          head="warped",
+    #                                          case=case,
+    #                                          phase=j * 10,
+    #                                          path=f"../result/general_reg/dirlab/warped_image")
+    #
+    #     utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
+    #                                      epoch=i,
+    #                                      head="tem",
+    #                                      case=case,
+    #                                      phase=50,
+    #                                      path=f"../result/general_reg/dirlab/template_image")
 
     total_loss = 0.
     if 'disp_i2t' in res:
@@ -279,35 +252,31 @@ for i in pbar:
             disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
         else:
             disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
-        composed_disp = calcdisp.compose_disp(disp_i2t, res['disp_t2i'][config.pair_disp_indexes], mode='all')
-        composed_disp_np = composed_disp.cpu().numpy()  # (2, 2, 3, d, h, w)
 
-        inter = interpolate.RegularGridInterpolator(grid_tuple, np.moveaxis(composed_disp_np[0, 1], 0, -1))
-        calc_landmark_disp = inter(landmark_00_converted)
+        mean, std, diff, _ = calc_tre(config.pair_disp_indexes)
+        diff_stats.append([i, mean, std])
+        print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
 
-        diff = (np.sum(((calc_landmark_disp - landmark_disp) * cfg[case]["pixel_spacing"]) ** 2, 1)) ** 0.5
-        diff = diff[~np.isnan(diff)]
+        # Save images
+        phase = 0
+        warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
+        save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
+                   warp_case_path + f'/epoch{i}', warped_name)
 
-        diff_stats.append([i, np.mean(diff), np.std(diff)])
-        print(f'\ndiff: {np.mean(diff):.2f}+-{np.std(diff):.2f}({np.max(diff):.2f})')
+        m2f_name = f"case{case}_temp.nii.gz"
+        save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
 
 if 'disp_i2t' in res:
     disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
 else:
     disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
 
-composed_disp = calcdisp.compose_disp(disp_i2t, res['disp_t2i'][config.pair_disp_indexes], mode='all')
-composed_disp_np = composed_disp.cpu().numpy()  # (2, 2, 3, d, h, w)
-inter = interpolate.RegularGridInterpolator(grid_tuple, np.moveaxis(composed_disp_np[0, 1], 0, -1))
-calc_landmark_disp = inter(landmark_00_converted)
-
-diff = (np.sum(((calc_landmark_disp - landmark_disp) * cfg[case]["pixel_spacing"]) ** 2, 1)) ** 0.5
-diff = diff[~np.isnan(diff)]
-diff_stats.append([i, np.mean(diff), np.std(diff)])
-print(f'\ndiff: {np.mean(diff):.2f}+-{np.std(diff):.2f}({np.max(diff):.2f})')
+mean, std, diff, composed_dis_np = calc_tre(config.pair_disp_indexes)
+diff_stats.append([i, mean, std])
+print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
 diff_stats = np.array(diff_stats)
 
-res['composed_disp_np'] = composed_disp_np
+res['composed_disp_np'] = composed_dis_np
 states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
           'registration_result': res, 'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
 index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
