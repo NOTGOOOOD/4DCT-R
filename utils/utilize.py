@@ -13,7 +13,8 @@ def save_png(imgs_numpy, save_path, save_name):
     # imgs_numpy = process.processing.data_standardization_0_n(255, imgs_numpy)
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
-def save_image(img:"Tensor", ref_img:"Tensor", save_path, save_name):
+
+def save_image(img: "Tensor", ref_img: "Tensor", save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -24,6 +25,7 @@ def save_image(img:"Tensor", ref_img:"Tensor", save_path, save_name):
     img.SetDirection(ref_img.GetDirection())
     img.SetSpacing(ref_img.GetSpacing())
     sitk.WriteImage(img, os.path.join(save_path, save_name))
+
 
 def make_dir(path):
     if not os.path.exists(path):
@@ -63,32 +65,6 @@ def loadfileFromFolderToarray(file_folder, datatype, shape=None):
     files_array = np.array(file_list)
 
     return files_array
-
-
-def dvf_save_nii(project_name, dvf_file):
-    project_path = get_project_path(project_name)
-    dvf_file_path = os.path.join(project_path, dvf_file)
-    image_file_list = sorted(
-        [file_name for file_name in os.listdir(dvf_file_path) if file_name.lower().endswith('mhd')])
-    image_list = []
-    for file_name in image_file_list:
-        stkimg = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(dvf_file_path, file_name)))
-        # sitk_dvf = sitk.GetImageFromArray(stkimg)
-        # sitk.WriteImage(sitk_dvf, f"{file_name}.nii")
-        # print(f"{file_name}.nii 已保存")
-
-        image_list.append(stkimg)
-
-    dvf = np.stack([image for image in image_list], 0).transpose(1, 2, 3, 0)
-    sitk_dvf = sitk.GetImageFromArray(dvf)
-    sitk.WriteImage(sitk_dvf, "dvf.nii")
-    print("dvf.nii 已保存")
-
-    # dvf_path = os.path.abspath(os.path.join(project_path, dvf_file, dvf_name))
-    # dvf = loadfile(dvf_path, np.float32).reshape(3, 150, 256, 256).transpose(2, 3, 1, 0)
-    # sitk_dvf = sitk.GetImageFromArray(dvf)
-    # sitk.WriteImage(sitk_dvf, f"{dvf_name}.nii")
-    # print(f"{dvf_name}.nii 已保存")
 
 
 def showimg(image: list, cmap='gray'):
