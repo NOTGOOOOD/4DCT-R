@@ -10,7 +10,7 @@ import logging, tqdm
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 from scipy import interpolate
-from utils.utilize import tre, save_image,get_project_path,make_dir
+from utils.utilize import tre, save_image, get_project_path, make_dir
 
 
 def calc_tre(pair_disp_indexes):
@@ -25,6 +25,7 @@ def calc_tre(pair_disp_indexes):
     diff = diff[~np.isnan(diff)]
 
     return np.mean(diff), np.std(diff), diff, composed_disp_np
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -75,22 +76,24 @@ cfg = [{},
 
 case = 1
 project_path = get_project_path("4DCT")
-data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
+data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/mhd/Case{case}_mhd/')
 landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 
 # 保存固定图像和扭曲图像路径
 warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
 temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
+dvf_path = os.path.join("../result/general_reg/dirlab/dvf", f"Case{case}")
 make_dir(warp_case_path)
 make_dir(temp_case_path)
+make_dir(dvf_path)
 
 config = dict(
     dim=3,  # dimension of the input image
     scale=0.5,
     initial_channels=32,
     depth=4,
-    max_num_iteration=400,
+    max_num_iteration=300,
     normalization=True,  # whether use normalization layer
     learning_rate=0.001,
     smooth_reg=1e-3,
@@ -114,7 +117,6 @@ for file_name in image_file_list:
     # zyx D H W
     stkimg = sitk.GetArrayFromImage(img_sitk)
     image_list.append(stkimg)
-
 
 # numpy D,H,W  zyx
 # simpleitk W,H,D  xyz
@@ -155,7 +157,8 @@ regnet = regnet.to(device)
 input_image = input_image.to(device)
 ncc_loss = ncc_loss.to(device)
 optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=5e-5)
+# scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0, verbose=True)
+# scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=5e-7)
 calcdisp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
 
 if config.load:
@@ -238,7 +241,7 @@ for i in pbar:
     optimizer.zero_grad()
     total_loss.backward()
     optimizer.step()
-    scheduler.step()
+    # scheduler.step()
 
     stop_criterion.add(simi_loss.item())
     if stop_criterion.stop():
@@ -266,6 +269,11 @@ for i in pbar:
         m2f_name = f"case{case}_temp.nii.gz"
         save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
 
+        # Save DVF
+        # n,3,d,h,w-> w,h,d,3
+        save_image(torch.permute(disp_i2t[0],(3,2,1,0)), input_image[5], dvf_path + f'/epoch{i}',
+                   f'case{case}dvf.nii')
+
 if 'disp_i2t' in res:
     disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
 else:
@@ -280,7 +288,7 @@ res['composed_disp_np'] = composed_dis_np
 states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
           'registration_result': res, 'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
 index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
-states_file = f'reg_dirlab_case{case}_{index:03d}.pth'
+states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
 torch.save(states, os.path.join(states_folder, states_file))
 
 logging.info(f'save model and optimizer state {states_file}')
