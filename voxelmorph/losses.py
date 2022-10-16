@@ -98,8 +98,11 @@ def Get_Ja(flow):
     '''
     Calculate the Jacobian value at each point of the displacement map having
     size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
+
+    the expected input: displacement of shape(batch, H, W, D, channel)
+    but the input dim: (batch, channel, D, H, W)
     '''
-    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b 3 d h w -> b h w d 3
+    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b, c, D, H, W -> b, H, W, D, c
     D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
     D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
     D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
