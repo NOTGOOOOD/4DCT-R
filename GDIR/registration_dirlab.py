@@ -52,7 +52,7 @@ cfg = [{},
         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32)
         },
        {"case": 6,
-        "crop_range": [slice(14, 107), slice(190, 328), slice(148, 426)],
+        "crop_range": [slice(10, 107), slice(144, 328), slice(132, 426)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32)
         },
        {"case": 7,
@@ -271,7 +271,7 @@ for i in pbar:
 
         # Save DVF
         # n,3,d,h,w-> w,h,d,3
-        save_image(torch.permute(disp_i2t[0],(3,2,1,0)), input_image[5], dvf_path + f'/epoch{i}',
+        save_image(torch.permute(disp_i2t[0], (3, 2, 1, 0)), input_image[5], dvf_path + f'/epoch{i}',
                    f'case{case}dvf.nii')
 
 if 'disp_i2t' in res:
