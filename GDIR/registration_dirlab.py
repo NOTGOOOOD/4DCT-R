@@ -176,9 +176,9 @@ def train(case):
         stkimg = sitk.GetArrayFromImage(img_sitk)
 
         # norm units: HU
-        stkimg -= 1000
-        Threshold = [-1000, 500]  # [-1000, -200]
-        stkimg = data_standardization_min_max(Threshold, stkimg)
+        # stkimg -= 1000
+        # Threshold = [-1000, 500]  # [-1000, -200]
+        # stkimg = data_standardization_min_max(Threshold, stkimg)
         image_list.append(stkimg)
 
     input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
@@ -186,10 +186,9 @@ def train(case):
         input_image = input_image[config.group_index_list]
 
     # normalize [0,1]
-    # input_image = data_standardization_0_n(1, input_image)
+    input_image = data_standardization_0_n(1, input_image)
 
     # crop
-
     input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
 
     image_shape = np.array(input_image.shape[2:])  # (d, h, w) z y x
@@ -345,18 +344,25 @@ def train(case):
         #     else:
         #         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
         #
-        #     mean, std, diff, _ = calc_tre(config.pair_disp_indexes)
+        #     mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+        #                                         grid_tuple, landmark_00_converted, landmark_disp,
+        #                                         cfg[case]['pixel_spacing'])
         #     diff_stats.append([i, mean, std])
         #     print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
-        #
-        #     # Save images
-        #     phase = 0
-        #     warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
-        #     save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
-        #                warp_case_path + f'/epoch{i}', warped_name)
-        #
-        #     m2f_name = f"case{case}_temp.nii.gz"
-        #     save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
+
+            # Save images
+            # phase = 0
+            # warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
+            # save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
+            #            warp_case_path + f'/epoch{i}', warped_name)
+            #
+            # m2f_name = f"case{case}_temp.nii.gz"
+            # save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
+
+            # Save DVF
+            # n,3,d,h,w-> w,h,d,3
+            # save_image(torch.permute(disp_i2t[0], (3, 2, 1, 0)), input_image[5], dvf_path + f'/epoch{i}',
+            #            f'case{case}dvf.nii')
 
     if 'disp_i2t' in res:
         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
@@ -374,7 +380,7 @@ def train(case):
 
     res['composed_disp_np'] = composed_dis_np
     states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
-              'registration_result': res, 'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
+               'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
     index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
     states_file = f'reg_dirlab_case{case}_{index:03d}.pth'
     torch.save(states, os.path.join(states_folder, states_file))
@@ -389,5 +395,5 @@ def train(case):
 
 
 if __name__ == '__main__':
-    for i in range(6, 11):
-        train(i)
+    # for i in range(1, 11):
+    train(1)
