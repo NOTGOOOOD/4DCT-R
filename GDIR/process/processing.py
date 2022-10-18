@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import torch
 
-from utils.utilize import plotorsave_ct_scan, get_project_path
+from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
 
 # import ants
 
@@ -21,6 +21,30 @@ case_cfg = {
     9: (128, 512, 512),
     10: (120, 512, 512),
 }
+
+# 重采样后
+"""
+Case1 [256, 256, 38]
+
+Case2 [256, 256, 45]
+
+Case3 [256, 256, 42]
+
+Case4 [256, 256, 40]
+
+Case5 [256, 256, 42]
+ 
+Case6 [512, 512, 51]
+
+Case7 [512, 512, 54]
+
+Case8 [512, 512, 51]
+ 
+Case9 [512, 512, 51]
+ 
+Case10 [512, 512, 48]
+
+"""
 
 
 def window(img):
@@ -51,27 +75,23 @@ def set_window(img_data, win_width, win_center):
     return img_temp
 
 
-def imgTomhd(file_folder, m_path, f_path, datatype, shape, case):
+def imgTomhd(file_folder, save_path, datatype, shape, case, crop_range=None, resample=False):
     for file_name in os.listdir(file_folder):
-        is_fixed = False
-        if 'T50' in file_name:
-            is_fixed = True
         file_path = os.path.join(file_folder, file_name)
         file = np.memmap(file_path, dtype=datatype, mode='r')
         if shape:
             file = file.reshape(shape)
 
+        if crop_range:
+            file = file[crop_range[0], crop_range[1], crop_range[2]]
+
         img = sitk.GetImageFromArray(file)
-        target_filepath = os.path.join(m_path, file_name.split('.')[0] + "_moving.mhd")
-        if is_fixed:
-            for i in range(10):
-                if i == 5:
-                    continue
-                new_name = f'dirlab_case{case}_T' + str(i) + '0_fixed.mhd'
-                target_filepath = os.path.join(f_path, new_name)
-                if not os.path.exists(target_filepath):
-                    sitk.WriteImage(img, target_filepath)
-            continue
+        if resample:
+            # 统一采样到1*1*2.5mm
+            img = img_resmaple([1, 1, 2.5], ori_img_file=img)
+
+        target_filepath = os.path.join(save_path,
+                                       f"case{case}_T" + file_name[file_name.find('T') + 1] + "0.mhd")
 
         if not os.path.exists(target_filepath):
             sitk.WriteImage(img, target_filepath)
@@ -86,6 +106,16 @@ def data_standardization_0_n(range, img):
         return range * (img - np.min(img)) / (np.max(img) - np.min(img))
 
 
+# 最大最小归一化0-1
+def data_standardization_min_max(range: list, img):
+    img = img.astype("float32")
+    min, max = range
+    img = (img - min) / (max - min)
+    img[img > 1] = 1
+    img[img < 0] = 0
+    return img
+
+
 def data_standardization_mean_std(img):
     return (img - np.mean(img)) / np.std(img)
 
@@ -96,48 +126,26 @@ def data_standardization_mean_std(img):
 #     ants.image_write(reg_img, save_path)
 
 
-def read_mhd(mhd_dir):
-    for file_name in os.listdir(mhd_dir):
-        mhd_file = os.path.join(mhd_dir, file_name)
-        itkimage = sitk.ReadImage(mhd_file)
-        ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
-        direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
-        origin = np.array(itkimage.GetOrigin())
-        spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
+def read_mhd(file_path):
+    mhd_file = file_path
+    itkimage = sitk.ReadImage(mhd_file)
+    ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
+    direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
+    origin = np.array(itkimage.GetOrigin())
+    spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
 
-        img_arr = ct_value.copy()  # ndarray
-
-        level = -200  # 窗位
-        window = 1600  # 窗宽
-
-        window_minimum = level - window / 2
-        window_maximum = level + window / 2
-        img_arr[img_arr < window_minimum] = window_minimum
-        img_arr[img_arr > window_maximum] = window_maximum
-
-        plotorsave_ct_scan(ct_value, "plot")
-        plotorsave_ct_scan(img_arr, "plot")
-
-        mha_img = sitk.GetImageFromArray(img_arr)
-        sitk.WriteImage(mha_img, 'test1.mhd')
-
-        test2 = set_window(ct_value, window, level)
-        plotorsave_ct_scan(test2, "plot")
-        mha_img = sitk.GetImageFromArray(test2)
-        sitk.WriteImage(mha_img, 'test2.mhd')
-
-        plt.show()
-        break
+    return ct_value, spacing
 
 
-def img_resmaple(ori_img_file, new_spacing, resamplemethod=sitk.sitkLinear):
+def img_resmaple(new_spacing, resamplemethod=sitk.sitkLinear, ori_img_file=None, ori_img_path=None):
     """
-        @param ori_img_file: 原始的itk图像路径，一般为.mhd
+        @param ori_img_file: sitk.Image
+        @param ori_img_path: 原始的itk图像路径，一般为.mhd 两个参数二选一
         @param target_img_file: 保存路径
         @param new_spacing: 目标重采样的spacing，如[0.585938, 0.585938, 0.4]
         @param resamplemethod: itk插值⽅法: sitk.sitkLinear-线性、sitk.sitkNearestNeighbor-最近邻、sitk.sitkBSpline等，SimpleITK源码中会有各种插值的方法，直接复制调用即可
     """
-    data = sitk.ReadImage(ori_img_file)  # 根据路径读取mhd文件
+    data = sitk.ReadImage(ori_img_path) if ori_img_file == None else ori_img_file  # 根据路径读取mhd文件
     original_spacing = data.GetSpacing()  # 获取图像重采样前的spacing
     original_size = data.GetSize()  # 获取图像重采样前的分辨率
 
@@ -159,7 +167,8 @@ def img_resmaple(ori_img_file, new_spacing, resamplemethod=sitk.sitkLinear):
     resample.SetInterpolator(resamplemethod)  # 插值算法
     data = resample.Execute(data)  # 执行操作
 
-    sitk.WriteImage(data, target_img_file)  # 将处理后的数据，保存到一个新的mhdw文件中
+    return data
+    # sitk.WriteImage(data, os.path.join(ori_img_file, '_new'))  # 将处理后的数据，保存到一个新的mhd文件中
 
 
 def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
@@ -182,32 +191,14 @@ if __name__ == '__main__':
 
     project_folder = get_project_path("4DCT").split("4DCT")[0]
 
-    pass
-
     # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
 
-    # # dirlab数据集img转mhd
-    # for item in case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     img_path = os.path.join(project_folder, f'datasets/dirlab/Case{case}Pack/Images')
-    #     moving_path = os.path.join(project_folder, f'datasets/registration/moving')
-    #     fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
-    #     ut.make_dir(moving_path)
-    #     ut.make_dir(fixed_path)
-    #
-    #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case)
+    # dirlab数据集img转mhd
+    for item in case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+        save_path = os.path.join(project_folder, f'datasets/dirlab/mhd/case{case}')
+        make_dir(save_path)
 
-    # import shutil
-    #
-    # # 10个病人
-    # for i in range(10):
-    #     case = i + 1
-    #     data_folder = os.path.join(project_folder.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
-    #
-    #     for file in os.listdir(data_folder):
-    #         filename = f'Case{case}'
-    #         os.rename(file, filename)
-    #         shutil.copy()
-    #
-    #     print(f"{case} converted")
+        imgTomhd(img_path, save_path, np.int16, shape, case, False)
