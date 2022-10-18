@@ -3,16 +3,14 @@ import warnings
 
 import torch
 import numpy as np
-import SimpleITK as sitk
 from torch.optim import Adam
 import torch.utils.data as Data
-import utils.utilize as ut
 
 import losses
 from config import args
 from datagenerators import Dataset
 from model import U_Network, SpatialTransformer, SpatialTransformer_new
-from utils.utilize import tre, save_image
+from utils.utilize import tre, save_image, get_project_path
 
 
 def count_parameters(model):
@@ -30,7 +28,6 @@ def make_dirs():
         os.makedirs(args.result_dir)
 
 
-
 def train():
     # 创建需要的文件夹并指定gpu
     make_dirs()
@@ -44,20 +41,21 @@ def train():
     # 读取相应的文件
     # case = 2
     # data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/Case{case}_mhd/')
-    project_path = ut.get_project_path("4DCT")
+    project_path = get_project_path("4DCT")
     fixed_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/registration/fixed/')
     moving_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/registration/moving/')
-    f_img_file_list = sorted([file_name for file_name in os.listdir(fixed_folder) if file_name.lower().endswith('mhd')])
-    m_img_file_list = sorted([file_name for file_name in os.listdir(moving_folder) if file_name.lower().endswith('mhd')])
-
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('mhd')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('mhd')])
 
     # 创建配准网络（UNet）和STN
     nf_enc = [16, 32, 32, 32]
-    if args.model == "vm1":
+    if args.model == "vm":
         nf_dec = [32, 32, 32, 32, 8, 8]
     else:
-        nf_dec = [32, 32, 32, 32, 32, 16, 16]   # vm2
-    temp = [112, 256, 256]
+        nf_dec = [32, 32, 32, 32, 32, 16, 16]  # vm2
+    temp = [54, 512, 512]
     UNet = U_Network(3, nf_enc, nf_dec).to(device)
     STN = SpatialTransformer(temp).to(device)
     STN2 = SpatialTransformer_new(3).to(device)
@@ -65,10 +63,13 @@ def train():
     STN.train()
     STN2.train()
 
+    from torch.utils.tensorboard import SummaryWriter
+    writer = SummaryWriter('runs/voxelmorph')
+    test_images = torch.randn(1, 1, 96, 256, 256)
+    writer.add_graph(UNet, [test_images.to(device), test_images.to(device)])
+    writer.close()
     # 模型参数个数
     print("UNet: ", count_parameters(UNet))
-    print("STN: ", count_parameters(STN))
-    print("STN2: ", count_parameters(STN2))
 
     # Set optimizer and losses
     opt = Adam(UNet.parameters(), lr=args.lr)
@@ -99,12 +100,13 @@ def train():
             m2f_new = STN2(input_moving, flow_m2f)
 
             # Calculate loss
-            sim_loss = sim_loss_fn(m2f, input_fixed, [9]*3)
-            sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9]*3)
+            sim_loss = sim_loss_fn(m2f, input_fixed, [9] * 3)
+            sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9] * 3)
             grad_loss = grad_loss_fn(flow_m2f)
             loss = sim_loss + args.alpha * grad_loss
-            tre_score = tre()
-            print("i: %d  loss: %f  sim: %f  sim2: %f  grad: %f" % (i, loss.item(), sim_loss.item(), sim_loss2.item(), grad_loss.item()), flush=True)
+            # tre_score = tre()
+            print("i: %d  loss: %f  sim: %f  sim2: %f  grad: %f" % (
+                i, loss.item(), sim_loss.item(), sim_loss2.item(), grad_loss.item()), flush=True)
             print("%d, %f, %f, %f" % (i, loss.item(), sim_loss.item(), grad_loss.item()), file=f)
 
             # Backwards and optimize

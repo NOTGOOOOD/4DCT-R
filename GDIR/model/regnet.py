@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import logging
+from utils.utilize import count_parameters
 
 
 class RegNet_single(nn.Module):
@@ -34,6 +35,8 @@ class RegNet_single(nn.Module):
         self.unet = unet.UNet(in_channels=n, out_channels=dim * n, dim=dim, depth=depth,
                               initial_channels=initial_channels, normalization=normalization)
         self.spatial_transform = SpatialTransformer(self.dim)
+        # print("unet: ", count_parameters(self.unet))
+        # print("spatial_transform: ", count_parameters(self.spatial_transform))
 
     def forward(self, input_image):
         '''
@@ -89,6 +92,7 @@ class RegNet_single(nn.Module):
         res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
                'template': template, 'scaled_template': scaled_template}
         return res
+        # return disp_t2i
 
 
 class RegNet_pairwise(nn.Module):

@@ -7,13 +7,20 @@ import cv2
 from PIL import Image
 
 
+def count_parameters(model):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    return params
+
+
 def save_png(imgs_numpy, save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     # imgs_numpy = process.processing.data_standardization_0_n(255, imgs_numpy)
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
-def save_image(img:"Tensor", ref_img:"Tensor", save_path, save_name):
+
+def save_image(img: "Tensor", ref_img: "Tensor", save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -24,6 +31,7 @@ def save_image(img:"Tensor", ref_img:"Tensor", save_path, save_name):
     img.SetDirection(ref_img.GetDirection())
     img.SetSpacing(ref_img.GetSpacing())
     sitk.WriteImage(img, os.path.join(save_path, save_name))
+
 
 def make_dir(path):
     if not os.path.exists(path):
@@ -111,7 +119,7 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
     :param option:plot or save
     :param num_column:
     :param jump: 间隔多少画图
-    :param cfg: option=plot时启用{head, case, phase ,path, epoch} 图像名 epoch_head_Case_Phase_i_slice
+    :param cfg: option=save时启用{head, case, phase ,path, epoch} 图像名 epoch_head_Case_Phase_i_slice
     :return:
     '''
     if torch.is_tensor(scan):
@@ -132,6 +140,7 @@ def plotorsave_ct_scan(scan, option: "str", **cfg):
             plot.axis('off')
             if i < num_slices // jump:
                 plot.imshow(scan_c[i * jump], cmap="gray")
+
     elif option == 'save':
         case_path = os.path.join(cfg["path"], f"Case{cfg['case']}")
         phase_path = os.path.join(case_path, f"T{cfg['phase']}")
@@ -175,16 +184,6 @@ def transform_convert(img, transform):
         raise Exception("Invalid img shape, expected 1 or 3 in axis 2, but got {}!".format(img_tensor.shape[2]))
 
     return img
-
-
-def tre(mov_lmk, ref_lmk, spacing=1):
-    # TRE, unit: mm
-
-    diff = (ref_lmk - mov_lmk) * spacing
-    diff = torch.Tensor(diff)
-    tre = diff.pow(2).sum(1).sqrt()
-    mean, std = tre.mean(), tre.std()
-    return mean, std, diff
 
 
 if __name__ == '__main__':
