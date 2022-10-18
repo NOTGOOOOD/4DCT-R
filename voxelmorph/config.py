@@ -9,13 +9,13 @@ parser.add_argument("--landmark_file", type=str, help="landmark file",
                     dest="landmark_file", default='data/dirlab/Case0_300_00_50.pt')
 parser.add_argument("--fixed_img", type=str, dest="fixed_img")
 parser.add_argument("--model", type=str, help="select model",
-                    dest="model", choices=['vm', 'gdir', 'dault-prnet'], default='vm')
+                    dest="model", choices=['vm', 'gdir', 'dault-prnet'], default='vm2')
 parser.add_argument("--result_dir", type=str, help="results folder",
                     dest="result_dir", default='./result/vm')
 
 # train时参数
 parser.add_argument("--train_dir", type=str, help="data folder with training vols",
-                    dest="train_dir", default="../../Dataset/LPBA40_delineation/delineation_l_norm/train")
+                    dest="train_dir", default="")
 parser.add_argument("--lr", type=float, help="learning rate",
                     dest="lr", default=5e-3)
 parser.add_argument("--n_iter", type=int, help="number of iterations",

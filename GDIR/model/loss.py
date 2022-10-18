@@ -1,10 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-import scipy.ndimage
 import numpy as np
-import math
-from utils.utilize import loadfile
 
 torch.backends.cudnn.deterministic = True
 
@@ -178,7 +175,7 @@ if __name__ == "__main__":
 
     import utils.utilize as ut
     import os
-    from process.processing import data_standardization_0_255
+    from GDIR.process.processing import data_standardization_0_255
 
     project_folder = ut.get_project_path("4DCT").split("4DCT")[0]
     img_path = os.path.join(project_folder, f'datasets/dirlab/Case4Pack/Images')
