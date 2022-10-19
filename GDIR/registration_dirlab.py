@@ -114,7 +114,7 @@ config = dict(
     scale=0.5,
     initial_channels=32,
     depth=4,
-    max_num_iteration=400,
+    max_num_iteration=300,
     normalization=True,  # whether use normalization layer
     learning_rate=0.001,
     smooth_reg=1e-3,
@@ -349,20 +349,20 @@ def train(case):
         #                                         cfg[case]['pixel_spacing'])
         #     diff_stats.append([i, mean, std])
         #     print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
-
-            # Save images
-            # phase = 0
-            # warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
-            # save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
-            #            warp_case_path + f'/epoch{i}', warped_name)
-            #
-            # m2f_name = f"case{case}_temp.nii.gz"
-            # save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
-
-            # Save DVF
-            # n,3,d,h,w-> w,h,d,3
-            # save_image(torch.permute(disp_i2t[0], (3, 2, 1, 0)), input_image[5], dvf_path + f'/epoch{i}',
-            #            f'case{case}dvf.nii')
+        #
+        #     # Save images
+        #     phase = 0
+        #     warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
+        #     save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
+        #                warp_case_path + f'/epoch{i}', warped_name)
+        #
+        #     m2f_name = f"case{case}_temp.nii.gz"
+        #     save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
+        #
+        #     # Save DVF
+        #     # n,3,d,h,w-> w,h,d,3
+        #     save_image(torch.permute(disp_i2t[0], (3, 2, 1, 0)), input_image[5], dvf_path + f'/epoch{i}',
+        #                f'case{case}dvf.nii')
 
     if 'disp_i2t' in res:
         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
@@ -395,5 +395,5 @@ def train(case):
 
 
 if __name__ == '__main__':
-    # for i in range(1, 11):
-    train(1)
+    for c in range(7, 11):
+        train(c)
