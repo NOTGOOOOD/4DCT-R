@@ -3,15 +3,15 @@ import torch, os
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from GDIR.process.processing import data_standardization_0_n, imgTomhd, data_standardization_min_max
+import random
 from utils.metric import MSE, NCC
 
 plot_dpi = 300
 import numpy as np
 import logging, tqdm
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 from scipy import interpolate
 from utils.utilize import save_image, get_project_path, make_dir, count_parameters
+from utils.logger import Logger
 
 
 def calc_tre(calcdisp, disp_i2t, disp_t2i, grid_tuple, landmark_00_converted, landmark_disp, spacing):
@@ -54,6 +54,14 @@ def show_slice(img_mov, img_ref=None):
         ax[1].imshow(img_ref[:, 200, :], cmap='gray')
         ax[2].imshow(img_ref[50, :, :], cmap='gray')
         plt.show()
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)  # cpu
+    torch.cuda.manual_seed(seed)  # gpu
+    torch.cuda.manual_seed_all(seed)  # all gpus
 
 
 # size:z y x spacing: x y z
@@ -134,15 +142,18 @@ states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def train(case):
+def train(case, seed):
+    set_seed(seed)
+    # file
     data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/mhd/case{case}/')
     landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
-
+    log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径
     warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
     temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
     make_dir(warp_case_path)
     make_dir(temp_case_path)
+    make_dir(log_folder)
 
     # landmark
     landmark_info = torch.load(landmark_file)
@@ -166,6 +177,9 @@ def train(case):
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
     # preprocess(project_path, cfg)
+
+    # init log
+    log = Logger(os.path.join(log_folder, 'log.txt'), level='info')
 
     image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
     image_list = []
@@ -276,6 +290,9 @@ def train(case):
 
     for i in pbar:
         res = regnet(input_image)
+        # for name, param in regnet.named_parameters():
+        #     log.logger.info("case{0}_iter{1}\n{2}\n{3}".format(case, i, name, param))
+
         # # 保存前六个阶段图片
         # if i % 10 == 0:
         #     for j in (0, 5):
@@ -338,6 +355,9 @@ def train(case):
         pbar.set_description(
             f'{i}, totalloss {total_loss:.6f}, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
+        # save logfile
+        log_index = len([file for file in os.listdir(log_folder) if file.endswith('.log')])
+
         # if i % config.pair_disp_calc_interval == 0:
         #     if 'disp_i2t' in res:
         #         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
@@ -372,18 +392,19 @@ def train(case):
     mean, std, diff, composed_dis_np = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
                                                 grid_tuple, landmark_00_converted, landmark_disp,
                                                 cfg[case]['pixel_spacing'])
-    diff_stats.append([i, mean, std])
-    print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
-    diff_stats = np.array(diff_stats)
-
-    # mse = MSE()
-
-    res['composed_disp_np'] = composed_dis_np
-    states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
-               'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
-    index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
-    states_file = f'reg_dirlab_case{case}_{index:03d}.pth'
-    torch.save(states, os.path.join(states_folder, states_file))
+    log.logger.info("seed:{0},diff:{1}({2})\n".format(seed, mean, std))
+    # diff_stats.append([i, mean, std])
+    # print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+    # diff_stats = np.array(diff_stats)
+    #
+    # # mse = MSE()
+    #
+    # res['composed_disp_np'] = composed_dis_np
+    # states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
+    #           'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
+    # index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
+    # states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
+    # torch.save(states, os.path.join(states_folder, states_file))
 
     # logging.info(f'save model and optimizer state {states_file}')
     #
@@ -395,5 +416,5 @@ def train(case):
 
 
 if __name__ == '__main__':
-    for c in range(7, 11):
-        train(c)
+    for c in range(0, 51):
+        train(1, c)
