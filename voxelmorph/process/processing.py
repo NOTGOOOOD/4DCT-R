@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import numpy as np
 from matplotlib import pyplot as plt
 import torch
+import torch.nn.functional as F
 
 from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
 
@@ -35,22 +36,32 @@ copd_case_cfg = {
     10: (135, 512, 512),
 }
 
-def imgTonii(img_path, target_path, datatype, shape, resample=False):
+
+def imgTonii(img_path, target_path, datatype, shape, case, resample=False):
     file = np.memmap(img_path, dtype=datatype, mode='r')
     if shape:
         file = file.reshape(shape)
 
+    # crop
+    file = file[:, 30:470, 70:470]
     img = sitk.GetImageFromArray(file)
-    # print("before resampling：", img.GetSize())
+
+    # resampling
     if resample:
         # 统一采样到1*1*2.5mm
-        img = img_resmaple([1, 1, 2.5], ori_img_file=img)
-        # print("after resampling：", img.GetSize())
+        img = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img)
 
+    # resize HU[0, 900]
+    file = sitk.GetArrayFromImage(img)
+    file = file.astype('float32')
+    img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=[96, 256, 256], mode='trilinear',
+                               align_corners=False).clamp_(min=0, max=900)/900
+
+    # save
+    img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
     make_dir(target_path)
     target_filepath = os.path.join(target_path,
                                    f"copd_case{case}.nii.gz")
-
     if not os.path.exists(target_filepath):
         sitk.WriteImage(img, target_filepath)
 
@@ -184,36 +195,39 @@ if __name__ == '__main__':
     #
     #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
-    # COPD数据集img转nii.gz
-    for item in copd_case_cfg.items():
-        case = item[0]
-        shape = item[1]
+    # # COPD数据集img转nii.gz
+    # for item in copd_case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #
+    #     fixed_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+    #     moving_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
+    #     target_fixed_path = f'G:/datasets/registration/train/fixed'
+    #     target_moving_path = f'G:/datasets/registration/train/moving'
+    #
+    #     '''img1 = torch.nn.functional.interpolate(torch.tensor(img1[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
+    #                                            align_corners=False).clamp_(
+    #         min=clamp_min, max=clamp_max) / int_range
+    #     img2 = torch.nn.functional.interpolate(torch.tensor(img2[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
+    #                                            align_corners=False).clamp_(
+    #         min=clamp_min, max=clamp_max) / int_range
+    #     img1 = img1[0,...]
+    #     img2 = img2[0,...]'''
+    #
+    #     imgTonii(fixed_path, target_fixed_path, np.int16, shape, case, True)
+    #     imgTonii(moving_path, target_moving_path, np.int16, shape, case, True)
+    #
+    # print('done')
 
-        fixed_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
-        moving_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
-        target_fixed_path = f'G:/datasets/registration/fixed'
-        target_moving_path = f'G:/datasets/registration/moving'
+    # learn2reg
+    l2r_path = r'G:\datasets\Learn2Reg\training\scans'
 
-        '''img1 = torch.nn.functional.interpolate(torch.tensor(img1[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
-                                               align_corners=False).clamp_(
-            min=clamp_min, max=clamp_max) / int_range
-        img2 = torch.nn.functional.interpolate(torch.tensor(img2[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
-                                               align_corners=False).clamp_(
-            min=clamp_min, max=clamp_max) / int_range
-        img1 = img1[0,...]
-        img2 = img2[0,...]'''
-
-        imgTonii(fixed_path, target_fixed_path, np.int16, shape, True)
-        imgTonii(moving_path, target_moving_path, np.int16, shape, True)
-
-    print('done')
-
-        # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
-        # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
-        # make_dir(moving_path)
-        # make_dir(fixed_path)
-        #
-        # imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
+    # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
+    # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
+    # make_dir(moving_path)
+    # make_dir(fixed_path)
+    #
+    # imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
     # # 真实病例
     # img_path = os.path.join(project_folder, f'datasets/4DCT_nii/')
