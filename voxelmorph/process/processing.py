@@ -9,7 +9,7 @@ from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
 # import ants
 
 # DIRLAB 4DCT 1-10例的 z y x
-case_cfg = {
+dirlab_case_cfg = {
     1: (94, 256, 256),
     2: (112, 256, 256),
     3: (104, 256, 256),
@@ -21,6 +21,38 @@ case_cfg = {
     9: (128, 512, 512),
     10: (120, 512, 512),
 }
+
+copd_case_cfg = {
+    1: (121, 512, 512),
+    2: (102, 512, 512),
+    3: (126, 512, 512),
+    4: (126, 512, 512),
+    5: (131, 512, 512),
+    6: (119, 512, 512),
+    7: (112, 512, 512),
+    8: (115, 512, 512),
+    9: (116, 512, 512),
+    10: (135, 512, 512),
+}
+
+def imgTonii(img_path, target_path, datatype, shape, resample=False):
+    file = np.memmap(img_path, dtype=datatype, mode='r')
+    if shape:
+        file = file.reshape(shape)
+
+    img = sitk.GetImageFromArray(file)
+    # print("before resampling：", img.GetSize())
+    if resample:
+        # 统一采样到1*1*2.5mm
+        img = img_resmaple([1, 1, 2.5], ori_img_file=img)
+        # print("after resampling：", img.GetSize())
+
+    make_dir(target_path)
+    target_filepath = os.path.join(target_path,
+                                   f"copd_case{case}.nii.gz")
+
+    if not os.path.exists(target_filepath):
+        sitk.WriteImage(img, target_filepath)
 
 
 def imgTomhd(file_folder, m_path, f_path, datatype, shape, case, resample=False):
@@ -152,13 +184,44 @@ if __name__ == '__main__':
     #
     #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
-    # 真实病例
-    img_path = os.path.join(project_folder, f'datasets/4DCT_nii/')
-    for file_name in os.listdir(img_path):
-        mhd_file = os.path.join(img_path, file_name)
-        itkimage = sitk.ReadImage(mhd_file)
-        ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
-        direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
-        origin = np.array(itkimage.GetOrigin())
-        spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
-        plotorsave_ct_scan(ct_value, "plot")
+    # COPD数据集img转nii.gz
+    for item in copd_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+
+        fixed_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+        moving_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
+        target_fixed_path = f'G:/datasets/registration/fixed'
+        target_moving_path = f'G:/datasets/registration/moving'
+
+        '''img1 = torch.nn.functional.interpolate(torch.tensor(img1[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
+                                               align_corners=False).clamp_(
+            min=clamp_min, max=clamp_max) / int_range
+        img2 = torch.nn.functional.interpolate(torch.tensor(img2[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
+                                               align_corners=False).clamp_(
+            min=clamp_min, max=clamp_max) / int_range
+        img1 = img1[0,...]
+        img2 = img2[0,...]'''
+
+        imgTonii(fixed_path, target_fixed_path, np.int16, shape, True)
+        imgTonii(moving_path, target_moving_path, np.int16, shape, True)
+
+    print('done')
+
+        # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
+        # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
+        # make_dir(moving_path)
+        # make_dir(fixed_path)
+        #
+        # imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
+
+    # # 真实病例
+    # img_path = os.path.join(project_folder, f'datasets/4DCT_nii/')
+    # for file_name in os.listdir(img_path):
+    #     mhd_file = os.path.join(img_path, file_name)
+    #     itkimage = sitk.ReadImage(mhd_file)
+    #     ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
+    #     direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
+    #     origin = np.array(itkimage.GetOrigin())
+    #     spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
+    #     plotorsave_ct_scan(ct_value, "plot")
