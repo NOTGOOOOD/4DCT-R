@@ -37,7 +37,7 @@ copd_case_cfg = {
 }
 
 
-def imgTonii(img_path, target_path, datatype, shape, case, resample=False):
+def copd_processing(img_path, target_path, datatype, shape, case, resample=False):
     file = np.memmap(img_path, dtype=datatype, mode='r')
     if shape:
         file = file.reshape(shape)
@@ -54,16 +54,16 @@ def imgTonii(img_path, target_path, datatype, shape, case, resample=False):
     # resize HU[0, 900]
     file = sitk.GetArrayFromImage(img)
     file = file.astype('float32')
-    img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=[96, 256, 256], mode='trilinear',
-                               align_corners=False).clamp_(min=0, max=900)/900
+    img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=[144, 256, 256], mode='trilinear',
+                               align_corners=False).clamp_(min=0, max=900)
 
     # save
     img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
     make_dir(target_path)
     target_filepath = os.path.join(target_path,
                                    f"copd_case{case}.nii.gz")
-    if not os.path.exists(target_filepath):
-        sitk.WriteImage(img, target_filepath)
+    # if not os.path.exists(target_filepath):
+    sitk.WriteImage(img, target_filepath)
 
 
 def imgTomhd(file_folder, m_path, f_path, datatype, shape, case, resample=False):
@@ -177,9 +177,84 @@ def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     return itkimgResampled
 
 
+def learn2reg_processing():
+    l2r_path = r'G:\datasets\Learn2Reg\all'
+    target_fixed_path = f'G:/datasets/registration/train/fixed'
+    target_moving_path = f'G:/datasets/registration/train/moving'
+
+    for file_name in os.listdir(l2r_path):
+        target_path = target_moving_path
+        file = os.path.join(l2r_path, file_name)
+        # exp -> fixed insp -> moving
+        if 'exp' in file_name:
+            target_path = target_fixed_path
+
+        # open nii
+        img_nii = sitk.ReadImage(file)
+
+        # resampling
+        img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+
+        # resize HU[0, 900]
+        img_arr = sitk.GetArrayFromImage(img_nii)
+        img_arr = img_arr.astype('float32')
+        img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
+                                   mode='trilinear',
+                                   align_corners=False).clamp_(min=0, max=900)
+
+        # save
+        img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
+        make_dir(target_path)
+        case = file_name.split('_')[1]
+        target_filepath = os.path.join(target_path,
+                                       f"l2r_case{case}.nii.gz")
+        # if not os.path.exists(target_filepath):
+        sitk.WriteImage(img, target_filepath)
+        print('case{} done'.format(case))
+
+
+def emp10_processing():
+    emp_path = r'G:\datasets\emp10\emp30'
+    target_fixed_path = f'G:/datasets/registration/train/fixed'
+    target_moving_path = f'G:/datasets/registration/train/moving'
+    file_list = sorted([file_name for file_name in os.listdir(emp_path) if file_name.lower().endswith('mhd')])
+
+    for file_name in file_list:
+        target_path = target_moving_path
+        file = os.path.join(emp_path, file_name)
+        # exp -> fixed insp -> moving
+        if 'Fixed' in file_name:
+            target_path = target_fixed_path
+
+        # open nii
+        img_nii = sitk.ReadImage(file)
+
+        # resampling
+        img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+
+        # resize HU[0, 900]
+        img_arr = sitk.GetArrayFromImage(img_nii)
+        img_arr = img_arr.astype('float32')
+        img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
+                                   mode='trilinear',
+                                   align_corners=False).clamp_(min=-900, max=500)
+
+        # save
+        img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
+        make_dir(target_path)
+        case = file_name.split('_')[0]
+        target_filepath = os.path.join(target_path,
+                                       f"emp_case{case}.nii.gz")
+        # if not os.path.exists(target_filepath):
+        sitk.WriteImage(img, target_filepath)
+        print('case{} done'.format(case))
+
+
 if __name__ == '__main__':
 
     project_folder = get_project_path("4DCT").split("4DCT")[0]
+    moving_path = os.path.join(project_folder, f'datasets/registration/moving')
+    fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
 
     # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
 
@@ -188,14 +263,12 @@ if __name__ == '__main__':
     #     case = item[0]
     #     shape = item[1]
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     moving_path = os.path.join(project_folder, f'datasets/registration/moving')
-    #     fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
     #     make_dir(moving_path)
     #     make_dir(fixed_path)
     #
     #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
-    # # COPD数据集img转nii.gz
+    # COPD数据集img转nii.gz
     # for item in copd_case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
@@ -205,22 +278,14 @@ if __name__ == '__main__':
     #     target_fixed_path = f'G:/datasets/registration/train/fixed'
     #     target_moving_path = f'G:/datasets/registration/train/moving'
     #
-    #     '''img1 = torch.nn.functional.interpolate(torch.tensor(img1[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
-    #                                            align_corners=False).clamp_(
-    #         min=clamp_min, max=clamp_max) / int_range
-    #     img2 = torch.nn.functional.interpolate(torch.tensor(img2[70:470,30:470,:]).unsqueeze(0).unsqueeze(0), size=[256, 256, 256], mode='trilinear',
-    #                                            align_corners=False).clamp_(
-    #         min=clamp_min, max=clamp_max) / int_range
-    #     img1 = img1[0,...]
-    #     img2 = img2[0,...]'''
-    #
-    #     imgTonii(fixed_path, target_fixed_path, np.int16, shape, case, True)
-    #     imgTonii(moving_path, target_moving_path, np.int16, shape, case, True)
-    #
-    # print('done')
+    #     copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, True)
+    #     copd_processing(moving_path, target_moving_path, np.int16, shape, case, True)
 
     # learn2reg
-    l2r_path = r'G:\datasets\Learn2Reg\training\scans'
+    # learn2reg_processing()
+
+    # emp10
+    emp10_processing()
 
     # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
     # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
