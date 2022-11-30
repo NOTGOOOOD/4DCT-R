@@ -35,12 +35,14 @@ class CalcDisp(object):
         self.spatial_transformer = regnet.SpatialTransformer(dim=dim)
 
     def inverse_disp(self, disp, threshold=0.01, max_iteration=20):
+
         '''
         compute the inverse field. implementationof "A simple fixed‐point approach to invert a deformation field"
 
         disp : (n, 2, h, w) or (n, 3, d, h, w) or (2, h, w) or (3, d, h, w)
             displacement field
         '''
+
         forward_disp = disp.detach().to(device=self.device)
         if disp.ndim < self.dim + 2:
             forward_disp = torch.unsqueeze(forward_disp, 0)

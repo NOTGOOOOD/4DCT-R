@@ -2,9 +2,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
 
 class UNet(nn.Module):
     '''
@@ -28,6 +25,35 @@ class UNet(nn.Module):
         Number of initial channels. The default is 32.
     normalization : bool, optional
         Whether to add instance normalization after activation. The default is False.
+
+        encoder
+DownBlock(
+  (block): Sequential(
+    (0): Conv3d(2, 16, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
+    (1): InstanceNorm3d(16, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (2): LeakyReLU(negative_slope=0.2)
+  )
+)
+通过Conv3d提取特征 增加通道
+利用插值方式下采样 0.5
+
+
+decoder
+UpBlock(
+  (conv): Conv3d(256, 128, kernel_size=(1, 1, 1), stride=(1, 1, 1))
+  (conv_block): ConvBlock(
+    (block): Sequential(
+      (0): Conv3d(256, 128, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))
+      (1): InstanceNorm3d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+      (2): LeakyReLU(negative_slope=0.2)
+    )
+  )
+)
+插值恢复到下采样最后一层的维度
+利用nn.Conv3d(in_channels, out_channels, kernel_size=(1, 1, 1)) 恢复通道数
+跳跃连接
+再通过ConvBlock提取特征
+
     '''
 
     def __init__(self, in_channels, out_channels, dim=2, depth=5, initial_channels=32, normalization=True):
@@ -52,9 +78,9 @@ class UNet(nn.Module):
             prev_channels = current_channels
 
         if dim == 2:
-            self.last = nn.Conv2d(prev_channels, out_channels, kernel_size=1)
+            self.last = nn.Conv2d(prev_channels, out_channels, kernel_size=(1, 1))
         elif dim == 3:
-            self.last = nn.Conv3d(prev_channels, out_channels, kernel_size=1)
+            self.last = nn.Conv3d(prev_channels, out_channels, kernel_size=(1, 1, 1))
 
     def forward(self, x):
         blocks = []
@@ -76,12 +102,12 @@ class ConvBlock(nn.Module):
         super().__init__()
         block = []
         if dim == 2:
-            block.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1))
+            block.append(nn.Conv2d(in_channels, out_channels, kernel_size=(3, 3), padding=1))
             if normalization:
                 block.append(nn.InstanceNorm2d(out_channels))
             block.append(nn.LeakyReLU(LeakyReLU_slope))
         elif dim == 3:
-            block.append(nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1))
+            block.append(nn.Conv3d(in_channels, out_channels, kernel_size=(3, 3, 3), padding=1))
             if normalization:
                 block.append(nn.InstanceNorm3d(out_channels))
             block.append(nn.LeakyReLU(LeakyReLU_slope))
@@ -99,9 +125,9 @@ class UpBlock(nn.Module):
         super().__init__()
         self.dim = dim
         if dim == 2:
-            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1))
         elif dim == 3:
-            self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1)
+            self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=(1, 1, 1))
         self.conv_block = ConvBlock(in_channels, out_channels, dim, normalization)
 
     def forward(self, x, skip):
@@ -110,4 +136,3 @@ class UpBlock(nn.Module):
         out = torch.cat([x_up_conv, skip], 1)
         out = self.conv_block(out)
         return out
-
