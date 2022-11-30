@@ -5,6 +5,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 from PIL import Image
+import random
+import time
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 
 def count_parameters(model):
@@ -20,7 +28,19 @@ def save_png(imgs_numpy, save_path, save_name):
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
-def save_image(img: "Tensor", ref_img: "Tensor", save_path, save_name):
+def save_model(args, model, optimizer, scheduler, global_step):
+    model_checkpoint = os.path.join(args.model_dir,
+                                    "{}_iter{}.pth".format(time.strftime("%Y-%m-%d-%H-%M-%S"), global_step))
+    checkpoint = {
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict()
+    }
+    torch.save(checkpoint, model_checkpoint)
+    print("Saved model checkpoint to [DIR: %s]", args.model_dir)
+
+
+def save_image(img, ref_img, save_path, save_name):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -161,6 +181,7 @@ def transform_convert(img, transform):
 
 
 if __name__ == '__main__':
+    pass
     # simpleITK x, y, z
     # numpy z, y, x
 
@@ -172,4 +193,4 @@ if __name__ == '__main__':
     # img = sitk.GetImageFromArray(img_array[0])
     # scan = sitk.GetArrayFromImage(img)
     # print("1")
-    dvf_save_nii("4DCT", "result/general_reg/dvf/")
+    # dvf_save_nii("4DCT", "result/general_reg/dvf/")

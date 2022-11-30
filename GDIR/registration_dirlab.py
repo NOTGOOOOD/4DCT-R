@@ -1,3 +1,5 @@
+import time
+
 import GDIR.model.regnet, GDIR.model.loss, GDIR.model.util, utils.structure, utils.utilize
 import torch, os
 import SimpleITK as sitk
@@ -11,7 +13,6 @@ import numpy as np
 import logging, tqdm
 from scipy import interpolate
 from utils.utilize import save_image, get_project_path, make_dir, count_parameters
-from utils.logger import Logger
 
 
 def calc_tre(calcdisp, disp_i2t, disp_t2i, grid_tuple, landmark_00_converted, landmark_disp, spacing):
@@ -56,63 +57,118 @@ def show_slice(img_mov, img_ref=None):
         plt.show()
 
 
-def set_seed(seed):
+def set_seed(seed=1024):
     random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)  # 为了禁止hash随机化，使得实验可复现
     np.random.seed(seed)
-    torch.manual_seed(seed)  # cpu
-    torch.cuda.manual_seed(seed)  # gpu
-    torch.cuda.manual_seed_all(seed)  # all gpus
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
 
 
 # size:z y x spacing: x y z
+# cfg_bak = [{},
+#        {"case": 1,
+#         "crop_range": [slice(0, 81), slice(43, 199), slice(10, 250)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (94, 256, 256)
+#         },
+#        {"case": 2,
+#         "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
+#         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
+#         "orign_size": (112, 256, 256)
+#         },
+#        {"case": 3,
+#         "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
+#         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
+#         "orign_size": (104, 256, 256)
+#         },
+#        {"case": 4,
+#         "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (99, 256, 256)
+#         },
+#        {"case": 5,
+#         "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
+#         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
+#         "orign_size": (106, 256, 256)
+#         },
+#        {"case": 6,
+#         "crop_range": [slice(10, 107), slice(144, 328), slice(132, 426)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (128, 512, 512)
+#         },
+#        {"case": 7,
+#         "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (136, 512, 512)
+#         },
+#        {"case": 8,
+#         "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (128, 512, 512)
+#         },
+#        {"case": 9,
+#         "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (128, 512, 512)
+#         },
+#        {"case": 10,
+#         "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
+#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+#         "orign_size": (120, 512, 512)
+#         }]
+
 cfg = [{},
        {"case": 1,
-        "crop_range": [slice(0, 83), slice(43, 200), slice(10, 250)],
+        "crop_range": [slice(0, 84), slice(43, 199), slice(10, 250)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (94, 256, 256)
         },
        {"case": 2,
-        "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
+        "crop_range": [slice(5, 101), slice(30, 194), slice(8, 244)],
         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
         "orign_size": (112, 256, 256)
         },
        {"case": 3,
-        "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
+        "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
         "orign_size": (104, 256, 256)
         },
        {"case": 4,
-        "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
+        "crop_range": [slice(0, 92), slice(42, 210), slice(10, 250)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (99, 256, 256)
         },
        {"case": 5,
-        "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
+        "crop_range": [slice(0, 92), slice(60, 220), slice(10, 250)],
         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
         "orign_size": (106, 256, 256)
         },
        {"case": 6,
-        "crop_range": [slice(10, 107), slice(144, 328), slice(132, 426)],
+        "crop_range": [slice(10, 102), slice(144, 328), slice(132, 424)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (128, 512, 512)
         },
        {"case": 7,
-        "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
+        "crop_range": [slice(10, 102), slice(144, 328), slice(114, 422)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (136, 512, 512)
         },
        {"case": 8,
-        "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
+        "crop_range": [slice(18, 118), slice(84, 300), slice(113, 389)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (128, 512, 512)
         },
        {"case": 9,
-        "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
+        "crop_range": [slice(0, 72), slice(126, 334), slice(128, 388)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (128, 512, 512)
         },
        {"case": 10,
-        "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
+        "crop_range": [slice(0, 92), slice(119, 335), slice(140, 384)],
         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
         "orign_size": (120, 512, 512)
         }]
@@ -128,8 +184,8 @@ config = dict(
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
     ncc_window_size=5,
-    load=False,
-    load_optimizer=False,
+    load=None,
+    load_optimizer=True,
     group_index_list=None,
     pair_disp_indexes=[0, 5],
     pair_disp_calc_interval=20,
@@ -142,11 +198,12 @@ states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def train(case, seed):
-    set_seed(seed)
+def train(case=1):
+    # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
+    set_seed()
     # file
     data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/mhd/case{case}/')
-    landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
+    landmark_file = os.path.join(project_path, f'data/dirlab/Case0{case}_300_00_50.pt')
     log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径
     warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
@@ -177,9 +234,6 @@ def train(case, seed):
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
     # preprocess(project_path, cfg)
-
-    # init log
-    log = Logger(os.path.join(log_folder, 'log.txt'), level='info')
 
     image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
     image_list = []
@@ -214,7 +268,7 @@ def train(case, seed):
     # from torch.utils.tensorboard import SummaryWriter
     # test_images = torch.randn(10, 1, 94, 256, 256)
     # writer = SummaryWriter('runs/GDIR')
-    # writer.add_graph(regnet, test_images)
+    # writer.add_graph(regnet, test_images,use_strict_trace=False)
     # writer.close()
     #
     # print("模型参数：", count_parameters(regnet.unet))
@@ -237,9 +291,6 @@ def train(case, seed):
             regnet.load_state_dict(states['model'])
             if config.load_optimizer:
                 optimizer.load_state_dict(states['optimizer'])
-                logging.info(f'load model and optimizer state {config.load}.pth')
-            else:
-                logging.info(f'load model state {config.load}.pth')
 
     grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
     diff_stats = []
@@ -290,9 +341,6 @@ def train(case, seed):
 
     for i in pbar:
         res = regnet(input_image)
-        # for name, param in regnet.named_parameters():
-        #     log.logger.info("case{0}_iter{1}\n{2}\n{3}".format(case, i, name, param))
-
         # # 保存前六个阶段图片
         # if i % 10 == 0:
         #     for j in (0, 5):
@@ -346,7 +394,6 @@ def train(case, seed):
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
-        # scheduler.step()
 
         stop_criterion.add(simi_loss.item())
         if stop_criterion.stop():
@@ -358,17 +405,20 @@ def train(case, seed):
         # save logfile
         log_index = len([file for file in os.listdir(log_folder) if file.endswith('.log')])
 
-        # if i % config.pair_disp_calc_interval == 0:
-        #     if 'disp_i2t' in res:
-        #         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
-        #     else:
-        #         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
-        #
-        #     mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-        #                                         grid_tuple, landmark_00_converted, landmark_disp,
-        #                                         cfg[case]['pixel_spacing'])
-        #     diff_stats.append([i, mean, std])
-        #     print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+        if i % config.pair_disp_calc_interval == 0:
+            # for name, param in regnet.named_parameters():
+            #     logger.info("case{0}_iter{1}\n{2}\n{3}".format(case, i, name, param))
+
+            if 'disp_i2t' in res:
+                disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
+            else:
+                disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
+
+            mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                          grid_tuple, landmark_00_converted, landmark_disp,
+                                          cfg[case]['pixel_spacing'])
+            diff_stats.append([i, mean, std])
+            print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
         #
         #     # Save images
         #     phase = 0
@@ -392,7 +442,7 @@ def train(case, seed):
     mean, std, diff, composed_dis_np = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
                                                 grid_tuple, landmark_00_converted, landmark_disp,
                                                 cfg[case]['pixel_spacing'])
-    log.logger.info("seed:{0},diff:{1}({2})\n".format(seed, mean, std))
+
     # diff_stats.append([i, mean, std])
     # print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
     # diff_stats = np.array(diff_stats)
@@ -416,5 +466,4 @@ def train(case, seed):
 
 
 if __name__ == '__main__':
-    for c in range(0, 51):
-        train(1, c)
+    train()
