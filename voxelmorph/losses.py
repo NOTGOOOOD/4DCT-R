@@ -7,8 +7,10 @@ Losses for VoxelMorph
 import math
 import torch
 import numpy as np
-from config import args
+from voxelmorph.config import get_args
 import torch.nn.functional as F
+
+args = get_args()
 
 # 平滑正则损失
 def gradient_loss(s, penalty='l2'):
@@ -23,11 +25,11 @@ def gradient_loss(s, penalty='l2'):
     -------
 
     '''
-    dy = torch.abs(s[:, :, 1:, :, :] - s[:, :, :-1, :, :])
-    dx = torch.abs(s[:, :, :, 1:, :] - s[:, :, :, :-1, :])
-    dz = torch.abs(s[:, :, :, :, 1:] - s[:, :, :, :, :-1])
+    dz = torch.abs(s[:, :, 1:, :, :] - s[:, :, :-1, :, :])
+    dy = torch.abs(s[:, :, :, 1:, :] - s[:, :, :, :-1, :])
+    dx = torch.abs(s[:, :, :, :, 1:] - s[:, :, :, :, :-1])
 
-    if (penalty == 'l2'):
+    if penalty == 'l2':
         dy = dy * dy
         dx = dx * dx
         dz = dz * dz
@@ -111,6 +113,7 @@ def Get_Ja(flow):
     D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
     return D1 - D2 + D3
 
+
 def jacobian_determinant(disp):
     """
     jacobian determinant of a displacement field.
@@ -155,6 +158,7 @@ def jacobian_determinant(disp):
         dfdy = J[1]
 
         return dfdx[..., 0] * dfdy[..., 1] - dfdy[..., 0] * dfdx[..., 1]
+
 
 def NJ_loss(ypred):
     '''

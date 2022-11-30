@@ -3,8 +3,6 @@ import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
 
-torch.backends.cudnn.deterministic = True
-
 
 class NCC(nn.Module):
     '''
