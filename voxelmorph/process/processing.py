@@ -36,67 +36,108 @@ copd_case_cfg = {
     10: (135, 512, 512),
 }
 
+dirlab_crop_range = [{},
+                     {"case": 1,
+                      "crop_range": [slice(0, 84), slice(43, 199), slice(10, 250)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (94, 256, 256)
+                      },
+                     {"case": 2,
+                      "crop_range": [slice(5, 101), slice(30, 194), slice(8, 244)],
+                      "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
+                      "orign_size": (112, 256, 256)
+                      },
+                     {"case": 3,
+                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
+                      "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
+                      "orign_size": (104, 256, 256)
+                      },
+                     {"case": 4,
+                      "crop_range": [slice(0, 92), slice(42, 210), slice(10, 250)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (99, 256, 256)
+                      },
+                     {"case": 5,
+                      "crop_range": [slice(0, 92), slice(60, 220), slice(10, 250)],
+                      "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
+                      "orign_size": (106, 256, 256)
+                      },
+                     {"case": 6,
+                      "crop_range": [slice(10, 102), slice(144, 328), slice(132, 424)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (128, 512, 512)
+                      },
+                     {"case": 7,
+                      "crop_range": [slice(10, 102), slice(144, 328), slice(114, 422)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (136, 512, 512)
+                      },
+                     {"case": 8,
+                      "crop_range": [slice(18, 118), slice(84, 300), slice(113, 389)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (128, 512, 512)
+                      },
+                     {"case": 9,
+                      "crop_range": [slice(0, 72), slice(126, 334), slice(128, 388)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (128, 512, 512)
+                      },
+                     {"case": 10,
+                      "crop_range": [slice(0, 92), slice(119, 335), slice(140, 384)],
+                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
+                      "orign_size": (120, 512, 512)
+                      }]
 
-def copd_processing(img_path, target_path, datatype, shape, case, resample=False):
-    file = np.memmap(img_path, dtype=datatype, mode='r')
-    if shape:
-        file = file.reshape(shape)
 
+def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, resample=None, clamp=None):
+    """
+    3D volume crop, resampling, resize and clamp
+    Parameters
+    ----------
+    sitk_img: input img
+    crop_range: x,y,z tuple[(),(),()]
+    resample: x,y,z arr[, , ,]
+    new_size: [z,y,x]
+    clamp: [min,max]
+
+    Returns: sitk_img
+    -------
+
+    """
     # crop
-    file = file[:, 30:470, 70:470]
-    img = sitk.GetImageFromArray(file)
+    if crop_range is not None:
+        img_arr = sitk.GetArrayFromImage(sitk_img)
+        img_arr = img_arr[crop_range[2], crop_range[1], crop_range[0]]
+        img = sitk.GetImageFromArray(img_arr)
+
+    else:
+        img = sitk_img
 
     # resampling
-    if resample:
-        # 统一采样到1*1*2.5mm
-        img = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img)
+    if resample is not None:
+        img = img_resmaple(resample, ori_img_file=img)
 
-    # resize HU[0, 900]
+    # resize and clamp HU[min,max]
     file = sitk.GetArrayFromImage(img)
     file = file.astype('float32')
-    img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=[144, 256, 256], mode='trilinear',
-                               align_corners=False).clamp_(min=0, max=900)
 
-    # save
-    img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
-    make_dir(target_path)
-    target_filepath = os.path.join(target_path,
-                                   f"copd_case{case}.nii.gz")
-    # if not os.path.exists(target_filepath):
-    sitk.WriteImage(img, target_filepath)
+    if new_size is not None:
+        if clamp is not None:
+            img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=new_size,
+                                       mode='trilinear',
+                                       align_corners=False).clamp_(min=clamp[0], max=clamp[1])
 
+        else:
+            img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=new_size,
+                                       mode='trilinear',
+                                       align_corners=False)
 
-def imgTomhd(file_folder, m_path, f_path, datatype, shape, case, resample=False):
-    for file_name in os.listdir(file_folder):
-        is_fixed = False
-        # T50为参考图像
-        if 'T50' in file_name:
-            is_fixed = True
-        file_path = os.path.join(file_folder, file_name)
-        file = np.memmap(file_path, dtype=datatype, mode='r')
-        if shape:
-            file = file.reshape(shape)
+        img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
+    elif clamp is not None:
+        img_tensor = torch.tensor(file).clamp_(min=clamp[0], max=clamp[1])
+        img = sitk.GetImageFromArray(np.array(img_tensor))
 
-        img = sitk.GetImageFromArray(file)
-        if resample:
-            # 统一采样到1*1*2.5mm
-            img = img_resmaple([1, 1, 2.5], ori_img_file=img)
-
-        target_filepath = os.path.join(m_path,
-                                       f"dirlab_case{case}_T" + file_name[file_name.find('T') + 1] + "0_moving.mhd")
-        if is_fixed:
-            for i in range(10):
-                if i == 5:
-                    continue
-                new_name = f'dirlab_case{case}_T' + str(i) + '0_fixed.mhd'
-                target_filepath = os.path.join(f_path, new_name)
-                if not os.path.exists(target_filepath):
-                    sitk.WriteImage(img, target_filepath)
-
-        if not os.path.exists(target_filepath):
-            sitk.WriteImage(img, target_filepath)
-
-    print("{} convert done".format(file_folder))
+    return img
 
 
 def data_standardization_0_n(range, img):
@@ -125,6 +166,25 @@ def read_mhd(mhd_dir):
         origin = np.array(itkimage.GetOrigin())
         spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
         plotorsave_ct_scan(ct_value, "plot")
+
+
+def read_dcm_series(dcm_path):
+    """
+    Parameters
+    ----------
+    dcm_path
+
+    Returns sitk image
+    -------
+    """
+
+    series_IDs = sitk.ImageSeriesReader.GetGDCMSeriesIDs(dcm_path)  # 获取该路径下的seriesid的数量
+    series_file_names = sitk.ImageSeriesReader.GetGDCMSeriesFileNames(dcm_path)  # 获取该路径下所有的.dcm文件，并且根据世界坐标从小到大排序
+    series_reader = sitk.ImageSeriesReader()
+    series_reader.SetFileNames(series_file_names)
+    image_sitk = series_reader.Execute()  # 生成3D图像
+
+    return image_sitk
 
 
 def img_resmaple(new_spacing, resamplemethod=sitk.sitkLinear, ori_img_file=None, ori_img_path=None):
@@ -177,33 +237,131 @@ def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     return itkimgResampled
 
 
-def learn2reg_processing():
-    l2r_path = r'G:\datasets\Learn2Reg\all'
-    target_fixed_path = f'G:/datasets/registration/train/fixed'
-    target_moving_path = f'G:/datasets/registration/train/moving'
+def dirlab_test(file_folder, m_path, f_path, datatype, shape, case):
+    for file_name in os.listdir(file_folder):
+        if 'T00' in file_name:
+            target_path = m_path
+
+        # T50 = fixed image
+        elif 'T50' in file_name:
+            target_path = f_path
+
+        else:
+            continue
+
+        file_path = os.path.join(file_folder, file_name)
+        file = np.memmap(file_path, dtype=datatype, mode='r')
+        if shape:
+            file = file.reshape(shape)
+
+        img = sitk.GetImageFromArray(file)
+
+        img = crop_resampling_resize_clamp(img, None,
+                                           dirlab_crop_range[case]['crop_range'][::-1],
+                                           [1, 1, 1],
+                                           [100, 900])
+
+        target_file_path = os.path.join(target_path,
+                                        f"dirlab_case{case}.nii.gz")
+
+        sitk.WriteImage(img, target_file_path)
+
+
+def dirlab_processing(file_folder, m_path, f_path, datatype, shape, case):
+    for file_name in os.listdir(file_folder):
+        target_path = m_path
+        # T50 = fixed image
+        if 'T50' in file_name:
+            target_path = f_path
+
+        file_path = os.path.join(file_folder, file_name)
+        file = np.memmap(file_path, dtype=datatype, mode='r')
+        if shape:
+            file = file.reshape(shape)
+
+        img = sitk.GetImageFromArray(file)
+
+        img = crop_resampling_resize_clamp(img, [144, 256, 256],
+                                           dirlab_crop_range[case]['crop_range'][::-1],
+                                           [0.6, 0.6, 0.6],
+                                           [100, 900])
+
+        target_file_path = os.path.join(target_path,
+                                        f"dirlab_case{case}_T" + file_name[file_name.find('T') + 1] + "0.nii.gz")
+        if target_path == f_path:
+            for i in ['0', '1', '2', '3', '4', '6', '7', '8', '9']:
+                new_name = f'dirlab_case{case}_T' + i + '0.nii.gz'
+                target_file_path = os.path.join(target_path, new_name)
+                sitk.WriteImage(img, target_file_path)
+        else:
+            sitk.WriteImage(img, target_file_path)
+
+    print("{} convert done".format(file_folder))
+
+
+def copd_processing(img_path, target_path, datatype, shape, case, resample=False):
+    file = np.memmap(img_path, dtype=datatype, mode='r')
+    if shape:
+        file = file.reshape(shape)
+
+    sitk_img = sitk.GetImageFromArray(file)
+    img = crop_resampling_resize_clamp(sitk_img, None,
+                                       [slice(70, 470), slice(30, 470), slice(None)], [1, 1, 1],
+                                       [0, 900])
+    # # crop
+    # file = file[:, 30:470, 70:470]
+    # img = sitk.GetImageFromArray(file)
+    #
+    # # resampling
+    # if resample:
+    #     # 采样到x*y*zmm
+    #     img = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img)
+    #
+    # # resize HU[0, 900]
+    # file = sitk.GetArrayFromImage(img)
+    # file = file.astype('float32')
+    # img_tensor = F.interpolate(torch.tensor(file).unsqueeze(0).unsqueeze(0), size=[144, 256, 256], mode='trilinear',
+    #                            align_corners=False).clamp_(min=0, max=900)
+    #
+    # # save
+    # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
+    make_dir(target_path)
+    target_filepath = os.path.join(target_path,
+                                   f"copd_case{case}.nii.gz")
+    # if not os.path.exists(target_filepath):
+    sitk.WriteImage(img, target_filepath)
+
+
+def learn2reg_processing(fixed_path, moving_path):
+    print("learn2reg: ")
+    l2r_path = r'E:\datasets\Learn2Reg\all'
 
     for file_name in os.listdir(l2r_path):
-        target_path = target_moving_path
+        target_path = moving_path
         file = os.path.join(l2r_path, file_name)
         # exp -> fixed insp -> moving
         if 'exp' in file_name:
-            target_path = target_fixed_path
+            target_path = fixed_path
 
         # open nii
         img_nii = sitk.ReadImage(file)
 
-        # resampling
-        img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+        img = crop_resampling_resize_clamp(img_nii, None,
+                                           None, [1, 1, 1],
+                                           [0, 900])
 
-        # resize HU[0, 900]
-        img_arr = sitk.GetArrayFromImage(img_nii)
-        img_arr = img_arr.astype('float32')
-        img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
-                                   mode='trilinear',
-                                   align_corners=False).clamp_(min=0, max=900)
+        # # resampling
+        # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+        #
+        # # resize HU[0, 900]
+        # img_arr = sitk.GetArrayFromImage(img_nii)
+        # img_arr = img_arr.astype('float32')
+        # img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
+        #                            mode='trilinear',
+        #                            align_corners=False).clamp_(min=0, max=900)
+        # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
 
         # save
-        img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
         make_dir(target_path)
         case = file_name.split('_')[1]
         target_filepath = os.path.join(target_path,
@@ -213,34 +371,37 @@ def learn2reg_processing():
         print('case{} done'.format(case))
 
 
-def emp10_processing():
-    emp_path = r'G:\datasets\emp10\emp30'
-    target_fixed_path = f'G:/datasets/registration/train/fixed'
-    target_moving_path = f'G:/datasets/registration/train/moving'
+def emp10_processing(fixed_path, moving_path):
+    print("emp10: ")
+    emp_path = r'E:\datasets\emp10\emp30'
+
     file_list = sorted([file_name for file_name in os.listdir(emp_path) if file_name.lower().endswith('mhd')])
 
     for file_name in file_list:
-        target_path = target_moving_path
+        target_path = moving_path
         file = os.path.join(emp_path, file_name)
         # exp -> fixed insp -> moving
         if 'Fixed' in file_name:
-            target_path = target_fixed_path
+            target_path = fixed_path
 
         # open nii
         img_nii = sitk.ReadImage(file)
 
-        # resampling
-        img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
-
-        # resize HU[0, 900]
-        img_arr = sitk.GetArrayFromImage(img_nii)
-        img_arr = img_arr.astype('float32')
-        img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
-                                   mode='trilinear',
-                                   align_corners=False).clamp_(min=-900, max=500)
+        img = crop_resampling_resize_clamp(img_nii, None,
+                                           None, [1, 1, 1],
+                                           [-900, 500])
+        # # resampling
+        # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+        #
+        # # resize HU[0, 900]
+        # img_arr = sitk.GetArrayFromImage(img_nii)
+        # img_arr = img_arr.astype('float32')
+        # img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
+        #                            mode='trilinear',
+        #                            align_corners=False).clamp_(min=-900, max=500)
+        # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
 
         # save
-        img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
         make_dir(target_path)
         case = file_name.split('_')[0]
         target_filepath = os.path.join(target_path,
@@ -250,42 +411,130 @@ def emp10_processing():
         print('case{} done'.format(case))
 
 
-if __name__ == '__main__':
+def popi_processing(fixed_path, moving_path):
+    print("popi: ")
+    # for case in range(1, 7):
+    #     popi_path = f'E:/datasets/creatis/case{case}/Images/'
+    #     for T in [file_name for file_name in os.listdir(popi_path) if '.gz' not in file_name]:
+    #         target_path = moving_path
+    #
+    #         if case != 1 and T == '50':
+    #             target_path = fixed_path
+    #
+    #         if case == 1 and T == '60':
+    #             target_path = fixed_path
+    #
+    #         # dcm slice -> 3D nii.gz
+    #         sitk_img = read_dcm_series(os.path.join(popi_path, T))
+    #
+    #         if case == 5 or case == 6:
+    #             img = crop_resampling_resize_clamp(sitk_img, None,
+    #                                                [slice(100, 400), slice(120, 360), slice(None)], [1, 1, 1],
+    #                                                [-800, -100])
+    #         else:
+    #             img = crop_resampling_resize_clamp(sitk_img, None,
+    #                                                [slice(70, 460), slice(40, 380), slice(None)], [1, 1, 1],
+    #                                                [-800, -100])
+    #
+    #         # save
+    #         make_dir(target_path)
+    #
+    #         # if this image is fixed image, then copy
+    #         if target_path == fixed_path:
+    #             if case == 1:
+    #                 for t in ['00', '10', '20', '30', '40', '50', '70', '80', '90']:
+    #                     target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
+    #                     sitk.WriteImage(img, target_file_path)
+    #             else:
+    #                 for t in ['00', '10', '20', '30', '40', '60', '70', '80', '90']:
+    #                     target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
+    #                     sitk.WriteImage(img, target_file_path)
+    #
+    #         else:
+    #             target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, T))
+    #             sitk.WriteImage(img, target_file_path)
+    #
+    #     print("case{} done".format(case))
 
+    # case 7 is .mhd
+    case = 7
+    mhd_path = r'E:\datasets\creatis\case7\Images'
+    for T in [file_name for file_name in os.listdir(mhd_path) if '.mhd' in file_name]:
+        target_path = moving_path
+
+        if '50' in T:
+            target_path = fixed_path
+
+        img_path = os.path.join(mhd_path, T)
+        sitk_img = sitk.ReadImage(img_path)
+        img = crop_resampling_resize_clamp(sitk_img, None,
+                                           [slice(70, 460), slice(25, None, None), slice(None)], [1, 1, 1],
+                                           [-900, -100])
+
+        # save
+        make_dir(target_path)
+
+        # if this image is fixed image, then copy
+        if target_path == fixed_path:
+            for t in ['00', '10', '20', '30', '40', '60', '70', '80', '90']:
+                target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
+                sitk.WriteImage(img, target_file_path)
+
+        else:
+            target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, T.split('-')[0]))
+            sitk.WriteImage(img, target_file_path)
+
+    print('case7 done')
+
+
+if __name__ == '__main__':
     project_folder = get_project_path("4DCT").split("4DCT")[0]
-    moving_path = os.path.join(project_folder, f'datasets/registration/moving')
-    fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
+    target_fixed_path = f'E:/datasets/registration/train_ori/fixed'
+    target_moving_path = f'E:/datasets/registration/train_ori/moving'
+
+    target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
+    target_test_moving_path = f'E:/datasets/registration/test_ori/moving'
 
     # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+    make_dir(target_test_fixed_path)
+    make_dir(target_test_moving_path)
 
-    # dirlab数据集img转mhd
-    # for item in case_cfg.items():
+    # # dirlab数据集img转mhd
+    # for item in dirlab_case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     make_dir(moving_path)
-    #     make_dir(fixed_path)
-    #
-    #     imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
+    #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
-    # COPD数据集img转nii.gz
+    # dirlab for test
+    print("dirlab: ")
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+        dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+
+    # # COPD数据集img转nii.gz
+    # print("copd: ")
     # for item in copd_case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
     #
-    #     fixed_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
-    #     moving_path = f'G:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
-    #     target_fixed_path = f'G:/datasets/registration/train/fixed'
-    #     target_moving_path = f'G:/datasets/registration/train/moving'
-    #
+    #     fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+    #     moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
     #     copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, True)
     #     copd_processing(moving_path, target_moving_path, np.int16, shape, case, True)
 
-    # learn2reg
-    # learn2reg_processing()
+    # # learn2reg
+    # learn2reg_processing(target_fixed_path, target_moving_path)
+    #
+    # # emp10
+    # emp10_processing(target_fixed_path, target_moving_path)
 
-    # emp10
-    emp10_processing()
+    # creatis-popi
+    # popi_processing(target_fixed_path, target_moving_path)
 
     # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
     # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
