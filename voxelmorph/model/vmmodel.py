@@ -17,6 +17,7 @@ class U_Network(nn.Module):
         for i in range(len(enc_nf)):
             prev_nf = 2 if i == 0 else enc_nf[i - 1]
             self.enc.append(self.conv_block(dim, prev_nf, enc_nf[i], 4, 2, batchnorm=bn))
+
         # Decoder functions
         self.dec = nn.ModuleList()
         self.dec.append(self.conv_block(dim, enc_nf[-1], dec_nf[0], batchnorm=bn))  # 1
@@ -61,15 +62,18 @@ class U_Network(nn.Module):
         for i, l in enumerate(self.enc):
             x = l(x_enc[-1])
             x_enc.append(x)
+
         # Three conv + upsample + concatenate series
         y = x_enc[-1]
         for i in range(3):
             y = self.dec[i](y)
             y = self.upsample(y)
             y = torch.cat([y, x_enc[-(i + 2)]], dim=1)
+
         # Two convs at full_size/2 res
         y = self.dec[3](y)
         y = self.dec[4](y)
+
         # Upsample to full res, concatenate and conv
         if self.full_size:
             y = self.upsample(y)
