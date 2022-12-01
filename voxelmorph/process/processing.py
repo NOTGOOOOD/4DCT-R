@@ -299,15 +299,15 @@ def dirlab_processing(file_folder, m_path, f_path, datatype, shape, case):
     print("{} convert done".format(file_folder))
 
 
-def copd_processing(img_path, target_path, datatype, shape, case, resample=False):
+def copd_processing(img_path, target_path, datatype, shape, case, **cfg):
     file = np.memmap(img_path, dtype=datatype, mode='r')
     if shape:
         file = file.reshape(shape)
 
     sitk_img = sitk.GetImageFromArray(file)
-    img = crop_resampling_resize_clamp(sitk_img, None,
-                                       [slice(70, 470), slice(30, 470), slice(None)], [1, 1, 1],
-                                       [0, 900])
+    img = crop_resampling_resize_clamp(sitk_img, cfg['resize'], cfg['crop']
+                                       , cfg['spacing'],
+                                       cfg['clamp'])
     # # crop
     # file = file[:, 30:470, 70:470]
     # img = sitk.GetImageFromArray(file)
@@ -327,12 +327,12 @@ def copd_processing(img_path, target_path, datatype, shape, case, resample=False
     # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
     make_dir(target_path)
     target_filepath = os.path.join(target_path,
-                                   f"copd_case{case}.nii.gz")
+                                   "copd_case%02d.nii.gz" % case)
     # if not os.path.exists(target_filepath):
     sitk.WriteImage(img, target_filepath)
 
 
-def learn2reg_processing(fixed_path, moving_path):
+def learn2reg_processing(fixed_path, moving_path, **cfg):
     print("learn2reg: ")
     l2r_path = r'E:\datasets\Learn2Reg\all'
 
@@ -346,9 +346,9 @@ def learn2reg_processing(fixed_path, moving_path):
         # open nii
         img_nii = sitk.ReadImage(file)
 
-        img = crop_resampling_resize_clamp(img_nii, None,
-                                           None, [1, 1, 1],
-                                           [0, 900])
+        img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
+                                           , cfg['spacing'],
+                                           cfg['clamp'])
 
         # # resampling
         # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
@@ -371,7 +371,7 @@ def learn2reg_processing(fixed_path, moving_path):
         print('case{} done'.format(case))
 
 
-def emp10_processing(fixed_path, moving_path):
+def emp10_processing(fixed_path, moving_path, **cfg):
     print("emp10: ")
     emp_path = r'E:\datasets\emp10\emp30'
 
@@ -387,9 +387,9 @@ def emp10_processing(fixed_path, moving_path):
         # open nii
         img_nii = sitk.ReadImage(file)
 
-        img = crop_resampling_resize_clamp(img_nii, None,
-                                           None, [1, 1, 1],
-                                           [-900, 500])
+        img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
+                                           , cfg['spacing'],
+                                           cfg['clamp'])
         # # resampling
         # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
         #
@@ -411,50 +411,50 @@ def emp10_processing(fixed_path, moving_path):
         print('case{} done'.format(case))
 
 
-def popi_processing(fixed_path, moving_path):
+def popi_processing(fixed_path, moving_path, **cfg):
     print("popi: ")
-    # for case in range(1, 7):
-    #     popi_path = f'E:/datasets/creatis/case{case}/Images/'
-    #     for T in [file_name for file_name in os.listdir(popi_path) if '.gz' not in file_name]:
-    #         target_path = moving_path
-    #
-    #         if case != 1 and T == '50':
-    #             target_path = fixed_path
-    #
-    #         if case == 1 and T == '60':
-    #             target_path = fixed_path
-    #
-    #         # dcm slice -> 3D nii.gz
-    #         sitk_img = read_dcm_series(os.path.join(popi_path, T))
-    #
-    #         if case == 5 or case == 6:
-    #             img = crop_resampling_resize_clamp(sitk_img, None,
-    #                                                [slice(100, 400), slice(120, 360), slice(None)], [1, 1, 1],
-    #                                                [-800, -100])
-    #         else:
-    #             img = crop_resampling_resize_clamp(sitk_img, None,
-    #                                                [slice(70, 460), slice(40, 380), slice(None)], [1, 1, 1],
-    #                                                [-800, -100])
-    #
-    #         # save
-    #         make_dir(target_path)
-    #
-    #         # if this image is fixed image, then copy
-    #         if target_path == fixed_path:
-    #             if case == 1:
-    #                 for t in ['00', '10', '20', '30', '40', '50', '70', '80', '90']:
-    #                     target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
-    #                     sitk.WriteImage(img, target_file_path)
-    #             else:
-    #                 for t in ['00', '10', '20', '30', '40', '60', '70', '80', '90']:
-    #                     target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
-    #                     sitk.WriteImage(img, target_file_path)
-    #
-    #         else:
-    #             target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, T))
-    #             sitk.WriteImage(img, target_file_path)
-    #
-    #     print("case{} done".format(case))
+    for case in range(1, 7):
+        popi_path = f'E:/datasets/creatis/case{case}/Images/'
+        for T in [file_name for file_name in os.listdir(popi_path) if '.gz' not in file_name]:
+            target_path = moving_path
+
+            if case != 1 and T == '50':
+                target_path = fixed_path
+
+            if case == 1 and T == '60':
+                target_path = fixed_path
+
+            # dcm slice -> 3D nii.gz
+            sitk_img = read_dcm_series(os.path.join(popi_path, T))
+
+            if case == 5 or case == 6:
+                img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
+                                                   [slice(100, 400), slice(120, 360), slice(None)], cfg['spacing'],
+                                                   [-800, -100])
+            else:
+                img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
+                                                   [slice(70, 460), slice(40, 380), slice(None)], cfg['spacing'],
+                                                   [-800, -100])
+
+            # save
+            make_dir(target_path)
+
+            # if this image is fixed image, then copy
+            if target_path == fixed_path:
+                if case == 1:
+                    for t in ['00', '10', '20', '30', '40', '50', '70', '80', '90']:
+                        target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
+                        sitk.WriteImage(img, target_file_path)
+                else:
+                    for t in ['00', '10', '20', '30', '40', '60', '70', '80', '90']:
+                        target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, t))
+                        sitk.WriteImage(img, target_file_path)
+
+            else:
+                target_file_path = os.path.join(target_path, 'popi_case{}_T{}.nii.gz'.format(case, T))
+                sitk.WriteImage(img, target_file_path)
+
+        print("case{} done".format(case))
 
     # case 7 is .mhd
     case = 7
@@ -467,8 +467,8 @@ def popi_processing(fixed_path, moving_path):
 
         img_path = os.path.join(mhd_path, T)
         sitk_img = sitk.ReadImage(img_path)
-        img = crop_resampling_resize_clamp(sitk_img, None,
-                                           [slice(70, 460), slice(25, None, None), slice(None)], [1, 1, 1],
+        img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
+                                           [slice(70, 460), slice(25, None, None), slice(None)], cfg['spacing'],
                                            [-900, -100])
 
         # save
@@ -489,17 +489,15 @@ def popi_processing(fixed_path, moving_path):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT").split("4DCT")[0]
-    target_fixed_path = f'E:/datasets/registration/train_ori/fixed'
-    target_moving_path = f'E:/datasets/registration/train_ori/moving'
-
-    target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
-    target_test_moving_path = f'E:/datasets/registration/test_ori/moving'
-
-    # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
+    target_fixed_path = f'E:/datasets/registration/train_512/fixed'
+    target_moving_path = f'E:/datasets/registration/train_512/moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
-    make_dir(target_test_fixed_path)
-    make_dir(target_test_moving_path)
+
+    # target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
+    # target_test_moving_path = f'E:/datasets/registration/test_ori/moving'
+    # make_dir(target_test_fixed_path)
+    # make_dir(target_test_moving_path)
 
     # # dirlab数据集img转mhd
     # for item in dirlab_case_cfg.items():
@@ -508,33 +506,49 @@ if __name__ == '__main__':
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
     #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
-    # dirlab for test
-    print("dirlab: ")
-    for item in dirlab_case_cfg.items():
-        case = item[0]
-        shape = item[1]
-        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-        dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
-
-    # # COPD数据集img转nii.gz
-    # print("copd: ")
-    # for item in copd_case_cfg.items():
+    # # dirlab for test
+    # print("dirlab: ")
+    # for item in dirlab_case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
-    #
-    #     fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
-    #     moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
-    #     copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, True)
-    #     copd_processing(moving_path, target_moving_path, np.int16, shape, case, True)
+    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+    #     dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
-    # # learn2reg
-    # learn2reg_processing(target_fixed_path, target_moving_path)
-    #
-    # # emp10
-    # emp10_processing(target_fixed_path, target_moving_path)
+    # COPD数据集img转nii.gz
+    print("copd: ")
+    clamp = [0, 900]
+    crop = [slice(70, 470), slice(30, 470), slice(None)]
+    resize = [256, 512, 512]
+    spacing = [1, 1, 1]
+    for item in copd_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+
+        fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+        moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
+        copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+                        spacing=spacing)
+        copd_processing(moving_path, target_moving_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+                        spacing=spacing)
+
+    # learn2reg
+    clamp = [0, 900]
+    crop = None
+    spacing = [1, 1, 1]
+    learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                         spacing=spacing)
+
+    # emp10
+    clamp = [-900, 500]
+    crop = None
+    spacing = [1, 1, 1]
+    emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                     spacing=spacing)
 
     # creatis-popi
-    # popi_processing(target_fixed_path, target_moving_path)
+    spacing = [1, 1, 1]
+    popi_processing(target_fixed_path, target_moving_path, resize=resize,
+                    spacing=spacing)
 
     # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
     # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')
