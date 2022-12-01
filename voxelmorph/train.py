@@ -3,10 +3,12 @@ import warnings
 
 import torch
 import numpy as np
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 import torch.utils.data as Data
+from tqdm import tqdm
+import logging
 
-import losses
+from voxelmorph.losses import NCC, mse_loss, gradient_loss
 from config import get_args
 from datagenerators import Dataset, TestDataset
 from voxelmorph.model import regnet
@@ -14,6 +16,12 @@ from utils.scheduler import WarmupCosineSchedule
 from utils.utilize import set_seed, save_image, save_model
 from utils.metric import get_test_photo_loss
 
+# log_index = len([file for file in os.listdir(r'D:\project\xxf\4DCT\voxelmorph\Log') if file.endswith('.txt')])
+
+logging.basicConfig(level=logging.INFO,
+                    filename=f'Log/log.txt',
+                    filemode='w',
+                    format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 args = get_args()
 
 
@@ -87,9 +95,10 @@ def train():
     # print("UNet: ", count_parameters(UNet))
 
     # Set optimizer and losses
-    opt = Adam(model.parameters(), lr=args.lr)
-    sim_loss_fn = losses.ncc_loss if args.sim_loss == "ncc" else losses.mse_loss
-    grad_loss_fn = losses.gradient_loss
+    opt = SGD(model.parameters(), lr=args.lr)
+    sim_loss_fn = NCC(3, 5) if args.sim_loss == "ncc" else mse_loss
+    sim_loss_fn = sim_loss_fn.to(device)
+    grad_loss_fn = gradient_loss
 
     # set scheduler
     scheduler = WarmupCosineSchedule(opt, warmup_steps=args.warmup_steps, t_total=args.n_iter)
@@ -106,8 +115,12 @@ def train():
     for i in range(1, args.n_iter + 1):
         model.train()
         loss_total = []
+        epoch_iterator = tqdm(train_loader,
+                              desc="Training (X / X Steps) (loss=X.X)",
+                              bar_format="{l_bar}{r_bar}",
+                              dynamic_ncols=True)
         print('iter:{} start'.format(i))
-        for i_step, (moving_file, fixed_file) in enumerate(train_loader):
+        for i_step, (moving_file, fixed_file) in enumerate(epoch_iterator):
             # [B, C, D, H, W]
             input_moving = moving_file[0].to(device).float()
             input_fixed = fixed_file[0].to(device).float()
@@ -116,36 +129,32 @@ def train():
             flow_m2f, warped_image = model(input_fixed, input_moving)  # b, c, d, h, w
 
             # Calculate loss
-            sim_loss = sim_loss_fn(warped_image, input_fixed, [9] * 3)
+            sim_loss = sim_loss_fn(warped_image, input_fixed)
             # sim_loss2 = sim_loss_fn(m2f_new, input_fixed, [9] * 3)
             grad_loss = grad_loss_fn(flow_m2f)  # b*c*h*w*d
             loss = sim_loss + args.alpha * grad_loss
             loss_total.append(loss.item())
 
-            # moving_name = moving_file[1].split(r'moving\\')[1]
-            # print("img_name:{}".format(moving_name))
-            # print("iter: %d batch: %d  loss: %f  sim: %f  grad: %f" % (
-            #     i, i_step, loss.item(), sim_loss.item(), grad_loss.item()), flush=True)
+            moving_name = moving_file[1][0].split('moving\\')[1]
+            logging.info("img_name:{}".format(moving_name))
+            logging.info("iter: %d batch: %d  loss: %f  sim: %f  grad: %f" % (
+                i, i_step, loss.item(), sim_loss.item(), grad_loss.item()))
 
+            epoch_iterator.set_description(
+                "Training (%d / %d Steps) (loss=%2.5f)" % (i_step, len(train_loader), loss.item())
+            )
             # Backwards and optimize
             opt.zero_grad()
             loss.backward()
             opt.step()
             scheduler.step()
 
-        if i % args.n_save_iter == 0:
-            # if test ncc is best ,save the model
-            mean_tre = get_test_photo_loss(args, model, test_loader)
-            if mean_tre < best_tre:
-                best_tre = mean_tre
-                save_model(args, model, opt, scheduler, i)
+            if i % args.n_save_iter == 0:
+                # save warped image0
+                m_name = "{}_{}.nii.gz".format(i, moving_name)
+                save_image(warped_image, input_fixed, args.output_dir, m_name)
+                print("warped images have saved.")
 
-                # # Save images
-                # moving_name = moving_file[1].split(r'moving\\')[1]
-                # m_name = "{}_{}.nii.gz".format(i, moving_name)
-                # save_image(warped_image, input_fixed, args.output_dir, m_name)
-                # print("warped images have saved.")
-                #
                 # # Save DVF
                 # # b,3,d,h,w-> w,h,d,3
                 # m2f_name = str(i) + "_dvf.nii.gz"
@@ -153,7 +162,13 @@ def train():
                 #            m2f_name)
                 # print("dvf have saved.")
 
-        print("iter:{}, mean loss:{}".format(i, loss_total.mean()))
+        # if test ncc is best ,save the model
+        mean_tre = get_test_photo_loss(args, model, test_loader)
+        if mean_tre < best_tre:
+            best_tre = mean_tre
+            save_model(args, model, opt, scheduler, i)
+
+        print("iter:{}, mean loss:{}, test tre{}".format(i, np.mean(loss_total), mean_tre))
 
 
 if __name__ == "__main__":
