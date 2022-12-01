@@ -59,7 +59,7 @@ def calc_dirlab(cfg):
 def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
     # x' = u(x) + x
     disp = np.array(disp_t2i.cpu())
-
+    landmark_disp = np.array(landmark_disp.cpu())
     # convert -> z,y,x
     landmark_00_converted = np.array(landmark_00_converted[0].cpu())
     landmark_00_converted = np.flip(landmark_00_converted, axis=1)
@@ -118,17 +118,18 @@ def get_test_photo_loss(args, model, test_loader):
             crop_range = args.dirlab_cfg[index]['crop_range']
 
             # 另一种计算方法
-            _mean, _std = calc_tre(flow_hr, landmarks00- torch.tensor(
-                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(), landmarks['disp_00_50'].squeeze(), spacing)
+            _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
+                                   landmarks['disp_00_50'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
             print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
             _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-                                         landmarks50 - torch.tensor(
-                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1,
-                                                                                                                   3).cuda(),
-                                         args.dirlab_cfg[index]['pixel_spacing'])
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[index]['pixel_spacing'])
 
             losses.append([_mean.item(), _std.item()])
 
