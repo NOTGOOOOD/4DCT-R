@@ -1,6 +1,8 @@
 import numpy as np
 import SimpleITK as sitk
+import torch
 import torch.utils.data as Data
+import torch.nn.functional as F
 from process.processing import data_standardization_0_n
 
 '''
@@ -27,6 +29,14 @@ class Dataset(Data.Dataset):
 
         f_img = sitk.GetArrayFromImage(sitk.ReadImage(self.fixed_files[index]))[np.newaxis, ...]
         f_img = data_standardization_0_n(1, f_img)
+
+        # shape dosen't match
+        if m_img.shape != f_img.shape:
+            img_tensor = F.interpolate(torch.tensor(m_img).unsqueeze(0), size=f_img.shape[1:],
+                                       mode='trilinear',
+                                       align_corners=False)
+
+            m_img = np.array(img_tensor)[0, ...]
 
         return [m_img, self.moving_files[index]], [f_img, self.fixed_files[index]]
 
