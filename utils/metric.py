@@ -76,22 +76,20 @@ def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
 
 
 def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
+    # flow + fixed - moving
     spec = torch.tensor(spacing).cuda()
-
-    # diff_ori = (torch.sum((landmark_disp * spec) ** 2, 1)) ** 0.5
-
     all_dist = []
-    flow = flow[[2, 1, 0], :, :, :]
+    flow = flow[:, :, :, :]
     for i in range(300):
         # point before warped
         f_point = f_landmarks[0, i].int()
         m_point = m_landmarks[0, i].int()
 
         # point at flow
-        move = flow[:, m_point[2], m_point[1], m_point[0]]
+        move = flow[:, f_point[2], f_point[1], f_point[0]]
         # point after warped
-        ori_point = torch.round(m_point + move)
-        dist = f_landmarks[0, i] - ori_point
+        ori_point = torch.round(f_point + move)
+        dist = ori_point - m_landmarks[0, i]
         all_dist.append(dist * spec)
 
     all_dist = torch.stack(all_dist)
