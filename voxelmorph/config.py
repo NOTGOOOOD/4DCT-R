@@ -67,7 +67,7 @@ def get_args():
 
     # train param
     parser.add_argument("--train_dir", type=str, help="data folder with training",
-                        dest="train_dir", default=r"D:\project\xxf\datasets\registration\train")
+                        dest="train_dir", default=r"C:\datasets\registration\train")
     parser.add_argument("--lr", type=float, help="learning rate",
                         dest="lr", default=1e-4)
     parser.add_argument("--n_iter", type=int, help="number of iterations",
@@ -76,11 +76,11 @@ def get_args():
     parser.add_argument("--sim_loss", type=str, help="image similarity loss: mse or ncc",
                         dest="sim_loss", default='ncc')
     parser.add_argument("--alpha", type=float, help="regularization parameter",
-                        dest="alpha", default=0.1)  # recommend 1.0 for ncc, 0.01 for mse
+                        dest="alpha", default=1)  # recommend 1.0 for ncc, 0.01 for mse
     parser.add_argument("--batch_size", type=int, help="batch_size",
                         dest="batch_size", default=1)
     parser.add_argument("--n_save_iter", type=int, help="frequency of model saves",
-                        dest="n_save_iter", default=20)
+                        dest="n_save_iter", default=100)
     parser.add_argument("--model_dir", type=str, help="models folder",
                         dest="model_dir", default='./Checkpoint')
     parser.add_argument("--log_dir", type=str, help="logs folder",
@@ -90,7 +90,7 @@ def get_args():
 
     # test时参数
     parser.add_argument("--test_dir", type=str, help="test data directory",
-                        dest="test_dir", default=r'D:\project\xxf\datasets\registration\test_ori')
+                        dest="test_dir", default=r'C:\datasets\registration\test_ori')
     parser.add_argument("--landmark_dir", type=str, help="landmark directory",
                         dest="landmark_dir", default=r'D:\project\xxf\4DCT\data\dirlab')
     parser.add_argument("--checkpoint_path", type=str, help="model weight file",
