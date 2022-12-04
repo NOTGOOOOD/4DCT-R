@@ -6,16 +6,6 @@ from scipy import interpolate
 from utils.utilize import get_project_path
 
 
-def tre(mov_lmk, ref_lmk, spacing=1):
-    # TRE, unit: mm
-
-    diff = (ref_lmk - mov_lmk) * spacing
-    diff = torch.Tensor(diff)
-    tre = diff.pow(2).sum(1).sqrt()
-    mean, std = tre.mean(), tre.std()
-    return mean, std, diff
-
-
 def NCC(real, predict):
     real_copy = np.copy(real)
     predict_copy = np.copy(predict)
@@ -25,7 +15,7 @@ def NCC(real, predict):
 
 def MSE(real_copy, predict_copy):
     # return mean_squared_error(real_copy, predict_copy)
-    return np.mean(np.square(predict_copy - real_copy))
+    return torch.mean(torch.square(predict_copy - real_copy))
 
 
 def calc_dirlab(cfg):
@@ -107,33 +97,35 @@ def get_test_photo_loss(args, model, test_loader):
             img1 = fixed[0].to('cuda').float()
 
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+            # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            flow, _ = model(img1, img2)
+            flow, warped_image = model(img1, img2)
             flow_hr = flow[0]
             index = batch + 1
 
             crop_range = args.dirlab_cfg[index]['crop_range']
 
-            # 另一种计算方法
+            # TRE
             _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
                                    landmarks['disp_00_50'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
-            print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
+            # MSE
+            _mse = MSE(img1, warped_image)
+            # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
-            _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[index]['pixel_spacing'])
+            # _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(
+            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
+            #                             landmarks50 - torch.tensor(
+            #                                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1,
+            #                                                                                                       3).cuda(),
+            #                             args.dirlab_cfg[index]['pixel_spacing'])
 
-            losses.append([_mean.item(), _std.item()])
+            losses.append([_mean.item(), _std.item(), _mse.item()])
 
-            print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
+            # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
         # loss = np.mean(losses)
         # print('mean loss=%.5f' % (loss))
         # show_results(net, test_loader, epoch, 2)
-        return torch.mean(torch.tensor(losses), 0)[0]
+        return losses

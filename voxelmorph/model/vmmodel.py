@@ -5,9 +5,10 @@ from torch.distributions.normal import Normal
 
 
 class U_Network(nn.Module):
-    def __init__(self, dim, enc_nf, dec_nf, bn=None, full_size=True):
+    def __init__(self, dim, size, enc_nf, dec_nf, bn=None, full_size=True):
         super(U_Network, self).__init__()
         self.bn = bn
+        self.size = size
         self.dim = dim
         self.enc_nf = enc_nf
         self.full_size = full_size
@@ -40,6 +41,8 @@ class U_Network(nn.Module):
         self.flow.weight = nn.Parameter(nd.sample(self.flow.weight.shape))
         self.flow.bias = nn.Parameter(torch.zeros(self.flow.bias.shape))
         self.batch_norm = getattr(nn, "BatchNorm{0}d".format(dim))(3)
+
+        self.stn = SpatialTransformer(self.size)
 
     def conv_block(self, dim, in_channels, out_channels, kernel_size=3, stride=1, padding=1, batchnorm=False):
         conv_fn = getattr(nn, "Conv{0}d".format(dim))
@@ -85,7 +88,8 @@ class U_Network(nn.Module):
         flow = self.flow(y)
         if self.bn:
             flow = self.batch_norm(flow)
-        return flow
+
+        return flow, self.stn(src, flow)
 
 
 class SpatialTransformer(nn.Module):
@@ -121,52 +125,3 @@ class SpatialTransformer(nn.Module):
         # 提供的坐标信息(这里指input中像素的坐标)，将input中对应位置的像素值填充到grid指定的位置，得到最终的输出
         # 即实现坐标求解的可微性
         return F.grid_sample(src, new_locs, mode=self.mode)
-
-
-class SpatialTransformer_new(nn.Module):
-    # 2D or 3d spatial transformer network to calculate the warped moving image
-
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-        self.grid_dict = {}
-        self.norm_coeff_dict = {}
-
-    def forward(self, input_image, flow):
-        '''
-        input_image: (n, 1, h, w) or (n, 1, d, h, w)
-        flow: (n, 2, h, w) or (n, 3, d, h, w)
-
-        return:
-            warped moving image, (n, 1, h, w) or (n, 1, d, h, w)
-        '''
-        # Grid generator 建立体素坐标对应关系
-        img_shape = input_image.shape[2:]
-        if img_shape in self.grid_dict:
-            grid = self.grid_dict[img_shape]
-            norm_coeff = self.norm_coeff_dict[img_shape]
-        else:
-            grids = torch.meshgrid([torch.arange(0, s) for s in img_shape])
-            grid = torch.stack(grids[::-1], dim=0)  # 2 x h x w or 3 x d x h x w, the data in second dimension is in the order of [w, h, d]
-            grid = torch.unsqueeze(grid, 0)
-            grid = grid.to(dtype=flow.dtype, device=flow.device)
-            norm_coeff = 2. / (torch.tensor(img_shape[::-1], dtype=flow.dtype,
-                                            device=flow.device) - 1.)  # the coefficients to map image coordinates to [-1, 1]
-            self.grid_dict[img_shape] = grid
-            self.norm_coeff_dict[img_shape] = norm_coeff
-
-        new_grid = grid + flow
-
-        if self.dim == 2:
-            new_grid = new_grid.permute(0, 2, 3, 1)  # n x h x w x 2
-        elif self.dim == 3:
-            new_grid = new_grid.permute(0, 2, 3, 4, 1)  # n x d x h x w x 3
-
-        if len(input_image) != len(new_grid):
-            # make the image shape compatable by broadcasting
-            input_image += torch.zeros_like(new_grid)
-            new_grid += torch.zeros_like(input_image)
-
-        warped_input_img = F.grid_sample(input_image, new_grid * norm_coeff - 1., mode='bilinear', align_corners=True,
-                                         padding_mode='border')
-        return warped_input_img

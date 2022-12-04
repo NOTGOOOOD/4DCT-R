@@ -38,6 +38,12 @@ class Dataset(Data.Dataset):
 
             m_img = np.array(img_tensor)[0, ...]
 
+        if self.moving_files[index].split('moving\\')[1] != self.fixed_files[index].split('fixed\\')[1]:
+            print("=================================================")
+            print("{} is not match {}".format(self.moving_files[index].split('moving\\')[1], self.fixed_files[index].split('fixed\\')[1]))
+            print("=================================================")
+            # raise ValueError
+
         return [m_img, self.moving_files[index]], [f_img, self.fixed_files[index]]
 
 

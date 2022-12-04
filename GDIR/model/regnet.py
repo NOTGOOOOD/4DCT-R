@@ -71,6 +71,8 @@ class RegNet_single(nn.Module):
         scaled_image_shape = scaled_image.shape[2:]
         scaled_disp_t2i = torch.squeeze(self.unet(scaled_image), 0).reshape(self.n, self.dim,
                                                                             *scaled_image_shape)  # (n, 2, h, w) or (n, 3, d, h, w)
+
+        # return to the ori shape
         if self.scale < 1:
             disp_t2i = torch.nn.functional.interpolate(scaled_disp_t2i, size=original_image_shape,
                                                        mode='bilinear' if self.dim == 2 else 'trilinear',

@@ -487,10 +487,70 @@ def popi_processing(fixed_path, moving_path, **cfg):
     print('case7 done')
 
 
+def tcia_processing(fixed_path, moving_path, **cfg):
+    tcia_folder = r'D:\project\xxf\datasets\other\4D-Lung'
+    # for patien_folder in os.listdir(tcia_folder):
+    #     patient_no = patien_folder.split('_')[0]
+    #     patien_path = os.path.join(tcia_folder, patien_folder)
+    if True:
+        patient_no = 116
+        patien_path = r'D:\project\xxf\datasets\other\4D-Lung\%d_HM10395' % patient_no
+
+        # for scan_times in os.listdir(patien_path):
+        for scan_times in ['05-24-2000-NA-p4-91968', '06-08-2000-NA-p4-87118', '06-22-2000-NA-p4-94897',
+                           '06-29-2000-NA-p4-10940', '07-06-2000-NA-p4-38364']:
+            scans_path = os.path.join(patien_path, scan_times)
+
+            T = 0
+            for dcm_folder in sorted([file_folder for file_folder in os.listdir(scans_path)]):
+                target_path = moving_path
+                dcm_path = os.path.join(scans_path, dcm_folder)
+
+                # only one .dcm
+                if len(os.listdir(dcm_path)) < 2:
+                    continue
+
+                sitk_img = read_dcm_series(dcm_path)
+
+                img = crop_resampling_resize_clamp(sitk_img, cfg['resize'], cfg['crop']
+                                                   , cfg['spacing'],
+                                                   cfg['clamp'])
+
+                if T == 5:
+                    target_path = fixed_path
+
+                if target_path == fixed_path:
+                    for t in ['00', '10', '20', '30', '40', '60', '70', '80', '90']:
+                        target_file_path = os.path.join(target_path,
+                                                        'tcia_case{}_time{}_T{}.nii.gz'.format(patient_no,
+                                                                                               scan_times[:10], t))
+                        if os.path.exists(target_file_path):
+                            print('{} already exists!'.format(target_file_path))
+
+                        else:
+                            sitk.WriteImage(img, target_file_path)
+
+                else:
+                    target_file_path = os.path.join(target_path, 'tcia_case%s_time%s_T%d0.nii.gz' % (
+                        patient_no, scan_times[:10], T))
+
+                    if os.path.exists(target_file_path):
+                        print('{} already exists!'.format(target_file_path))
+
+                    else:
+                        sitk.WriteImage(img, target_file_path)
+
+                T = T + 1
+
+        print("{} done!!".format(scan_times))
+
+    print("%d done!!" % patient_no)
+
+
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT").split("4DCT")[0]
-    target_fixed_path = f'E:/datasets/registration/train_512/fixed'
-    target_moving_path = f'E:/datasets/registration/train_512/moving'
+    target_fixed_path = f'E:/datasets/registration/tcia_plus/fixed'
+    target_moving_path = f'E:/datasets/registration/tcia_plus/moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
@@ -515,40 +575,76 @@ if __name__ == '__main__':
     #     dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
-    print("copd: ")
-    clamp = [0, 900]
-    crop = [slice(70, 470), slice(30, 470), slice(None)]
-    resize = [256, 512, 512]
-    spacing = [1, 1, 1]
-    for item in copd_case_cfg.items():
-        case = item[0]
-        shape = item[1]
+    # print("copd: ")
+    # clamp = [0, 900]
+    # crop = [slice(70, 470), slice(30, 470), slice(None)]
+    # resize = [144, 256, 256]
+    # spacing = [1, 1, 1]
+    # for item in copd_case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #
+    #     fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+    #     moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
+    #     copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+    #                     spacing=spacing)
+    #     copd_processing(moving_path, target_moving_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+    #                     spacing=spacing)
+    #
+    # # learn2reg
+    # clamp = [0, 900]
+    # crop = None
+    # spacing = [1, 1, 1]
+    # learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    #                      spacing=spacing)
+    #
+    # # emp10
+    # clamp = [-750, -100]  # before -900 500
+    # crop = None
+    # spacing = [1, 1, 1]
+    # emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    #                  spacing=spacing)
+    #
+    # # creatis-popi
+    # spacing = [1, 1, 1]
+    # popi_processing(target_fixed_path, target_moving_path, resize=resize,
+    #                 spacing=spacing)
 
-        fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
-        moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
-        copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
-                        spacing=spacing)
-        copd_processing(moving_path, target_moving_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
-                        spacing=spacing)
+    # TCIA
 
-    # learn2reg
-    clamp = [0, 900]
+    resize = None
+    spacing = None
     crop = None
+    clamp = None
+    resize = [144, 256, 256]
     spacing = [1, 1, 1]
-    learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-                         spacing=spacing)
+    crop = [slice(95, 420), slice(120, 400), slice(0,94)]
+    clamp = [-900, 100]
 
-    # emp10
-    clamp = [-900, 500]
-    crop = None
-    spacing = [1, 1, 1]
-    emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-                     spacing=spacing)
+    tcia_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp, spacing=spacing)
 
-    # creatis-popi
-    spacing = [1, 1, 1]
-    popi_processing(target_fixed_path, target_moving_path, resize=resize,
-                    spacing=spacing)
+    # test TCIA
+    # patient_no_list = [114]
+    # for patient_no in patient_no_list:
+    #     patient_path = r'D:\project\xxf\datasets\other\4D-Lung\%d_HM10395' % patient_no
+    #     for scan_time in sorted([sc for sc in os.listdir(patient_path)]):
+    #         scan_path = os.path.join(patient_path, scan_time)
+    #         dcm_path = os.path.join(scan_path, os.listdir(scan_path)[0])
+    #
+    #         if len(os.listdir(dcm_path)) < 2:
+    #             dcm_path = os.path.join(scan_path, os.listdir(scan_path)[1])
+    #
+    #         sitk_img = read_dcm_series(dcm_path)
+    #
+    #         img = crop_resampling_resize_clamp(sitk_img, resize, crop
+    #                                            , spacing, clamp)
+    #
+    #         target_file_path = os.path.join(target_fixed_path,
+    #                                         'tcia_case{}_time{}_T{}.nii.gz'.format(patient_no,
+    #                                                                                scan_time[:10], 50))
+    #         sitk.WriteImage(img, target_file_path)
+    #
+    # print("TCIA done!!")
 
     # moving_path = os.path.join(project_folder, f'datasets/registration/moving')
     # fixed_path = os.path.join(project_folder, f'datasets/registration/fixed')

@@ -11,17 +11,11 @@ import logging
 from voxelmorph.losses import NCC, mse_loss, gradient_loss
 from config import get_args
 from datagenerators import Dataset, TestDataset
-from voxelmorph.model import regnet
+from voxelmorph.model import regnet, vmmodel
 from utils.scheduler import WarmupCosineSchedule
 from utils.utilize import set_seed, save_image, save_model
 from utils.metric import get_test_photo_loss
 
-# log_index = len([file for file in os.listdir(r'D:\project\xxf\4DCT\voxelmorph\Log') if file.endswith('.txt')])
-
-logging.basicConfig(level=logging.INFO,
-                    filename=f'Log/log.txt',
-                    filemode='w',
-                    format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 args = get_args()
 
 
@@ -71,21 +65,18 @@ def train():
         [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
          file_name.lower().endswith('.gz')])
 
-    # # VM and STN
-    # nf_enc = [16, 32, 32, 32]
-    # if args.model == "vm":
-    #     nf_dec = [32, 32, 32, 32, 8, 8]
-    # else:
-    #     nf_dec = [32, 32, 32, 32, 32, 16, 16]  # vm2
-    #
-    # UNet = U_Network(3, nf_enc, nf_dec).to(device)
-    # STN = SpatialTransformer([144, 256, 256]).to(device)
-    # # STN2 = SpatialTransformer_new(3).to(device)
-    # UNet.train()
+    # 创建配准网络（UNet）和STN
+    nf_enc = [16, 32, 32, 32]
+    if args.model == "vm1":
+        nf_dec = [32, 32, 32, 32, 8, 8]
+    else:
+        nf_dec = [32, 32, 32, 32, 32, 16, 16]  # vm2
+    model = vmmodel.U_Network(3, [144, 256, 256], nf_enc, nf_dec).to(device)
+    # model.train()
     # STN.train()
-    # # STN2.train()
-    model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=16, normalization=True)
-    model = model.to(device)
+
+    # model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=16, normalization=True)
+    # model = model.to(device)
     # from torch.utils.tensorboard import SummaryWriter
     # writer = SummaryWriter('runs/voxelmorph')
     # test_images = torch.randn(1, 1, 96, 256, 256)
@@ -95,6 +86,7 @@ def train():
     # print("UNet: ", count_parameters(UNet))
 
     # Set optimizer and losses
+
     opt = SGD(model.parameters(), lr=args.lr)
     sim_loss_fn = NCC(3, 5) if args.sim_loss == "ncc" else mse_loss
     sim_loss_fn = sim_loss_fn.to(device)
@@ -112,14 +104,17 @@ def train():
 
     best_tre = 99.
     # Training
+    # fold-validation
+
     for i in range(1, args.n_iter + 1):
         model.train()
         loss_total = []
+        print('iter:{} start'.format(i))
+
         epoch_iterator = tqdm(train_loader,
                               desc="Training (X / X Steps) (loss=X.X)",
                               bar_format="{l_bar}{r_bar}",
                               dynamic_ncols=True)
-        print('iter:{} start'.format(i))
         for i_step, (moving_file, fixed_file) in enumerate(epoch_iterator):
             # [B, C, D, H, W]
             input_moving = moving_file[0].to(device).float()
@@ -149,26 +144,31 @@ def train():
             opt.step()
             scheduler.step()
 
-            if i % args.n_save_iter == 0:
-                # save warped image0
-                m_name = "{}_{}.nii.gz".format(i, moving_name)
-                save_image(warped_image, input_fixed, args.output_dir, m_name)
-                print("warped images have saved.")
+            # if i % args.n_save_iter == 0:
+            #     # save warped image0
+            #     m_name = "{}_{}.nii.gz".format(i, moving_name)
+            #     save_image(warped_image, input_fixed, args.output_dir, m_name)
+            #     print("warped images have saved.")
 
-                # # Save DVF
-                # # b,3,d,h,w-> w,h,d,3
-                # m2f_name = str(i) + "_dvf.nii.gz"
-                # save_image(torch.permute(flow_m2f[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
-                #            m2f_name)
-                # print("dvf have saved.")
+            # # Save DVF
+            # # b,3,d,h,w-> w,h,d,3
+            # m2f_name = str(i) + "_dvf.nii.gz"
+            # save_image(torch.permute(flow_m2f[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
+            #            m2f_name)
+            # print("dvf have saved.")
 
         # if test ncc is best ,save the model
-        mean_tre = get_test_photo_loss(args, model, test_loader)
+        losses = get_test_photo_loss(args, model, test_loader)
+        mean_tre = torch.mean(torch.tensor(losses), 0)[0]
+        mean_std = torch.mean(torch.tensor(losses), 0)[1]
+        mean_mse = torch.mean(torch.tensor(losses), 0)[2]
         if mean_tre < best_tre:
             best_tre = mean_tre
             save_model(args, model, opt, scheduler, i)
+            logging.info("best tre{}".format(losses))
 
-        print("iter:{}, mean loss:{}, test tre{}".format(i, np.mean(loss_total), mean_tre))
+        print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
+        i, np.mean(loss_total), mean_tre, mean_std, mean_mse))
 
 
 if __name__ == "__main__":
@@ -176,4 +176,10 @@ if __name__ == "__main__":
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     set_seed(1024)
+    log_index = len([file for file in os.listdir(r'D:\project\xxf\4DCT\voxelmorph\Log') if file.endswith('.txt')])
+
+    logging.basicConfig(level=logging.INFO,
+                        filename=f'Log/log{log_index}.txt',
+                        filemode='a',
+                        format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
     train()
