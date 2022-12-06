@@ -88,7 +88,7 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
     return torch.mean(pt_errs_phys), torch.std(pt_errs_phys)
 
 
-def get_test_photo_loss(args, model, test_loader):
+def get_test_photo_loss(args, logger, model, test_loader):
     with torch.no_grad():
         model.eval()
         losses = []
@@ -123,7 +123,7 @@ def get_test_photo_loss(args, model, test_loader):
 
             losses.append([_mean.item(), _std.item(), _mse.item()])
 
-            # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
+            logger.info('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
         # loss = np.mean(losses)
         # print('mean loss=%.5f' % (loss))

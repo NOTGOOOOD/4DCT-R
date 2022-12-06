@@ -49,11 +49,12 @@ class RegNet_pairwise(nn.Module):
         scaled_disp
         '''
 
-        original_image_shape = fixed_image.shape
-        input_image = torch.cat((fixed_image, moving_image),dim=1)   # (1, 2, h, w) or (1, 2, d, h, w)
+        original_image_shape = fixed_image.shape[2:]
+        input_image = torch.cat((fixed_image, moving_image), dim=1)  # (1, 2, h, w) or (1, 2, d, h, w)
 
         if self.scale < 1:
-            scaled_image = F.interpolate(input_image, scale_factor=self.scale, align_corners=True,
+            scaled_image = F.interpolate(input_image, scale_factor=self.scale,
+                                         align_corners=True,
                                          mode='bilinear' if self.dim == 2 else 'trilinear',
                                          recompute_scale_factor=False)  # (1, 2, h, w) or (1, 2, d, h, w)
         else:

@@ -193,7 +193,7 @@ config = dict(
     stop_query_len=200,
 )
 config = utils.structure.Struct(**config)
-project_path = get_project_path("4DCT")
+project_path = get_project_path("4DCT-R")
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -202,7 +202,7 @@ def train(case=1):
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
     set_seed()
     # file
-    data_folder = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/mhd/case{case}/')
+    data_folder = os.path.join(project_path.split("4DCT-R")[0], f'datasets/dirlab/mhd/case{case}/')
     landmark_file = os.path.join(project_path, f'data/dirlab/Case0{case}_300_00_50.pt')
     log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径

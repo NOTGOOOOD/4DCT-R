@@ -1,13 +1,38 @@
-import logging
 import math
+import numpy as np
 
 from torch.optim.lr_scheduler import LambdaLR
 
-logger = logging.getLogger(__name__)
+
+class StopCriterion(object):
+    def __init__(self, stop_std=0.001, query_len=100, num_min_iter=2500):
+        self.query_len = query_len
+        self.stop_std = stop_std
+        self.loss_list = []
+        self.loss_min = 1.
+        self.num_min_iter = num_min_iter
+
+    def add(self, loss):
+        self.loss_list.append(loss)
+        if loss < self.loss_min:
+            self.loss_min = loss
+            self.loss_min_i = len(self.loss_list)
+
+    def stop(self):
+        # return True if the stop creteria are met
+        query_list = self.loss_list[-self.query_len:]
+        query_std = np.std(query_list)
+        if query_std < self.stop_std and self.loss_list[-1] - self.loss_min < self.stop_std / 3. and len(
+                self.loss_list) > self.loss_min_i and len(self.loss_list) > self.num_min_iter:
+            return True
+        else:
+            return False
+
 
 class ConstantLRSchedule(LambdaLR):
     """ Constant learning rate schedule.
     """
+
     def __init__(self, optimizer, last_epoch=-1):
         super(ConstantLRSchedule, self).__init__(optimizer, lambda _: 1.0, last_epoch=last_epoch)
 
@@ -17,6 +42,7 @@ class WarmupConstantSchedule(LambdaLR):
         Linearly increases learning rate schedule from 0 to 1 over `warmup_steps` training steps.
         Keeps learning rate schedule equal to 1. after warmup_steps.
     """
+
     def __init__(self, optimizer, warmup_steps, last_epoch=-1):
         self.warmup_steps = warmup_steps
         super(WarmupConstantSchedule, self).__init__(optimizer, self.lr_lambda, last_epoch=last_epoch)
@@ -32,6 +58,7 @@ class WarmupLinearSchedule(LambdaLR):
         Linearly increases learning rate from 0 to 1 over `warmup_steps` training steps.
         Linearly decreases learning rate from 1. to 0. over remaining `t_total - warmup_steps` steps.
     """
+
     def __init__(self, optimizer, warmup_steps, t_total, last_epoch=-1):
         self.warmup_steps = warmup_steps
         self.t_total = t_total
@@ -49,6 +76,7 @@ class WarmupCosineSchedule(LambdaLR):
         Decreases learning rate from 1. to 0. over remaining `t_total - warmup_steps` steps following a cosine curve.
         If `cycles` (default=0.5) is different from default, learning rate follows cosine function after warmup.
     """
+
     def __init__(self, optimizer, warmup_steps, t_total, cycles=.5, last_epoch=-1):
         self.warmup_steps = warmup_steps
         self.t_total = t_total

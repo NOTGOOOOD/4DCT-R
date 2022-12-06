@@ -69,7 +69,7 @@ def get_args():
     parser.add_argument("--train_dir", type=str, help="data folder with training",
                         dest="train_dir", default=r"C:\datasets\registration\train")
     parser.add_argument("--lr", type=float, help="learning rate",
-                        dest="lr", default=1e-4)
+                        dest="lr", default=4e-4)
     parser.add_argument("--n_iter", type=int, help="number of iterations",
                         dest="n_iter", default=500)
     parser.add_argument("--warmup_steps", type=int, dest="warmup_steps", default=20)
@@ -87,6 +87,12 @@ def get_args():
                         dest="log_dir", default='./Log')
     parser.add_argument("--output_dir", type=str, help="output folder with dvf and warped image",
                         dest="output_dir", default='./output')
+    parser.add_argument("--win_size", type=int, help="window size for ncc",
+                        dest="win_size", default='5')
+    parser.add_argument("--stop_std", type=float, help="early stop",
+                        dest="win_size", default='0.001')
+    parser.add_argument("--stop_query_len", type=float, help="early stop",
+                        dest="win_size", default='15')
 
     # test时参数
     parser.add_argument("--test_dir", type=str, help="test data directory",

@@ -12,7 +12,7 @@ from voxelmorph.losses import NCC, mse_loss, gradient_loss
 from config import get_args
 from datagenerators import Dataset, TestDataset
 from voxelmorph.model import regnet, vmmodel
-from utils.scheduler import WarmupCosineSchedule
+from utils.scheduler import WarmupCosineSchedule, StopCriterion
 from utils.utilize import set_seed, save_image, save_model
 from utils.metric import get_test_photo_loss
 
@@ -30,6 +30,8 @@ def make_dirs():
         os.makedirs(args.model_dir)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
 
 
 def load_landmarks():
@@ -44,7 +46,6 @@ def load_landmarks():
 
 def train():
     # set gpu
-    make_dirs()
     landmark_list = load_landmarks()
     device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu')
 
@@ -65,18 +66,18 @@ def train():
         [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
          file_name.lower().endswith('.gz')])
 
-    # 创建配准网络（UNet）和STN
-    nf_enc = [16, 32, 32, 32]
-    if args.model == "vm1":
-        nf_dec = [32, 32, 32, 32, 8, 8]
-    else:
-        nf_dec = [32, 32, 32, 32, 32, 16, 16]  # vm2
-    model = vmmodel.U_Network(3, [144, 256, 256], nf_enc, nf_dec).to(device)
+    # # voxelmorph
+    # nf_enc = [16, 32, 32, 32]
+    # if args.model == "vm1":
+    #     nf_dec = [32, 32, 32, 32, 8, 8]
+    # else:
+    #     nf_dec = [32, 32, 32, 32, 32, 16, 16]  # vm2
+    # model = vmmodel.U_Network(3, [144, 256, 256], nf_enc, nf_dec).to(device)
     # model.train()
     # STN.train()
 
-    # model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=16, normalization=True)
-    # model = model.to(device)
+    model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=16, normalization=True)
+    model = model.to(device)
     # from torch.utils.tensorboard import SummaryWriter
     # writer = SummaryWriter('runs/voxelmorph')
     # test_images = torch.randn(1, 1, 96, 256, 256)
@@ -88,12 +89,13 @@ def train():
     # Set optimizer and losses
 
     opt = SGD(model.parameters(), lr=args.lr)
-    sim_loss_fn = NCC(3, 5) if args.sim_loss == "ncc" else mse_loss
+    sim_loss_fn = NCC(3, args.win_size) if args.sim_loss == "ncc" else mse_loss
     sim_loss_fn = sim_loss_fn.to(device)
     grad_loss_fn = gradient_loss
 
     # set scheduler
     scheduler = WarmupCosineSchedule(opt, warmup_steps=args.warmup_steps, t_total=args.n_iter)
+    stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
 
     # load data
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
@@ -130,7 +132,7 @@ def train():
             loss = sim_loss + args.alpha * grad_loss
             loss_total.append(loss.item())
 
-            moving_name = moving_file[1][0].split('moving\\')[1]
+            moving_name = moving_file[1][0].split('moving/')[1]
             logging.info("img_name:{}".format(moving_name))
             logging.info("iter: %d batch: %d  loss: %f  sim: %f  grad: %f" % (
                 i, i_step, loss.item(), sim_loss.item(), grad_loss.item()))
@@ -158,10 +160,11 @@ def train():
             # print("dvf have saved.")
 
         # if test ncc is best ,save the model
-        losses = get_test_photo_loss(args, model, test_loader)
+        losses = get_test_photo_loss(args, logging, model, test_loader)
         mean_tre = torch.mean(torch.tensor(losses), 0)[0]
         mean_std = torch.mean(torch.tensor(losses), 0)[1]
         mean_mse = torch.mean(torch.tensor(losses), 0)[2]
+
         if mean_tre < best_tre:
             best_tre = mean_tre
             save_model(args, model, opt, scheduler, i)
@@ -170,13 +173,18 @@ def train():
         print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
         i, np.mean(loss_total), mean_tre, mean_std, mean_mse))
 
+        stop_criterion.add(mean_tre)
+        if stop_criterion.stop():
+            break
+
 
 if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     set_seed(1024)
-    log_index = len([file for file in os.listdir(r'D:\project\xxf\4DCT\voxelmorph\Log') if file.endswith('.txt')])
+    make_dirs()
+    log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
