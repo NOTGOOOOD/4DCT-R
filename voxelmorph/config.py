@@ -64,6 +64,7 @@ def get_args():
                         dest="model", choices=['vm', 'gdir', 'dault-prnet'], default='vm')
     parser.add_argument("--result_dir", type=str, help="results folder",
                         dest="result_dir", default='./result/vm')
+    parser.add_argument("--size", type=int, dest="size", default='256')
 
     # train param
     parser.add_argument("--train_dir", type=str, help="data folder with training",
@@ -90,9 +91,9 @@ def get_args():
     parser.add_argument("--win_size", type=int, help="window size for ncc",
                         dest="win_size", default='5')
     parser.add_argument("--stop_std", type=float, help="early stop",
-                        dest="win_size", default='0.001')
-    parser.add_argument("--stop_query_len", type=float, help="early stop",
-                        dest="win_size", default='15')
+                        dest="stop_std", default='0.001')
+    parser.add_argument("--stop_query_len", type=int, help="early stop",
+                        dest="stop_query_len", default='15')
 
     # test时参数
     parser.add_argument("--test_dir", type=str, help="test data directory",

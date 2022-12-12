@@ -6,7 +6,6 @@ from matplotlib import pyplot as plt
 import cv2
 from PIL import Image
 import random
-import time
 
 
 def set_seed(seed):
@@ -28,9 +27,9 @@ def save_png(imgs_numpy, save_path, save_name):
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
-def save_model(args, model, optimizer, scheduler, global_step):
+def save_model(args, model, optimizer, scheduler, time):
     model_checkpoint = os.path.join(args.model_dir,
-                                    "{}_iter{}.pth".format(time.strftime("%Y-%m-%d-%H-%M-%S"), global_step))
+                                    "{}_size{}_lr{}.pth".format(time, args.size, args.lr))
     checkpoint = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),

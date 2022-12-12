@@ -7,6 +7,7 @@ from torch.optim import Adam, SGD
 import torch.utils.data as Data
 from tqdm import tqdm
 import logging
+import time
 
 from voxelmorph.losses import NCC, mse_loss, gradient_loss
 from config import get_args
@@ -107,7 +108,7 @@ def train():
     best_tre = 99.
     # Training
     # fold-validation
-
+    train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     for i in range(1, args.n_iter + 1):
         model.train()
         loss_total = []
@@ -151,13 +152,13 @@ def train():
             #     m_name = "{}_{}.nii.gz".format(i, moving_name)
             #     save_image(warped_image, input_fixed, args.output_dir, m_name)
             #     print("warped images have saved.")
-
-            # # Save DVF
-            # # b,3,d,h,w-> w,h,d,3
-            # m2f_name = str(i) + "_dvf.nii.gz"
-            # save_image(torch.permute(flow_m2f[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
-            #            m2f_name)
-            # print("dvf have saved.")
+            #
+            #     # Save DVF
+            #     # b,3,d,h,w-> w,h,d,3
+            #     m2f_name = str(i) + "_dvf.nii.gz"
+            #     save_image(torch.permute(flow_m2f[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
+            #                m2f_name)
+            #     print("dvf have saved.")
 
         # if test ncc is best ,save the model
         losses = get_test_photo_loss(args, logging, model, test_loader)
@@ -167,15 +168,15 @@ def train():
 
         if mean_tre < best_tre:
             best_tre = mean_tre
-            save_model(args, model, opt, scheduler, i)
+            save_model(args, model, opt, scheduler, train_time)
             logging.info("best tre{}".format(losses))
 
         print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
-        i, np.mean(loss_total), mean_tre, mean_std, mean_mse))
+            i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
 
-        stop_criterion.add(mean_tre)
-        if stop_criterion.stop():
-            break
+        # stop_criterion.add(mean_tre.item())
+        # if stop_criterion.stop():
+        #     break
 
 
 if __name__ == "__main__":
