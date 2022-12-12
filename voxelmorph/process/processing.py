@@ -549,10 +549,34 @@ def tcia_processing(fixed_path, moving_path, **cfg):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT").split("4DCT")[0]
-    target_fixed_path = f'E:/datasets/registration/tcia_plus/fixed'
-    target_moving_path = f'E:/datasets/registration/tcia_plus/moving'
+    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
+    target_moving_path = '/home/cqut/project/xxf/train_144/moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
+
+    # ===================== adjust all registration image=================================
+    size = [144, 144, 144]
+    fixed_path = '/home/cqut/project/xxf/train_256/fixed'
+    moving_path = '/home/cqut/project/xxf/train_256/moving'
+
+    target_path = target_fixed_path
+    for f_file_name in os.listdir(fixed_path):
+        file = os.path.join(fixed_path, f_file_name)
+        sitk_img = sitk.ReadImage(file)
+        img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
+        sitk.WriteImage(img, os.path.join(target_path, f_file_name))
+
+    print('fixed done!')
+
+    target_path = target_moving_path
+    for m_file_name in os.listdir(moving_path):
+        file = os.path.join(moving_path, m_file_name)
+        sitk_img = sitk.ReadImage(file)
+        img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
+        sitk.WriteImage(img, os.path.join(target_path, m_file_name))
+
+    print('moving done!')
+    # ====================================================================================
 
     # target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
     # target_test_moving_path = f'E:/datasets/registration/test_ori/moving'
@@ -610,18 +634,18 @@ if __name__ == '__main__':
     # popi_processing(target_fixed_path, target_moving_path, resize=resize,
     #                 spacing=spacing)
 
-    # TCIA
+    ## TCIA
 
-    resize = None
-    spacing = None
-    crop = None
-    clamp = None
-    resize = [144, 256, 256]
-    spacing = [1, 1, 1]
-    crop = [slice(95, 420), slice(120, 400), slice(0,94)]
-    clamp = [-900, 100]
-
-    tcia_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp, spacing=spacing)
+    # resize = None
+    # spacing = None
+    # crop = None
+    # clamp = None
+    # resize = [144, 256, 256]
+    # spacing = [1, 1, 1]
+    # crop = [slice(95, 420), slice(120, 400), slice(0,94)]
+    # clamp = [-900, 100]
+    #
+    # tcia_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp, spacing=spacing)
 
     # test TCIA
     # patient_no_list = [114]
