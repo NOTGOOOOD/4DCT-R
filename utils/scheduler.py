@@ -9,7 +9,7 @@ class StopCriterion(object):
         self.query_len = query_len
         self.stop_std = stop_std
         self.loss_list = []
-        self.loss_min = 1.
+        self.loss_min = 30.
         self.num_min_iter = num_min_iter
 
     def add(self, loss):
