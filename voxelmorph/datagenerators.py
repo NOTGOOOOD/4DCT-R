@@ -67,4 +67,4 @@ class TestDataset(Data.Dataset):
         f_img = sitk.GetArrayFromImage(sitk.ReadImage(self.fixed_files[index]))[np.newaxis, ...]
         f_img = data_standardization_0_n(1, f_img)
 
-        return [m_img, self.moving_files[index]], [f_img, self.fixed_files[index]], self.landmark_files[index]
+        return [m_img, self.moving_files[index].split('moving/')[1]], [f_img, self.fixed_files[index].split('fixed/')[1]], self.landmark_files[index]

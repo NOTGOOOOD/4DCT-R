@@ -14,7 +14,7 @@ from config import get_args
 from datagenerators import Dataset, TestDataset
 from voxelmorph.model import regnet, vmmodel
 from utils.scheduler import WarmupCosineSchedule, StopCriterion
-from utils.utilize import set_seed, save_image, save_model
+from utils.utilize import set_seed, save_image, save_model, load_landmarks
 from utils.metric import get_test_photo_loss
 
 args = get_args()
@@ -35,21 +35,10 @@ def make_dirs():
         os.makedirs(args.log_dir)
 
 
-def load_landmarks():
-    landmark_folder = args.landmark_dir
-    landmarks = []
-    for i in sorted(
-            [os.path.join(landmark_folder, file) for file in os.listdir(landmark_folder) if file.endswith('.pt')]):
-        landmarks.append(torch.load(i))
-
-    return landmarks
-
-
 def train():
     # set gpu
-    landmark_list = load_landmarks()
-    device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu')
-
+    landmark_list = load_landmarks(args.landmark_dir)
+    device = args.device
     # load file
     fixed_folder = os.path.join(args.train_dir, 'fixed')
     moving_folder = os.path.join(args.train_dir, 'moving')
@@ -77,7 +66,7 @@ def train():
     # model.train()
     # STN.train()
 
-    model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=16, normalization=True)
+    model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=args.initial_channels, normalization=True)
     model = model.to(device)
     # from torch.utils.tensorboard import SummaryWriter
     # writer = SummaryWriter('runs/voxelmorph')

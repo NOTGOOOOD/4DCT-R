@@ -29,7 +29,7 @@ def save_png(imgs_numpy, save_path, save_name):
 
 def save_model(args, model, optimizer, scheduler, time):
     model_checkpoint = os.path.join(args.model_dir,
-                                    "{}_size{}_lr{}.pth".format(time, args.size, args.lr))
+                                    "{}_size{}_lr{}_channel{}.pth".format(time, args.size, args.lr,args.initial_channels))
     checkpoint = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
@@ -40,8 +40,7 @@ def save_model(args, model, optimizer, scheduler, time):
 
 
 def save_image(img, ref_img, save_path, save_name):
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
+    make_dir(save_path)
 
     img = sitk.GetImageFromArray(img.cpu().detach().numpy())
     ref_img = sitk.GetImageFromArray(ref_img.cpu().detach().numpy())
@@ -178,6 +177,14 @@ def transform_convert(img, transform):
 
     return img
 
+def load_landmarks(landmark_dir):
+    landmark_folder = landmark_dir
+    landmarks = []
+    for i in sorted(
+            [os.path.join(landmark_folder, file) for file in os.listdir(landmark_folder) if file.endswith('.pt')]):
+        landmarks.append(torch.load(i))
+
+    return landmarks
 
 if __name__ == '__main__':
     pass

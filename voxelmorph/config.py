@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import torch
 
 dirlab_crop_range = [{},
                      {"case": 1,
@@ -65,6 +66,7 @@ def get_args():
     parser.add_argument("--result_dir", type=str, help="results folder",
                         dest="result_dir", default='./result/vm')
     parser.add_argument("--size", type=int, dest="size", default='256')
+    parser.add_argument("--initial_channels", type=int, dest="initial_channels", default='16')
 
     # train param
     parser.add_argument("--train_dir", type=str, help="data folder with training",
@@ -105,5 +107,5 @@ def get_args():
 
     args = parser.parse_args()
     args.dirlab_cfg = dirlab_crop_range
-
+    args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu')
     return args
