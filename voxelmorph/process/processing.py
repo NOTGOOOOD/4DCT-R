@@ -596,26 +596,28 @@ if __name__ == '__main__':
     ax[1].set_title('ref')
     plt.show()
 
-    # after resampling
-    # crop
-
-    lm1_mov0 = mov_lmk_int[lmk_id]
-    lm1_ref0 = ref_lmk_int[lmk_id]
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(mov1cc[lm1_mov0[2]], cmap='gray')
-    ax[0].scatter([lm1_mov0[0]], [lm1_mov0[1]], 50, color='red')
-    ax[0].set_title('mov')
-    ax[1].imshow(ref1cc[lm1_ref0[2]], cmap='gray')
-    ax[1].scatter([lm1_ref0[0]], [lm1_ref0[1]], 50, color='red')
-    ax[1].set_title('ref')
-    plt.show()
-
     # load flow
     flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
 
     # d,h,w,3
     img_arr = sitk.GetArrayFromImage(sitk.ReadImage(flow_path))
     img_arr = img_arr.transpose(3, 0, 1, 2)
+
+    # after resampling
+    # crop
+
+    # lm1_mov0 = mov_lmk_int[lmk_id]
+    # lm1_ref0 = ref_lmk_int[lmk_id]
+    # fig, ax = plt.subplots(1, 2)
+    # ax[0].imshow(mov1cc[lm1_mov0[2]], cmap='gray')
+    # ax[0].scatter([lm1_mov0[0]], [lm1_mov0[1]], 50, color='red')
+    # ax[0].set_title('mov')
+    # ax[1].imshow(ref1cc[lm1_ref0[2]], cmap='gray')
+    # ax[1].scatter([lm1_ref0[0]], [lm1_ref0[1]], 50, color='red')
+    # ax[1].set_title('ref')
+    # plt.show()
+    #
+
 
     # %%
 
