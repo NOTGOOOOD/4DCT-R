@@ -554,29 +554,94 @@ if __name__ == '__main__':
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    # ===================== adjust all registration image=================================
-    size = [144, 144, 144]
-    fixed_path = '/home/cqut/project/xxf/train_256/fixed'
-    moving_path = '/home/cqut/project/xxf/train_256/moving'
+    # %% test landmarks
+    case = 1
+    # load image
+    import SimpleITK as sitk
+    m_file_path = '/home/cqut/project/xxf/test_ori/moving/dirlab_case%02d.nii.gz' % case
+    f_file_path = '/home/cqut/project/xxf/test_ori/fixed/dirlab_case%02d.nii.gz' % case
 
-    target_path = target_fixed_path
-    for f_file_name in os.listdir(fixed_path):
-        file = os.path.join(fixed_path, f_file_name)
-        sitk_img = sitk.ReadImage(file)
-        img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
-        sitk.WriteImage(img, os.path.join(target_path, f_file_name))
+    m_file = sitk.GetArrayFromImage(sitk.ReadImage(m_file_path))
+    f_file = sitk.GetArrayFromImage(sitk.ReadImage(f_file_path))
 
-    print('fixed done!')
+    # load landmark
+    from utils.utilize import load_landmarks
+    landmark_list = load_landmarks('/home/cqut/project/xxf/4DCT-R/data/dirlab')
+    case_landmark = landmark_list[0]
+    landmark_00 = case_landmark['landmark_00']
+    landmark_50 = case_landmark['landmark_50']
 
-    target_path = target_moving_path
-    for m_file_name in os.listdir(moving_path):
-        file = os.path.join(moving_path, m_file_name)
-        sitk_img = sitk.ReadImage(file)
-        img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
-        sitk.WriteImage(img, os.path.join(target_path, m_file_name))
+    # crop landmark
+    crop_range_d = dirlab_crop_range[case]["crop_range"][0].start
+    crop_range_h = dirlab_crop_range[case]["crop_range"][1].start
+    crop_range_w = dirlab_crop_range[case]["crop_range"][2].start
+    landmark_00 = landmark_00 - [crop_range_w, crop_range_h, crop_range_d]
+    landmark_50 = landmark_50 - [crop_range_w, crop_range_h, crop_range_d]
 
-    print('moving done!')
-    # ====================================================================================
+    # mov_lmk_int = np.round(np.flip(landmark_00, axis=1)).astype('int32')
+    # ref_lmk_int = np.round(np.flip(landmark_50, axis=1)).astype('int32')
+
+    lmk_id = 257
+    lm1_mov = landmark_00[lmk_id]
+    lm1_ref = landmark_50[lmk_id]
+
+    # visual
+    from matplotlib import pyplot as plt
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(m_file[lm1_mov[2]], cmap='gray')
+    ax[0].scatter([lm1_mov[0]], [lm1_mov[1]], 10, color='red')
+    ax[0].set_title('mov')
+    ax[1].imshow(f_file[lm1_ref[2]], cmap='gray')
+    ax[1].scatter([lm1_ref[0]], [lm1_ref[1]], 10, color='red')
+    ax[1].set_title('ref')
+    plt.show()
+
+    # after resampling
+    # crop
+
+    lm1_mov0 = mov_lmk_int[lmk_id]
+    lm1_ref0 = ref_lmk_int[lmk_id]
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(mov1cc[lm1_mov0[2]], cmap='gray')
+    ax[0].scatter([lm1_mov0[0]], [lm1_mov0[1]], 50, color='red')
+    ax[0].set_title('mov')
+    ax[1].imshow(ref1cc[lm1_ref0[2]], cmap='gray')
+    ax[1].scatter([lm1_ref0[0]], [lm1_ref0[1]], 50, color='red')
+    ax[1].set_title('ref')
+    plt.show()
+
+    # load flow
+    flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
+
+    # d,h,w,3
+    img_arr = sitk.GetArrayFromImage(sitk.ReadImage(flow_path))
+    img_arr = img_arr.transpose(3, 0, 1, 2)
+
+    # %%
+
+    # %%===================== adjust all registration image=================================
+    # size = [144, 144, 144]
+    # fixed_path = '/home/cqut/project/xxf/train_256/fixed'
+    # moving_path = '/home/cqut/project/xxf/train_256/moving'
+    #
+    # target_path = target_fixed_path
+    # for f_file_name in os.listdir(fixed_path):
+    #     file = os.path.join(fixed_path, f_file_name)
+    #     sitk_img = sitk.ReadImage(file)
+    #     img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
+    #     sitk.WriteImage(img, os.path.join(target_path, f_file_name))
+    #
+    # print('fixed done!')
+    #
+    # target_path = target_moving_path
+    # for m_file_name in os.listdir(moving_path):
+    #     file = os.path.join(moving_path, m_file_name)
+    #     sitk_img = sitk.ReadImage(file)
+    #     img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
+    #     sitk.WriteImage(img, os.path.join(target_path, m_file_name))
+    #
+    # print('moving done!')
+    # %%====================================================================================
 
     # target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
     # target_test_moving_path = f'E:/datasets/registration/test_ori/moving'

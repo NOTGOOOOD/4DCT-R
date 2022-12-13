@@ -22,7 +22,8 @@ class StopCriterion(object):
         # return True if the stop creteria are met
         query_list = self.loss_list[-self.query_len:]
         query_std = np.std(query_list)
-        if query_std < self.stop_std and self.loss_list[-1] - self.loss_min < self.stop_std / 3. and len(
+        print("query_std: %.5f" % query_std)
+        if query_std < self.stop_std and len(
                 self.loss_list) > self.loss_min_i and len(self.loss_list) > self.num_min_iter:
             return True
         else:

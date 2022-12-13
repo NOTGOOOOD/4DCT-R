@@ -69,7 +69,6 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
     # flow + fixed - moving
     spec = torch.tensor(spacing).cuda()
     all_dist = []
-    flow = flow[:, :, :, :]
     for i in range(300):
         # point before warped
         f_point = f_landmarks[0, i].int()

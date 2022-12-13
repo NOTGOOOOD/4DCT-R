@@ -29,7 +29,8 @@ def save_png(imgs_numpy, save_path, save_name):
 
 def save_model(args, model, optimizer, scheduler, time):
     model_checkpoint = os.path.join(args.model_dir,
-                                    "{}_size{}_lr{}_channel{}.pth".format(time, args.size, args.lr,args.initial_channels))
+                                    "{}_size{}_lr{}_channel{}.pth".format(time, args.size, args.lr,
+                                                                          args.initial_channels))
     checkpoint = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
@@ -177,6 +178,7 @@ def transform_convert(img, transform):
 
     return img
 
+
 def load_landmarks(landmark_dir):
     landmark_folder = landmark_dir
     landmarks = []
@@ -185,6 +187,7 @@ def load_landmarks(landmark_dir):
         landmarks.append(torch.load(i))
 
     return landmarks
+
 
 if __name__ == '__main__':
     pass
