@@ -68,12 +68,16 @@ def do_test(args):
             save_image(warped_image, input_fixed, args.output_dir, m_name)
             print("warped images have saved.")
 
-            # # Save DVF
-            # # b,3,d,h,w-> w,h,d,3
-            # m2f_name = str(i) + "_dvf.nii.gz"
+            # Save DVF
+            # b,3,d,h,w-> w,h,d,3  # maybe have sth. wrong, the shape getting from elastix is (d,h,w,3)
+            m2f_name = "{}_dvf.nii.gz".format(moving[1][:15])
             # save_image(torch.permute(flow[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
             #            m2f_name)
-            # print("dvf have saved.")
+
+            # b,3,d,h,w-> d,h,w,3
+            save_image(torch.permute(flow[0], (1, 2, 3, 0)), input_fixed, args.output_dir,
+                       m2f_name)
+            print("dvf have saved.")
 
         mean_tre = torch.mean(torch.tensor(losses), 0)[0]
         mean_std = torch.mean(torch.tensor(losses), 0)[1]

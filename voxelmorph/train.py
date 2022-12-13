@@ -155,7 +155,7 @@ def train():
         mean_std = torch.mean(torch.tensor(losses), 0)[1]
         mean_mse = torch.mean(torch.tensor(losses), 0)[2]
 
-        if mean_tre < best_tre:
+        if mean_tre < best_tre and best_tre - mean_tre > 0.01:
             best_tre = mean_tre
             save_model(args, model, opt, scheduler, train_time)
             logging.info("best tre{}".format(losses))
@@ -163,9 +163,9 @@ def train():
         print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
             i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
 
-        # stop_criterion.add(mean_tre.item())
-        # if stop_criterion.stop():
-        #     break
+        stop_criterion.add(mean_tre.item())
+        if stop_criterion.stop():
+            break
 
 
 if __name__ == "__main__":
