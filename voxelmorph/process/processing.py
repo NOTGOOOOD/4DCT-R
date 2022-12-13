@@ -548,25 +548,31 @@ def tcia_processing(fixed_path, moving_path, **cfg):
 
 
 if __name__ == '__main__':
-    project_folder = get_project_path("4DCT").split("4DCT")[0]
-    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
-    target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    make_dir(target_moving_path)
-    make_dir(target_fixed_path)
+    # project_folder = get_project_path("4DCT").split("4DCT")[0]
+    # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
+    # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
+    # make_dir(target_moving_path)
+    # make_dir(target_fixed_path)
 
     # %% test landmarks
     case = 1
     # load image
     import SimpleITK as sitk
-    m_file_path = '/home/cqut/project/xxf/test_ori/moving/dirlab_case%02d.nii.gz' % case
-    f_file_path = '/home/cqut/project/xxf/test_ori/fixed/dirlab_case%02d.nii.gz' % case
+    # m_file_path = '/home/cqut/project/xxf/test_ori/moving/dirlab_case%02d.nii.gz' % case
+    # f_file_path = '/home/cqut/project/xxf/test_ori/fixed/dirlab_case%02d.nii.gz' % case
+    # landmark_dir = '/home/cqut/project/xxf/4DCT-R/data/dirlab'
+    # flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
+    # w_file_path = r''
 
-    m_file = sitk.GetArrayFromImage(sitk.ReadImage(m_file_path))
-    f_file = sitk.GetArrayFromImage(sitk.ReadImage(f_file_path))
+    m_file_path = r'G:\datasets\registration\test_ori\moving\dirlab_case%02d.nii.gz' % case
+    f_file_path = r'G:\datasets\registration\test_ori\moving\dirlab_case%02d.nii.gz' % case
+    landmark_dir = r'D:\Project\4DCT\data\dirlab'
+    flow_path = r'G:\datasets\registration\affine_result\deformationField.nii.gz'
+    w_file_path = r'G:\datasets\registration\affine_result\result.nii.gz'
 
     # load landmark
     from utils.utilize import load_landmarks
-    landmark_list = load_landmarks('/home/cqut/project/xxf/4DCT-R/data/dirlab')
+    landmark_list = load_landmarks(landmark_dir)
     case_landmark = landmark_list[0]
     landmark_00 = case_landmark['landmark_00']
     landmark_50 = case_landmark['landmark_50']
@@ -575,48 +581,47 @@ if __name__ == '__main__':
     crop_range_d = dirlab_crop_range[case]["crop_range"][0].start
     crop_range_h = dirlab_crop_range[case]["crop_range"][1].start
     crop_range_w = dirlab_crop_range[case]["crop_range"][2].start
-    landmark_00 = landmark_00 - [crop_range_w, crop_range_h, crop_range_d]
-    landmark_50 = landmark_50 - [crop_range_w, crop_range_h, crop_range_d]
+    landmark_00 = (landmark_00 - [crop_range_w, crop_range_h, crop_range_d]).astype('float')
+    landmark_50 = (landmark_50 - [crop_range_w, crop_range_h, crop_range_d]).astype('float')
 
-    # mov_lmk_int = np.round(np.flip(landmark_00, axis=1)).astype('int32')
-    # ref_lmk_int = np.round(np.flip(landmark_50, axis=1)).astype('int32')
+    mov_lmk_int = np.round(landmark_00).astype('int32')
+    ref_lmk_int = np.round(landmark_50).astype('int32')
 
+    # load flow
+    # d,h,w,3
+    flow = sitk.GetArrayFromImage(sitk.ReadImage(flow_path))
+    flow = flow.transpose(3, 0, 1, 2)
+
+    # after affine registration
+    mov_lmk = landmark_00.copy()
+    ref_lmk = landmark_50.copy()
+    for i in range(300):
+        wi, hi, di = ref_lmk_int[i]
+        w0, h0, d0 = flow[:, di, hi, wi]
+        ref_lmk[i] = ref_lmk[i] + [w0, h0, d0]
+
+    tre = torch.tensor(ref_lmk - landmark_00).pow(2).sum(1).sqrt()
     lmk_id = 257
-    lm1_mov = landmark_00[lmk_id]
-    lm1_ref = landmark_50[lmk_id]
+    lm1_mov = landmark_00[lmk_id].astype('int32')
+    lm1_ref = landmark_50[lmk_id].astype('int32')
+    lm1_warped = np.round(ref_lmk[lmk_id]).astype('int32')
 
     # visual
+    m_file = sitk.GetArrayFromImage(sitk.ReadImage(m_file_path))
+    f_file = sitk.GetArrayFromImage(sitk.ReadImage(f_file_path))
+    w_file = sitk.GetArrayFromImage(sitk.ReadImage(w_file_path))
     from matplotlib import pyplot as plt
-    fig, ax = plt.subplots(1, 2)
+    fig, ax = plt.subplots(1, 3)
     ax[0].imshow(m_file[lm1_mov[2]], cmap='gray')
     ax[0].scatter([lm1_mov[0]], [lm1_mov[1]], 10, color='red')
     ax[0].set_title('mov')
     ax[1].imshow(f_file[lm1_ref[2]], cmap='gray')
     ax[1].scatter([lm1_ref[0]], [lm1_ref[1]], 10, color='red')
     ax[1].set_title('ref')
+    ax[2].imshow(w_file[lm1_warped[2]], cmap='gray')
+    ax[2].scatter([lm1_warped[0]], [lm1_warped[1]], 10, color='red')
+    ax[2].set_title('warped')
     plt.show()
-
-    # after resampling
-    # crop
-
-    lm1_mov0 = mov_lmk_int[lmk_id]
-    lm1_ref0 = ref_lmk_int[lmk_id]
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(mov1cc[lm1_mov0[2]], cmap='gray')
-    ax[0].scatter([lm1_mov0[0]], [lm1_mov0[1]], 50, color='red')
-    ax[0].set_title('mov')
-    ax[1].imshow(ref1cc[lm1_ref0[2]], cmap='gray')
-    ax[1].scatter([lm1_ref0[0]], [lm1_ref0[1]], 50, color='red')
-    ax[1].set_title('ref')
-    plt.show()
-
-    # load flow
-    flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
-
-    # d,h,w,3
-    img_arr = sitk.GetArrayFromImage(sitk.ReadImage(flow_path))
-    img_arr = img_arr.transpose(3, 0, 1, 2)
-
     # %%
 
     # %%===================== adjust all registration image=================================
