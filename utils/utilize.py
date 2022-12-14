@@ -33,8 +33,8 @@ def save_model(args, model, optimizer, scheduler, time):
                                                                           args.initial_channels))
     checkpoint = {
         'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'scheduler': scheduler.state_dict()
+        'optimizer': optimizer.state_dict() if optimizer else None,
+        'scheduler': scheduler.state_dict() if scheduler else None
     }
     torch.save(checkpoint, model_checkpoint)
     print("Saved model checkpoint to [DIR: %s]", args.model_dir)
