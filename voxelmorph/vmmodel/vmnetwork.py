@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.distributions.normal import Normal
 
 from voxelmorph.vmmodel import layers
-from modelio import store_config_args, LoadableModel
+from voxelmorph.vmmodel.modelio import store_config_args, LoadableModel
 
 def default_unet_features():
     nb_features = [

@@ -67,6 +67,7 @@ def get_args():
                         dest="result_dir", default='./result/vm')
     parser.add_argument("--size", type=int, dest="size", default='256')
     parser.add_argument("--initial_channels", type=int, dest="initial_channels", default='16')
+    parser.add_argument("--bidir", action='store_true')
 
     # train param
     parser.add_argument("--train_dir", type=str, help="data folder with training",

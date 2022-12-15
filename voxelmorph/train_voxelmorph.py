@@ -12,6 +12,7 @@ from config import get_args
 from datagenerators import Dataset, TestDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import NCC, Grad, MSE
+from voxelmorph.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks
 
 args = get_args()
@@ -53,14 +54,14 @@ def train():
         [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
          file_name.lower().endswith('.gz')])
 
-    enc_nf = args.enc if args.enc else [16, 32, 32, 32]
-    dec_nf = args.dec if args.dec else [32, 32, 32, 32, 32, 16, 16]
+    enc_nf = [16, 32, 32, 32]
+    dec_nf = [32, 32, 32, 32, 32, 16, 16]
     model = vmnetwork.VxmDense(
-        inshape=[144, 144, 144],
+        inshape=[args.size] * 3,
         nb_unet_features=[enc_nf, dec_nf],
         bidir=args.bidir,
-        int_steps=args.int_steps,
-        int_downsize=args.int_downsize
+        int_steps=7,
+        int_downsize=2
     )
     model = model.to(device)
 
@@ -69,7 +70,8 @@ def train():
 
     # prepare image loss
     if args.sim_loss == 'ncc':
-        image_loss_func = NCC().loss
+        # image_loss_func = NCC([args.win_size]*3).loss
+        image_loss_func = NCC_new(3, args.win_size)
     elif args.sim_loss == 'mse':
         image_loss_func = MSE().loss
     else:
@@ -84,9 +86,8 @@ def train():
         weights = [1]
 
     # prepare deformation loss
-    losses += [Grad('l2', loss_mult=args.int_downsize).loss]
-    weights += [
-        args.weight]  # parser.add_argument('--lambda', type=float, dest='weight', default=0.01, help='weight of deformation loss (default: 0.01)')
+    losses += [Grad('l2', loss_mult=2).loss]
+    weights += [args.alpha]
 
     # # set scheduler
     # scheduler = WarmupCosineSchedule(opt, warmup_steps=args.warmup_steps, t_total=args.n_iter)
@@ -133,10 +134,10 @@ def train():
             logging.info("img_name:{}".format(moving_name))
             if args.bidir:
                 logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f bisim: %.5f  grad: %.5f" % (
-                    i, i_step, loss.item(), loss_list[0].item(), loss_list[1].item(), loss_list[2].item()))
+                    i, i_step, loss.item(), loss_list[0], loss_list[1], loss_list[2]))
             else:
                 logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f  grad: %.5f" % (
-                    i, i_step, loss.item(), loss_list[0].item(), loss_list[1].item()))
+                    i, i_step, loss.item(), loss_list[0], loss_list[1]))
 
             epoch_iterator.set_description(
                 "Training (%d / %d Steps) (loss=%2.5f)" % (i_step, len(train_loader), loss.item())
@@ -169,8 +170,7 @@ def train():
         #     save_model(args, model, optimizer, None, train_time)
         #     logging.info("best tre{}".format(losses_test))
         #
-        # print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
-        #     i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
+        print("iter: %d, mean loss:%2.5f" % (i, np.mean(loss_total)))
 
 
 if __name__ == "__main__":
