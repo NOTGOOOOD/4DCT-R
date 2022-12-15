@@ -117,13 +117,13 @@ def train():
             input_moving = moving_file[0].to(device).float()
             input_fixed = fixed_file[0].to(device).float()
 
-            # Run the data through the model to produce warp and flow field
-            warped_image, flow_m2f = model(input_moving, input_fixed)  # b, c, d, h, w
+            y_true = [input_fixed, input_moving] if args.bidir else [input_fixed, None]
+            y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
 
             loss = 0
             loss_list = []
             for n, loss_function in enumerate(losses):
-                curr_loss = loss_function(input_fixed[n], warped_image[n]) * weights[n]
+                curr_loss = loss_function(y_true[n], y_pred[n]) * weights[n]
                 loss_list.append(curr_loss.item())
                 loss += curr_loss
 
@@ -131,8 +131,12 @@ def train():
 
             moving_name = moving_file[1][0].split('moving/')[1]
             logging.info("img_name:{}".format(moving_name))
-            logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f  grad: %.5f" % (
-                i, i_step, loss.item(), loss_list[0].item(), loss_list[1].item()))
+            if args.bidir:
+                logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f bisim: %.5f  grad: %.5f" % (
+                    i, i_step, loss.item(), loss_list[0].item(), loss_list[1].item(), loss_list[2].item()))
+            else:
+                logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f  grad: %.5f" % (
+                    i, i_step, loss.item(), loss_list[0].item(), loss_list[1].item()))
 
             epoch_iterator.set_description(
                 "Training (%d / %d Steps) (loss=%2.5f)" % (i_step, len(train_loader), loss.item())
