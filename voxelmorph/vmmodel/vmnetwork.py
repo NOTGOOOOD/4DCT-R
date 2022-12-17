@@ -1,10 +1,12 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
 from voxelmorph.vmmodel import layers
 from voxelmorph.vmmodel.modelio import store_config_args, LoadableModel
+
 
 def default_unet_features():
     nb_features = [
@@ -25,7 +27,7 @@ class Unet(nn.Module):
     """
 
     def __init__(self,
-                 inshape=None,
+                 dim=None,
                  infeats=None,
                  nb_features=None,
                  nb_levels=None,
@@ -52,7 +54,7 @@ class Unet(nn.Module):
         super().__init__()
 
         # ensure correct dimensionality
-        ndims = len(inshape)
+        ndims = dim
         assert ndims in [1, 2, 3], 'ndims should be one of 1, 2, or 3. found: %d' % ndims
 
         # cache some parameters
@@ -132,14 +134,18 @@ class Unet(nn.Module):
             for conv in convs:
                 x = conv(x)
             x_history.append(x)
-            x = self.pooling[level](x)
+            # x = self.pooling[level](x)
+            x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
+                              align_corners=True, recompute_scale_factor=False)
 
         # decoder forward pass with upsampling and concatenation
         for level, convs in enumerate(self.decoder):
             for conv in convs:
                 x = conv(x)
             if not self.half_res or level < (self.nb_levels - 2):
-                x = self.upsampling[level](x)
+                # x = self.upsampling[level](x)
+                x = F.interpolate(x, x_history[-1].shape[2:], mode='trilinear',
+                                     align_corners=True)
                 x = torch.cat([x, x_history.pop()], dim=1)
 
         # remaining convs at full resolution
@@ -156,7 +162,7 @@ class VxmDense(LoadableModel):
 
     @store_config_args
     def __init__(self,
-                 inshape,
+                 dim,
                  nb_unet_features=None,
                  nb_unet_levels=None,
                  unet_feat_mult=1,
@@ -195,14 +201,13 @@ class VxmDense(LoadableModel):
 
         # internal flag indicating whether to return flow or integrated warp during inference
         self.training = True
-
+        self.dim = dim
         # ensure correct dimensionality
-        ndims = len(inshape)
-        assert ndims in [1, 2, 3], 'ndims should be one of 1, 2, or 3. found: %d' % ndims
+        assert dim==3, 'ndims should be 3. found: %d' % dim
 
         # configure core unet model
         self.unet_model = Unet(
-            inshape,
+            self.dim,
             infeats=(src_feats + trg_feats),
             nb_features=nb_unet_features,
             nb_levels=nb_unet_levels,
@@ -212,8 +217,8 @@ class VxmDense(LoadableModel):
         )
 
         # configure unet to flow field layer
-        Conv = getattr(nn, 'Conv%dd' % ndims)
-        self.flow = Conv(self.unet_model.final_nf, ndims, kernel_size=3, padding=1)
+        Conv = getattr(nn, 'Conv%dd' % self.dim)
+        self.flow = Conv(self.unet_model.final_nf, self.dim, kernel_size=3, padding=1)
 
         # init flow layer with small weights and bias
         self.flow.weight = nn.Parameter(Normal(0, 1e-5).sample(self.flow.weight.shape))
@@ -226,13 +231,13 @@ class VxmDense(LoadableModel):
 
         # configure optional resize layers (downsize)
         if not unet_half_res and int_steps > 0 and int_downsize > 1:
-            self.resize = layers.ResizeTransform(int_downsize, ndims)
+            self.resize = layers.ResizeTransform(int_downsize, self.dim)
         else:
             self.resize = None
 
         # resize to full res
         if int_steps > 0 and int_downsize > 1:
-            self.fullsize = layers.ResizeTransform(1 / int_downsize, ndims)
+            self.fullsize = layers.ResizeTransform(1 / int_downsize, self.dim)
         else:
             self.fullsize = None
 
@@ -240,11 +245,12 @@ class VxmDense(LoadableModel):
         self.bidir = bidir
 
         # configure optional integration layer for diffeomorphic warp
-        down_shape = [int(dim / int_downsize) for dim in inshape]
-        self.integrate = layers.VecInt(down_shape, int_steps) if int_steps > 0 else None
-
+        # down_shape = [int(dim / int_downsize) for dim in inshape]
+        # self.integrate = layers.VecInt(down_shape, int_steps) if int_steps > 0 else None
+        self.integrate = layers.VecInt(None,int_steps) if int_steps > 0 else None
         # configure transformer
-        self.transformer = layers.SpatialTransformer(inshape)
+        # self.transformer = layers.SpatialTransformer(inshape)
+        self.transformer = layers.SpatialTransformer(self.dim)
 
     def forward(self, source, target, registration=False):
         '''
@@ -287,7 +293,7 @@ class VxmDense(LoadableModel):
 
         # return non-integrated flow field if training
         if not registration:
-            return (y_source, y_target, preint_flow) if self.bidir else (y_source, preint_flow)
+            return (y_source, y_target, preint_flow, pos_flow) if self.bidir else (y_source, preint_flow, pos_flow)
         else:
             return y_source, pos_flow
 
@@ -308,3 +314,4 @@ class ConvBlock(nn.Module):
         out = self.main(x)
         out = self.activation(out)
         return out
+

@@ -92,13 +92,13 @@ def get_test_photo_loss(args, logger, model, test_loader):
         model.eval()
         losses = []
         for batch, (moving, fixed, landmarks) in enumerate(test_loader):
-            img2 = moving[0].to('cuda').float()
-            img1 = fixed[0].to('cuda').float()
+            m_img = moving[0].to('cuda').float()
+            f_img = fixed[0].to('cuda').float()
 
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            flow, warped_image = model(img1, img2)
+            warped_image, flow = model(m_img, f_img, True)
             flow_hr = flow[0]
             index = batch + 1
 
@@ -110,7 +110,7 @@ def get_test_photo_loss(args, logger, model, test_loader):
                                    landmarks['disp_00_50'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
             # MSE
-            _mse = MSE(img1, warped_image)
+            _mse = MSE(f_img, warped_image)
             # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
             # _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(

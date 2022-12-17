@@ -13,7 +13,9 @@ from datagenerators import Dataset, TestDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import NCC, Grad, MSE
 from voxelmorph.losses import NCC as NCC_new
-from utils.utilize import set_seed, load_landmarks
+from utils.utilize import set_seed, load_landmarks, save_model
+from utils.scheduler import WarmupCosineSchedule
+from utils.metric import get_test_photo_loss
 
 args = get_args()
 
@@ -57,7 +59,7 @@ def train():
     enc_nf = [16, 32, 32, 32]
     dec_nf = [32, 32, 32, 32, 32, 16, 16]
     model = vmnetwork.VxmDense(
-        inshape=[args.size] * 3,
+        dim=3,
         nb_unet_features=[enc_nf, dec_nf],
         bidir=args.bidir,
         int_steps=7,
@@ -66,8 +68,8 @@ def train():
     model = model.to(device)
 
     # Set optimizer and losses
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
     # prepare image loss
     if args.sim_loss == 'ncc':
         # image_loss_func = NCC([args.win_size]*3).loss
@@ -90,7 +92,7 @@ def train():
     weights += [args.alpha]
 
     # # set scheduler
-    # scheduler = WarmupCosineSchedule(opt, warmup_steps=args.warmup_steps, t_total=args.n_iter)
+    scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
     # stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
 
     # load data
@@ -146,6 +148,7 @@ def train():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             # if i % args.n_save_iter == 0:
             #     # save warped image0
@@ -160,24 +163,25 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        # losses_test = get_test_photo_loss(args, logging, model, test_loader)
-        # mean_tre = torch.mean(torch.tensor(losses_test), 0)[0]
-        # mean_std = torch.mean(torch.tensor(losses_test), 0)[1]
-        # mean_mse = torch.mean(torch.tensor(losses_test), 0)[2]
-        #
+        test_loss = get_test_photo_loss(args, logging, model, test_loader)
+        mean_tre = torch.mean(torch.tensor(test_loss), 0)[0]
+        mean_std = torch.mean(torch.tensor(test_loss), 0)[1]
+        mean_mse = torch.mean(torch.tensor(test_loss), 0)[2]
+
         # if mean_tre < best_tre and best_tre - mean_tre > 0.01:
         #     best_tre = mean_tre
         #     save_model(args, model, optimizer, None, train_time)
-        #     logging.info("best tre{}".format(losses_test))
-        #
-        print("iter: %d, mean loss:%2.5f" % (i, np.mean(loss_total)))
+        #     logging.info("best tre{}".format(test_loss))
+
+        print("iter: %d, mean train loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
+            i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
 
 
 if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-    set_seed(1024)
+    set_seed(42)
     make_dirs()
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
