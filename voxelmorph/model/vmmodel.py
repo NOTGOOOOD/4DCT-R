@@ -89,7 +89,7 @@ class U_Network(nn.Module):
         if self.bn:
             flow = self.batch_norm(flow)
 
-        return flow, self.stn(src, flow)
+        return self.stn(src, flow), flow
 
 
 class SpatialTransformer(nn.Module):

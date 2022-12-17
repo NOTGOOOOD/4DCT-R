@@ -72,7 +72,7 @@ class RegNet_pairwise(nn.Module):
 
         warped_moving_image = self.spatial_transform(input_image[:, 1:], disp)  # (h, w) or (d, h, w)
 
-        return disp, warped_moving_image
+        return warped_moving_image, disp
 
 
 class SpatialTransformer(nn.Module):
