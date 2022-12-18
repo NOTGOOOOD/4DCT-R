@@ -5,12 +5,11 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, stop_std=0.001, query_len=100, num_min_iter=2500):
+    def __init__(self, stop_std=0.001, query_len=100):
         self.query_len = query_len
         self.stop_std = stop_std
         self.loss_list = []
         self.loss_min = 30.
-        self.num_min_iter = num_min_iter
 
     def add(self, loss):
         self.loss_list.append(loss)
@@ -23,8 +22,7 @@ class StopCriterion(object):
         query_list = self.loss_list[-self.query_len:]
         query_std = np.std(query_list)
         print("query_std: %.5f" % query_std)
-        if query_std < self.stop_std and len(
-                self.loss_list) > self.loss_min_i and len(self.loss_list) > self.num_min_iter:
+        if query_std < self.stop_std and len(self.loss_list) > self.loss_min_i:
             return True
         else:
             return False

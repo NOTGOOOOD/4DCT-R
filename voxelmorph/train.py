@@ -113,7 +113,7 @@ def train():
             input_fixed = fixed_file[0].to(device).float()
 
             # Run the data through the model to produce warp and flow field
-            flow_m2f, warped_image = model(input_fixed, input_moving)  # b, c, d, h, w
+            warped_image, flow_m2f = model(input_fixed, input_moving)  # b, c, d, h, w
 
             # Calculate loss
             sim_loss = sim_loss_fn(warped_image, input_fixed)

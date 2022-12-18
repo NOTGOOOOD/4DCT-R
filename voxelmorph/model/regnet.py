@@ -33,7 +33,7 @@ class RegNet_pairwise(nn.Module):
                               normalization=normalization)
         self.spatial_transform = SpatialTransformer(self.dim)
 
-    def forward(self, fixed_image, moving_image):
+    def forward(self, moving_image, fixed_image):
         '''
         Parameters
         ----------
