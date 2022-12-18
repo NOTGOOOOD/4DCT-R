@@ -2,15 +2,15 @@ import numpy as np
 import torch
 import os
 
-from utils.utilize import get_project_path, tre
+from utils.utilize import get_project_path
 
 
 def convert_landmark(project_path):
     for i in range(1, 11):
         case = i
-        landmark_path = os.path.join(project_path, f'datasets/dirlab/img/Case{case}Pack/ExtremePhases')
-        landmark_00_file = os.path.join(landmark_path, f'Case{case}_300_T00_xyz.txt')
-        landmark_50_file = os.path.join(landmark_path, f'Case{case}_300_T50_xyz.txt')
+        landmark_path = os.path.join(project_path, 'datasets/dirlab/img/Case%02dPack/ExtremePhases' % case)
+        landmark_00_file = os.path.join(landmark_path, 'Case%02d_300_T00_xyz.txt' % case)
+        landmark_50_file = os.path.join(landmark_path, 'Case%02d_300_T50_xyz.txt' % case)
         landmark_00 = np.genfromtxt(landmark_00_file, dtype=np.int64) - 1  # change to 0-based indexing
         landmark_50 = np.genfromtxt(landmark_50_file,
                                     dtype=np.int64) - 1  # (n, 3), (w, h, d) order in the last dimension
