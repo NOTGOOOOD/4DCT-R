@@ -1,6 +1,6 @@
 import os
 import warnings
-
+import platform
 import torch
 import numpy as np
 from torch.optim import Adam, SGD
@@ -122,7 +122,9 @@ def train():
             loss = sim_loss + args.alpha * grad_loss
             loss_total.append(loss.item())
 
-            moving_name = moving_file[1][0].split('moving/')[1]
+            moving_name = moving_file[1][0].split('moving\\')[1] if platform.system().lower() == 'windows' else \
+            moving_file[1][0].split('moving/')[1]
+
             logging.info("img_name:{}".format(moving_name))
             logging.info("iter: %d batch: %d  loss: %f  sim: %f  grad: %f" % (
                 i, i_step, loss.item(), sim_loss.item(), grad_loss.item()))

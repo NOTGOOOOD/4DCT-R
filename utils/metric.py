@@ -112,20 +112,9 @@ def get_test_photo_loss(args, logger, model, test_loader):
 
             # MSE
             _mse = MSE(f_img, warped_image)
-            # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
-
-            # _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-            #                             landmarks50 - torch.tensor(
-            #                                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1,
-            #                                                                                                       3).cuda(),
-            #                             args.dirlab_cfg[index]['pixel_spacing'])
 
             losses.append([_mean.item(), _std.item(), _mse.item()])
 
             logger.info('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
-        # loss = np.mean(losses)
-        # print('mean loss=%.5f' % (loss))
-        # show_results(net, test_loader, epoch, 2)
         return losses

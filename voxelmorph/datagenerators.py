@@ -1,3 +1,4 @@
+import platform
 import numpy as np
 import SimpleITK as sitk
 import torch
@@ -5,30 +6,26 @@ import torch.utils.data as Data
 import torch.nn.functional as F
 from process.processing import data_standardization_0_n
 
-'''
-通过继承Data.Dataset，实现将一组Tensor数据对封装成Tensor数据集
-至少要重载__init__，__len__和__getitem__方法
-'''
-
 
 class Dataset(Data.Dataset):
     def __init__(self, moving_files, fixed_files):
-        # 初始化
         self.moving_files = moving_files
         self.fixed_files = fixed_files
 
     def __len__(self):
-        # 返回数据集的大小
         return len(self.moving_files)
 
     def __getitem__(self, index):
-        # 索引数据集中的某个数据，还可以对数据进行预处理
-        # 下标index参数是必须有的，名字任意
         m_img = sitk.GetArrayFromImage(sitk.ReadImage(self.moving_files[index]))[np.newaxis, ...]
         m_img = data_standardization_0_n(1, m_img)
 
         f_img = sitk.GetArrayFromImage(sitk.ReadImage(self.fixed_files[index]))[np.newaxis, ...]
         f_img = data_standardization_0_n(1, f_img)
+
+        m_name = self.moving_files[index].split('moving\\')[1] if platform.system().lower() == 'windows' else \
+        self.moving_files[index].split('moving/')[1]
+        f_name = self.fixed_files[index].split('fixed\\')[1] if platform.system().lower() == 'windows' else \
+        self.fixed_files[index].split('fixed/')[1]
 
         # shape dosen't match
         if m_img.shape != f_img.shape:
@@ -38,9 +35,9 @@ class Dataset(Data.Dataset):
 
             m_img = np.array(img_tensor)[0, ...]
 
-        if self.moving_files[index].split('moving/')[1] != self.fixed_files[index].split('fixed/')[1]:
+        if m_name != f_name:
             print("=================================================")
-            print("{} is not match {}".format(self.moving_files[index].split('moving/')[1], self.fixed_files[index].split('fixed/')[1]))
+            print("{} is not match {}".format(m_name, f_name))
             print("=================================================")
             # raise ValueError
 
@@ -67,4 +64,6 @@ class TestDataset(Data.Dataset):
         f_img = sitk.GetArrayFromImage(sitk.ReadImage(self.fixed_files[index]))[np.newaxis, ...]
         f_img = data_standardization_0_n(1, f_img)
 
-        return [m_img, self.moving_files[index].split('moving/')[1]], [f_img, self.fixed_files[index].split('fixed/')[1]], self.landmark_files[index]
+        m_name = self.moving_files[index].split('moving\\')[1] if platform.system().lower() == 'windows' else self.moving_files[index].split('moving/')[1]
+        f_name = self.fixed_files[index].split('fixed\\')[1] if platform.system().lower() == 'windows' else self.fixed_files[index].split('fixed/')[1]
+        return [m_img, m_name], [f_img, f_name], self.landmark_files[index]
