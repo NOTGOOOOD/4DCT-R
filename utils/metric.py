@@ -98,8 +98,8 @@ def get_test_photo_loss(args, logger, model, test_loader):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            warped_image, flow = model(m_img, f_img, True)
-            # warped_image, flow = model(m_img, f_img)
+            # warped_image, flow = model(m_img, f_img, True)
+            warped_image, flow = model(m_img, f_img)
             flow_hr = flow[0]
             index = batch + 1
 

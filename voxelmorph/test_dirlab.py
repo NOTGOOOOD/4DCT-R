@@ -38,7 +38,7 @@ def do_test(args):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            flow, warped_image = model(input_fixed, input_moving)
+            warped_image, flow,  = model(input_fixed, input_moving)
             flow_hr = flow[0]
             index = batch + 1
 
@@ -51,8 +51,6 @@ def do_test(args):
 
             # MSE
             _mse = MSE(input_fixed, warped_image)
-            # print('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
-
             # _mean, _std = landmark_loss(flow_hr, landmarks00 - torch.tensor(
             #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
             #                             landmarks50 - torch.tensor(
@@ -64,20 +62,20 @@ def do_test(args):
             print('case=%d after warped, TRE=%.5f+-%.5f MSE=%.5f' % (index, _mean.item(), _std.item(), _mse.item()))
 
             # save warped image0
-            m_name = "{}_warped.nii.gz".format(moving[1][:15])
+            m_name = "{}_warped.nii.gz".format(moving[1][0][:13])
             save_image(warped_image, input_fixed, args.output_dir, m_name)
             print("warped images have saved.")
 
-            # Save DVF
-            # b,3,d,h,w-> w,h,d,3  # maybe have sth. wrong, the shape getting from elastix is (d,h,w,3)
-            m2f_name = "{}_dvf.nii.gz".format(moving[1][:15])
-            # save_image(torch.permute(flow[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
+            # # Save DVF
+            # # b,3,d,h,w-> w,h,d,3  # maybe have sth. wrong, the shape getting from elastix is (d,h,w,3)
+            # m2f_name = "{}_dvf.nii.gz".format(moving[1][:15])
+            # # save_image(torch.permute(flow[0], (3, 2, 1, 0)), input_fixed, args.output_dir,
+            # #            m2f_name)
+            #
+            # # b,3,d,h,w-> d,h,w,3
+            # save_image(torch.permute(flow[0], (1, 2, 3, 0)), input_fixed, args.output_dir,
             #            m2f_name)
-
-            # b,3,d,h,w-> d,h,w,3
-            save_image(torch.permute(flow[0], (1, 2, 3, 0)), input_fixed, args.output_dir,
-                       m2f_name)
-            print("dvf have saved.")
+            # print("dvf have saved.")
 
         mean_tre = torch.mean(torch.tensor(losses), 0)[0]
         mean_std = torch.mean(torch.tensor(losses), 0)[1]

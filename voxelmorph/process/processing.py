@@ -190,7 +190,7 @@ def read_dcm_series(dcm_path):
 def img_resmaple(new_spacing, resamplemethod=sitk.sitkLinear, ori_img_file=None, ori_img_path=None):
     """
         @param ori_img_file: sitk.Image
-        @param ori_img_path: 原始的itk图像路径，一般为.mhd 两个参数二选一
+        @param ori_img_path: 原始的itk图像路径，.mhd .nii等 两个参数二选一
         @param target_img_file: 保存路径
         @param new_spacing: 目标重采样的spacing，如[0.585938, 0.585938, 0.4]
         @param resamplemethod: itk插值⽅法: sitk.sitkLinear-线性、sitk.sitkNearestNeighbor-最近邻、sitk.sitkBSpline等，SimpleITK源码中会有各种插值的方法，直接复制调用即可
@@ -339,6 +339,40 @@ def learn2reg_processing(fixed_path, moving_path, **cfg):
         print('case{} done'.format(case))
 
 
+def patient_processing(fixed_path, moving_path, **cfg):
+    patient_path = r'G:\datasets\patient'
+    for patient_name in os.listdir(patient_path):
+        patient_folder = os.path.join(patient_path, patient_name)
+        file_list = sorted([file_name for file_name in os.listdir(patient_folder) if file_name.lower().endswith('.gz')])
+        for file_name in file_list:
+            target_path = moving_path
+            file = os.path.join(patient_folder, file_name)
+            # exp -> fixed insp -> moving
+            if 'ct_5' in file_name:
+                target_path = fixed_path
+
+            # open nii
+            img_nii = sitk.ReadImage(file)
+
+            img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
+                                               , cfg['spacing'],
+                                               cfg['clamp'])
+
+            make_dir(target_path)
+            if target_path == fixed_path:
+                for t in ['00', '01', '02', '03', '04', '06', '07', '08', '09']:
+                    img_name = '%s_T%s.nii.gz' % (patient_name, t)
+                    target_file_path = os.path.join(target_path, img_name)
+                    sitk.WriteImage(img, target_file_path)
+
+            else:
+                phase = int(file_name.split('_')[1].split('.nii')[0])
+                img_name = '%s_T%02d.nii.gz' % (patient_name, phase)
+                target_filepath = os.path.join(target_path, img_name)
+                # if not os.path.exists(target_filepath):
+                sitk.WriteImage(img, target_filepath)
+
+
 def emp10_processing(fixed_path, moving_path, **cfg):
     print("emp10: ")
     emp_path = r'E:\datasets\emp10\emp30'
@@ -358,16 +392,8 @@ def emp10_processing(fixed_path, moving_path, **cfg):
         img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
                                            , cfg['spacing'],
                                            cfg['clamp'])
-        # # resampling
-        # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
+        # if target_path == fixed_path:
         #
-        # # resize HU[0, 900]
-        # img_arr = sitk.GetArrayFromImage(img_nii)
-        # img_arr = img_arr.astype('float32')
-        # img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
-        #                            mode='trilinear',
-        #                            align_corners=False).clamp_(min=-900, max=500)
-        # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
 
         # save
         make_dir(target_path)
@@ -519,84 +545,84 @@ if __name__ == '__main__':
     project_folder = get_project_path("4DCT").split("4DCT")[0]
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    target_fixed_path = r'G:\datasets\registration\train_144\fixed'
-    target_moving_path = r'G:\datasets\registration\train_144\moving'
+    target_fixed_path = r'G:\datasets\registration\patient\fixed'
+    target_moving_path = r'G:\datasets\registration\patient\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    # %% test landmarks
-    # load image
-    import SimpleITK as sitk
-
-    for case in range(1, 11):
-        print('case %d start' % case)
-        # m_file_path = '/home/cqut/project/xxf/test_ori/moving/dirlab_case%02d.nii.gz' % case
-        # f_file_path = '/home/cqut/project/xxf/test_ori/fixed/dirlab_case%02d.nii.gz' % case
-        m_file_path = r'G:\datasets\registration\test_ori\moving\dirlab_case%02d.nii' % case
-        f_file_path = r'G:\datasets\registration\test_ori\fixed\dirlab_case%02d.nii' % case
-
-        m_file = sitk.GetArrayFromImage(sitk.ReadImage(m_file_path))
-        f_file = sitk.GetArrayFromImage(sitk.ReadImage(f_file_path))
-
-        # load landmark
-        from utils.utilize import load_landmarks
-
-        # landmark_list = load_landmarks('/home/cqut/project/xxf/4DCT-R/data/dirlab')
-        landmark_list = load_landmarks(r'D:\Project\4DCT\data\dirlab')
-        case_landmark = landmark_list[case-1]
-        landmark_00 = case_landmark['landmark_00']
-        landmark_50 = case_landmark['landmark_50']
-
-        # crop landmark
-        crop_range_d = dirlab_crop_range[case]["crop_range"][0].start
-        crop_range_h = dirlab_crop_range[case]["crop_range"][1].start
-        crop_range_w = dirlab_crop_range[case]["crop_range"][2].start
-        landmark_00 = landmark_00 - [crop_range_w, crop_range_h, crop_range_d]
-        landmark_50 = landmark_50 - [crop_range_w, crop_range_h, crop_range_d]
-
-        # mov_lmk_int = np.round(np.flip(landmark_00, axis=1)).astype('int32')
-        # ref_lmk_int = np.round(np.flip(landmark_50, axis=1)).astype('int32')
-
-        # lmk_id = 257
-        # lm1_mov = landmark_00[lmk_id]
-        # lm1_ref = landmark_50[lmk_id]
-        #
-        # # visual
-        # from matplotlib import pyplot as plt
-        #
-        # fig, ax = plt.subplots(1, 2)
-        # ax[0].imshow(m_file[lm1_mov[2]], cmap='gray')
-        # ax[0].scatter([lm1_mov[0]], [lm1_mov[1]], 10, color='red')
-        # ax[0].set_title('mov')
-        # ax[1].imshow(f_file[lm1_ref[2]], cmap='gray')
-        # ax[1].scatter([lm1_ref[0]], [lm1_ref[1]], 10, color='red')
-        # ax[1].set_title('ref')
-        # plt.show()
-
-        # load flow
-        # flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
-        flow_path = r'G:\datasets\registration\affine\dirlab_case%02d_output' % case
-        flow_file = os.path.join(flow_path, 'deformationField.nii.gz')
-
-        # d,h,w,3
-        flow_arr = sitk.GetArrayFromImage(sitk.ReadImage(flow_file))
-        flow = flow_arr.transpose(3, 0, 1, 2)
-
-        ref_lmk = landmark_50.copy()
-        for i in range(300):
-            wi, hi, di = landmark_50[i]
-            w0, h0, d0 = flow[:, di, hi, wi]
-            ref_lmk[i] = ref_lmk[i] + [w0, h0, d0]
-
-        tre = torch.tensor(ref_lmk - landmark_00).pow(2).sum(1).sqrt()
-        tre_mean = tre.mean()
-        tre_std = tre.std()
-        print("%.2f+-%.2f" % (tre_mean, tre_std))
-
-        disp_00_50 = (ref_lmk - landmark_00).astype(np.float32)
-        torch.save(disp_00_50, os.path.join(flow_path, 'case%02d_disp_affine.pt' % case))
-
-    # %%
+    # # %% test landmarks
+    # # load image
+    # import SimpleITK as sitk
+    #
+    # for case in range(1, 11):
+    #     print('case %d start' % case)
+    #     # m_file_path = '/home/cqut/project/xxf/test_ori/moving/dirlab_case%02d.nii.gz' % case
+    #     # f_file_path = '/home/cqut/project/xxf/test_ori/fixed/dirlab_case%02d.nii.gz' % case
+    #     m_file_path = r'G:\datasets\registration\test_ori\moving\dirlab_case%02d.nii' % case
+    #     f_file_path = r'G:\datasets\registration\test_ori\fixed\dirlab_case%02d.nii' % case
+    #
+    #     m_file = sitk.GetArrayFromImage(sitk.ReadImage(m_file_path))
+    #     f_file = sitk.GetArrayFromImage(sitk.ReadImage(f_file_path))
+    #
+    #     # load landmark
+    #     from utils.utilize import load_landmarks
+    #
+    #     # landmark_list = load_landmarks('/home/cqut/project/xxf/4DCT-R/data/dirlab')
+    #     landmark_list = load_landmarks(r'D:\Project\4DCT\data\dirlab')
+    #     case_landmark = landmark_list[case-1]
+    #     landmark_00 = case_landmark['landmark_00']
+    #     landmark_50 = case_landmark['landmark_50']
+    #
+    #     # crop landmark
+    #     crop_range_d = dirlab_crop_range[case]["crop_range"][0].start
+    #     crop_range_h = dirlab_crop_range[case]["crop_range"][1].start
+    #     crop_range_w = dirlab_crop_range[case]["crop_range"][2].start
+    #     landmark_00 = landmark_00 - [crop_range_w, crop_range_h, crop_range_d]
+    #     landmark_50 = landmark_50 - [crop_range_w, crop_range_h, crop_range_d]
+    #
+    #     # mov_lmk_int = np.round(np.flip(landmark_00, axis=1)).astype('int32')
+    #     # ref_lmk_int = np.round(np.flip(landmark_50, axis=1)).astype('int32')
+    #
+    #     # lmk_id = 257
+    #     # lm1_mov = landmark_00[lmk_id]
+    #     # lm1_ref = landmark_50[lmk_id]
+    #     #
+    #     # # visual
+    #     # from matplotlib import pyplot as plt
+    #     #
+    #     # fig, ax = plt.subplots(1, 2)
+    #     # ax[0].imshow(m_file[lm1_mov[2]], cmap='gray')
+    #     # ax[0].scatter([lm1_mov[0]], [lm1_mov[1]], 10, color='red')
+    #     # ax[0].set_title('mov')
+    #     # ax[1].imshow(f_file[lm1_ref[2]], cmap='gray')
+    #     # ax[1].scatter([lm1_ref[0]], [lm1_ref[1]], 10, color='red')
+    #     # ax[1].set_title('ref')
+    #     # plt.show()
+    #
+    #     # load flow
+    #     # flow_path = '/home/cqut/project/xxf/deformationField.nii.gz'
+    #     flow_path = r'G:\datasets\registration\affine\dirlab_case%02d_output' % case
+    #     flow_file = os.path.join(flow_path, 'deformationField.nii.gz')
+    #
+    #     # d,h,w,3
+    #     flow_arr = sitk.GetArrayFromImage(sitk.ReadImage(flow_file))
+    #     flow = flow_arr.transpose(3, 0, 1, 2)
+    #
+    #     ref_lmk = landmark_50.copy()
+    #     for i in range(300):
+    #         wi, hi, di = landmark_50[i]
+    #         w0, h0, d0 = flow[:, di, hi, wi]
+    #         ref_lmk[i] = ref_lmk[i] + [w0, h0, d0]
+    #
+    #     tre = torch.tensor(ref_lmk - landmark_00).pow(2).sum(1).sqrt()
+    #     tre_mean = tre.mean()
+    #     tre_std = tre.std()
+    #     print("%.2f+-%.2f" % (tre_mean, tre_std))
+    #
+    #     disp_00_50 = (ref_lmk - landmark_00).astype(np.float32)
+    #     torch.save(disp_00_50, os.path.join(flow_path, 'case%02d_disp_affine.pt' % case))
+    #
+    # # %%
 
     # # %%===================== adjust all registration image=================================
     # size = [144, 144, 144]
@@ -668,11 +694,11 @@ if __name__ == '__main__':
     # learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                      spacing=spacing)
     #
-    # # emp10
+    # emp10
     # clamp = [-750, -100]  # before -900 500
     # crop = None
     # spacing = [1, 1, 1]
-    # emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    # emp10_processing(target_fixed_path, target_moving_path, resize=None, crop=crop, clamp=clamp,
     #                  spacing=spacing)
     #
     # # creatis-popi
@@ -724,12 +750,11 @@ if __name__ == '__main__':
     # imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
     # # 真实病例
-    # img_path = os.path.join(project_folder, f'datasets/4DCT_nii/')
-    # for file_name in os.listdir(img_path):
-    #     mhd_file = os.path.join(img_path, file_name)
-    #     itkimage = sitk.ReadImage(mhd_file)
-    #     ct_value = sitk.GetArrayFromImage(itkimage)  # 这里一定要注意，得到的是[z,y,x]格式
-    #     direction = itkimage.GetDirection()  # mhd文件中的TransformMatrix
-    #     origin = np.array(itkimage.GetOrigin())
-    #     spacing = np.array(itkimage.GetSpacing())  # 文件中的ElementSpacing
-    #     plotorsave_ct_scan(ct_value, "plot")
+    # print("patient: ")
+    # clamp = [-900, 500]
+    # crop = [slice(70, 430), slice(120, 370), slice(None)]
+    # resize = None
+    # spacing = [1, 1, 1]
+    #
+    # patient_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    #                    spacing=spacing)
