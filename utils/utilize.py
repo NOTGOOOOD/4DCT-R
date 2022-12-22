@@ -27,10 +27,10 @@ def save_png(imgs_numpy, save_path, save_name):
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
-def save_model(args, model, optimizer, scheduler, time):
+def save_model(args, model, optimizer, scheduler, time, best_tre):
     model_checkpoint = os.path.join(args.model_dir,
-                                    "{}_size{}_lr{}_channel{}.pth".format(time, args.size, args.lr,
-                                                                          args.initial_channels))
+                                    "{}_size{}_lr{}_best_tre{}.pth".format(time, args.size, args.lr,
+                                                                           best_tre))
     checkpoint = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict() if optimizer else None,

@@ -122,8 +122,10 @@ def train():
             loss = sim_loss + args.alpha * grad_loss
             loss_total.append(loss.item())
 
-            moving_name = moving_file[1][0].split('moving\\')[1] if platform.system().lower() == 'windows' else \
-            moving_file[1][0].split('moving/')[1]
+            moving_name = moving_file[1][0]
+            if 'moving' in moving_name:
+                moving_name = moving_file[1][0].split('moving\\')[1] if platform.system().lower() == 'windows' else \
+                moving_file[1][0].split('moving/')[1]
 
             logging.info("img_name:{}".format(moving_name))
             logging.info("iter: %d batch: %d  loss: %f  sim: %f  grad: %f" % (
@@ -159,15 +161,15 @@ def train():
 
         if mean_tre < best_tre and best_tre - mean_tre > 0.01:
             best_tre = mean_tre
-            save_model(args, model, opt, scheduler, train_time)
+            save_model(args, model, opt, scheduler, train_time, best_tre)
             logging.info("best tre{}".format(losses))
 
         print("iter: %d, mean loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
             i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
 
-        stop_criterion.add(mean_tre.item())
-        if stop_criterion.stop():
-            break
+        # stop_criterion.add(mean_tre.item())
+        # if stop_criterion.stop():
+        #     break
 
 
 if __name__ == "__main__":

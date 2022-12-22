@@ -132,8 +132,7 @@ def train():
 
             loss_total.append(loss.item())
 
-            moving_name = moving_file[1][0].split('moving\\')[1] if platform.system().lower() == 'windows' else \
-            moving_file[1][0].split('moving/')[1]
+            moving_name = moving_file[1][0]
             logging.info("img_name:{}".format(moving_name))
             if args.bidir:
                 logging.info("iter: %d batch: %d  loss: %.5f  sim: %.5f bisim: %.5f  grad: %.5f" % (
