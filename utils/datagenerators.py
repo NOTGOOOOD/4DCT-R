@@ -4,7 +4,7 @@ import SimpleITK as sitk
 import torch
 import torch.utils.data as Data
 import torch.nn.functional as F
-from process.processing import data_standardization_0_n
+from utils.processing import data_standardization_0_n
 
 
 class Dataset(Data.Dataset):
