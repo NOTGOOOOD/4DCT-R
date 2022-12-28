@@ -4,12 +4,12 @@ import torch
 
 dirlab_crop_range = [{},
                      {"case": 1,
-                      "crop_range": [slice(0, 84), slice(43, 199), slice(10, 250)],
+                      "crop_range": [slice(0, 88), slice(40, 200), slice(10, 250)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (94, 256, 256)
                       },
                      {"case": 2,
-                      "crop_range": [slice(5, 101), slice(30, 194), slice(8, 244)],
+                      "crop_range": [slice(5, 101), slice(24, 200), slice(8, 248)],
                       "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
                       "orign_size": (112, 256, 256)
                       },
@@ -19,37 +19,37 @@ dirlab_crop_range = [{},
                       "orign_size": (104, 256, 256)
                       },
                      {"case": 4,
-                      "crop_range": [slice(0, 92), slice(42, 210), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (99, 256, 256)
                       },
                      {"case": 5,
-                      "crop_range": [slice(0, 92), slice(60, 220), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(60, 220), slice(10, 250)],
                       "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
                       "orign_size": (106, 256, 256)
                       },
                      {"case": 6,
-                      "crop_range": [slice(10, 102), slice(144, 328), slice(132, 424)],
+                      "crop_range": [slice(8, 104), slice(144, 328), slice(130, 426)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 7,
-                      "crop_range": [slice(10, 102), slice(144, 328), slice(114, 422)],
+                      "crop_range": [slice(8, 104), slice(144, 328), slice(112, 424)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (136, 512, 512)
                       },
                      {"case": 8,
-                      "crop_range": [slice(18, 118), slice(84, 300), slice(113, 389)],
+                      "crop_range": [slice(16, 120), slice(84, 300), slice(112, 424)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 9,
-                      "crop_range": [slice(0, 72), slice(126, 334), slice(128, 388)],
+                      "crop_range": [slice(0, 96), slice(126, 334), slice(126, 390)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 10,
-                      "crop_range": [slice(0, 92), slice(119, 335), slice(140, 384)],
+                      "crop_range": [slice(0, 96), slice(119, 335), slice(138, 386)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (120, 512, 512)
                       }]
@@ -65,8 +65,8 @@ def get_args():
                         dest="model", choices=['vm', 'gdir', 'dault-prnet'], default='vm')
     parser.add_argument("--result_dir", type=str, help="results folder",
                         dest="result_dir", default='./result/vm')
-    parser.add_argument("--size", type=int, dest="size", default='256')
-    parser.add_argument("--initial_channels", type=int, dest="initial_channels", default='16')
+    parser.add_argument("--size", type=int, dest="size", default='144')
+    parser.add_argument("--initial_channels", type=int, dest="initial_channels", required=True)  # default 16
     parser.add_argument("--bidir", action='store_true')
 
     # train param
@@ -76,7 +76,7 @@ def get_args():
                         dest="lr", default=4e-4)
     parser.add_argument("--n_iter", type=int, help="number of iterations",
                         dest="n_iter", default=500)
-    parser.add_argument("--warmup_steps", type=int, dest="warmup_steps", default=20)
+    parser.add_argument("--warmup_steps", type=int, dest="warmup_steps", default=50)
     parser.add_argument("--sim_loss", type=str, help="image similarity loss: mse or ncc",
                         dest="sim_loss", default='ncc')
     parser.add_argument("--alpha", type=float, help="regularization parameter",
@@ -84,7 +84,7 @@ def get_args():
     parser.add_argument("--batch_size", type=int, help="batch_size",
                         dest="batch_size", default=1)
     parser.add_argument("--n_save_iter", type=int, help="frequency of model saves",
-                        dest="n_save_iter", default=100)
+                        dest="n_save_iter", required=True)
     parser.add_argument("--model_dir", type=str, help="models folder",
                         dest="model_dir", default='./Checkpoint')
     parser.add_argument("--log_dir", type=str, help="logs folder",
@@ -104,7 +104,28 @@ def get_args():
     parser.add_argument("--landmark_dir", type=str, help="landmark directory",
                         dest="landmark_dir", default=r'D:\project\4DCT\data\dirlab')
     parser.add_argument("--checkpoint_path", type=str, help="model weight file",
-                        dest="checkpoint_path", default="./Checkpoint/DIRLAB.pth")
+                        dest="checkpoint_path", default="./Checkpoint/2022-12-06-13-09-25_iter15.pth")
+
+    # LapIRN
+    parser.add_argument("--iteration_lvl1", type=int,
+                        dest="iteration_lvl1", default=30001,
+                        help="number of lvl1 iterations")
+    parser.add_argument("--iteration_lvl2", type=int,
+                        dest="iteration_lvl2", default=30001,
+                        help="number of lvl2 iterations")
+    parser.add_argument("--iteration_lvl3", type=int,
+                        dest="iteration_lvl3", default=60001,
+                        help="number of lvl3 iterations")
+    parser.add_argument("--antifold", type=float,
+                        dest="antifold", default=0.,
+                        help="Anti-fold loss: suggested range 0 to 1000")
+    parser.add_argument("--smooth", type=float,
+                        dest="smooth", default=1.0,
+                        help="Gradient smooth loss: suggested range 0.1 to 10")
+    parser.add_argument("--freeze_step", type=int,
+                        dest="freeze_step", default=2000,
+                        help="Number step for freezing the previous level")
+
 
     args = parser.parse_args()
     args.dirlab_cfg = dirlab_crop_range

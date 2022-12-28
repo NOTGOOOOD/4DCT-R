@@ -2,11 +2,11 @@ import torch
 import torch.utils.data as Data
 import os
 
-from utils.metric import calc_tre, MSE
+from utils.metric import MSE
 from utils.utilize import save_image
 from datagenerators import Dataset
 from voxelmorph.model.regnet import RegNet_pairwise
-from config import get_args
+from utils.config import get_args
 
 
 def do_test(args):

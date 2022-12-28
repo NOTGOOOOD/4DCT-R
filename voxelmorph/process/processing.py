@@ -9,7 +9,7 @@ from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
 
 # import ants
 
-# DIRLAB 4DCT 1-10例的 z y x
+# DIRLAB 4DCT-R 1-10例的 z y x
 dirlab_case_cfg = {
     1: (94, 256, 256),
     2: (112, 256, 256),
@@ -38,12 +38,12 @@ copd_case_cfg = {
 
 dirlab_crop_range = [{},
                      {"case": 1,
-                      "crop_range": [slice(0, 84), slice(43, 199), slice(10, 250)],
+                      "crop_range": [slice(0, 88), slice(40, 200), slice(10, 250)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (94, 256, 256)
                       },
                      {"case": 2,
-                      "crop_range": [slice(5, 101), slice(30, 194), slice(8, 244)],
+                      "crop_range": [slice(5, 101), slice(24, 200), slice(8, 248)],
                       "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
                       "orign_size": (112, 256, 256)
                       },
@@ -53,37 +53,37 @@ dirlab_crop_range = [{},
                       "orign_size": (104, 256, 256)
                       },
                      {"case": 4,
-                      "crop_range": [slice(0, 92), slice(42, 210), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (99, 256, 256)
                       },
                      {"case": 5,
-                      "crop_range": [slice(0, 92), slice(60, 220), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(60, 220), slice(10, 250)],
                       "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
                       "orign_size": (106, 256, 256)
                       },
                      {"case": 6,
-                      "crop_range": [slice(10, 102), slice(144, 328), slice(132, 424)],
+                      "crop_range": [slice(8, 104), slice(144, 328), slice(130, 426)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 7,
-                      "crop_range": [slice(10, 102), slice(144, 328), slice(114, 422)],
+                      "crop_range": [slice(8, 104), slice(144, 328), slice(112, 424)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (136, 512, 512)
                       },
                      {"case": 8,
-                      "crop_range": [slice(18, 118), slice(84, 300), slice(113, 389)],
+                      "crop_range": [slice(16, 120), slice(84, 300), slice(112, 424)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 9,
-                      "crop_range": [slice(0, 72), slice(126, 334), slice(128, 388)],
+                      "crop_range": [slice(0, 96), slice(126, 334), slice(126, 390)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 10,
-                      "crop_range": [slice(0, 92), slice(119, 335), slice(140, 384)],
+                      "crop_range": [slice(0, 96), slice(119, 335), slice(138, 386)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (120, 512, 512)
                       }]
@@ -261,8 +261,9 @@ def dirlab_test(file_folder, m_path, f_path, datatype, shape, case):
                                            [1, 1, 1],
                                            [100, 900])
 
+        case_name = 'dirlab_case%02d.nii.gz' % case
         target_file_path = os.path.join(target_path,
-                                        f"dirlab_case{case}.nii.gz")
+                                        case_name)
 
         sitk.WriteImage(img, target_file_path)
 
@@ -541,15 +542,33 @@ def tcia_processing(fixed_path, moving_path, **cfg):
     print("%d done!!" % patient_no)
 
 
+def aug(img_path):
+    for img_name in os.listdir(img_path):
+        itk_img = sitk.ReadImage(os.path.join(img_path, img_name))
+        img_arr = sitk.GetArrayFromImage(itk_img)
+        img_arr_new = img_arr[:, :, ::-1]
+        img_new = sitk.GetImageFromArray(img_arr_new)
+        img_new_name = 'flip_' + img_name
+        sitk.WriteImage(img_new, os.path.join(img_path, img_new_name))
+
+    print('done !')
+
+
 if __name__ == '__main__':
-    project_folder = get_project_path("4DCT").split("4DCT")[0]
-    # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
-    # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    target_fixed_path = r'G:\datasets\registration\patient\fixed'
-    target_moving_path = r'G:\datasets\registration\patient\moving'
+    project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
+    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed_'
+    target_moving_path = '/home/cqut/project/xxf/train_144/moving_'
+    # target_fixed_path = r'G:\datasets\registration\patient\fixed'
+    # target_moving_path = r'G:\datasets\registration\patient\moving'
+    target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving'
+    target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
+    # # ================Augment================= #
+    # aug(target_fixed_path)
+    # aug(target_moving_path)
+    # # ======================================= #
     # # %% test landmarks
     # # load image
     # import SimpleITK as sitk
@@ -568,7 +587,7 @@ if __name__ == '__main__':
     #     from utils.utilize import load_landmarks
     #
     #     # landmark_list = load_landmarks('/home/cqut/project/xxf/4DCT-R/data/dirlab')
-    #     landmark_list = load_landmarks(r'D:\Project\4DCT\data\dirlab')
+    #     landmark_list = load_landmarks(r'D:\Project\4DCT-R\data\dirlab')
     #     case_landmark = landmark_list[case-1]
     #     landmark_00 = case_landmark['landmark_00']
     #     landmark_50 = case_landmark['landmark_50']
@@ -662,13 +681,13 @@ if __name__ == '__main__':
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
     #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
-    # # dirlab for test
-    # print("dirlab: ")
-    # for item in dirlab_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+    # dirlab for test
+    print("dirlab: ")
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+        dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
     # print("copd: ")

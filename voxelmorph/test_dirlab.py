@@ -6,14 +6,19 @@ from utils.metric import calc_tre, MSE
 from utils.utilize import load_landmarks, save_image
 from datagenerators import TestDataset
 from voxelmorph.model.regnet import RegNet_pairwise
-from config import get_args
+from utils.config import get_args
 
 
 def do_test(args):
+
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
     landmark_list = load_landmarks(args.landmark_dir)
 
     test_fixed_folder = os.path.join(args.test_dir, 'fixed')
     test_moving_folder = os.path.join(args.test_dir, 'moving')
+    # test_moving_folder = os.path.join(args.test_dir, 'affine')
     test_fixed_list = sorted(
         [os.path.join(test_fixed_folder, file_name) for file_name in os.listdir(test_fixed_folder) if
          file_name.lower().endswith('.gz')])
@@ -29,7 +34,7 @@ def do_test(args):
     model = model.to(args.device)
 
     with torch.no_grad():
-        model.eval()
+        model.eval()# m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
         losses = []
         for batch, (moving, fixed, landmarks) in enumerate(test_loader):
             input_moving = moving[0].to('cuda').float()
@@ -48,6 +53,9 @@ def do_test(args):
             _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
                                    landmarks['disp_00_50'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
+            # _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
+            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
+            #                        landmarks['disp_affine'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
             # MSE
             _mse = MSE(input_fixed, warped_image)
@@ -63,6 +71,7 @@ def do_test(args):
 
             # save warped image0
             m_name = "{}_warped.nii.gz".format(moving[1][0][:13])
+            # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
             save_image(warped_image, input_fixed, args.output_dir, m_name)
             print("warped images have saved.")
 

@@ -3,18 +3,18 @@ import warnings
 import platform
 import torch
 import numpy as np
-from torch.optim import Adam, SGD
+from torch.optim import SGD
 import torch.utils.data as Data
 from tqdm import tqdm
 import logging
 import time
 
 from voxelmorph.losses import NCC, mse_loss, gradient_loss
-from config import get_args
+from utils.config import get_args
 from datagenerators import Dataset, TestDataset
-from voxelmorph.model import regnet, vmmodel
+from voxelmorph.model import regnet
 from utils.scheduler import WarmupCosineSchedule, StopCriterion
-from utils.utilize import set_seed, save_image, save_model, load_landmarks
+from utils.utilize import set_seed, save_model, load_landmarks
 from utils.metric import get_test_photo_loss
 
 args = get_args()
@@ -33,6 +33,8 @@ def make_dirs():
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
 
 def train():
@@ -66,7 +68,7 @@ def train():
     # model.train()
     # STN.train()
 
-    model = regnet.RegNet_pairwise(3, scale=1, depth=5, initial_channels=args.initial_channels, normalization=True)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=True)
     model = model.to(device)
     # from torch.utils.tensorboard import SummaryWriter
     # writer = SummaryWriter('runs/voxelmorph')

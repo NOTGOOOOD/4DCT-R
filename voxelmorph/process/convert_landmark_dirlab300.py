@@ -25,7 +25,7 @@ def convert_landmark(project_path):
 
 if __name__ == '__main__':
     # case = 1
-    project_path = get_project_path("4DCT").split("4DCT")[0]
+    project_path = get_project_path("4DCT-R").split("4DCT-R")[0]
     convert_landmark(project_path)
     # landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
     # landmark_info = torch.load(landmark_file)

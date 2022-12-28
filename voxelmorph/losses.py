@@ -8,7 +8,7 @@ import math
 import torch
 import torch.nn as nn
 import numpy as np
-from voxelmorph.config import get_args
+from utils.config import get_args
 import torch.nn.functional as F
 
 args = get_args()

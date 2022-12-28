@@ -28,9 +28,8 @@ def save_png(imgs_numpy, save_path, save_name):
 
 
 def save_model(args, model, optimizer, scheduler, time, best_tre):
-    model_checkpoint = os.path.join(args.model_dir,
-                                    "{}_size{}_lr{}_best_tre{}.pth".format(time, args.size, args.lr,
-                                                                           best_tre))
+    model_name = "%s_size%d_lr%s_best_tre%.5f.pth" % (time, args.size, args.lr, best_tre)
+    model_checkpoint = os.path.join(args.model_dir, model_name)
     checkpoint = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict() if optimizer else None,
@@ -202,4 +201,4 @@ if __name__ == '__main__':
     # img = sitk.GetImageFromArray(img_array[0])
     # scan = sitk.GetArrayFromImage(img)
     # print("1")
-    # dvf_save_nii("4DCT", "result/general_reg/dvf/")
+    # dvf_save_nii("4DCT-R", "result/general_reg/dvf/")

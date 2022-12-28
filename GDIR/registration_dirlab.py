@@ -35,8 +35,8 @@ def preprocess(project_path, cfg):
         case = i
         shape = cfg[i]["orign_size"]
         crop_range = cfg[i]["crop_range"]
-        img_path = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/img/Case{case}Pack/Images')
-        save_path = os.path.join(project_path.split("4DCT")[0], f'datasets/dirlab/mhd_resample/case{case}')
+        img_path = os.path.join(project_path.split("4DCT-R")[0], f'datasets/dirlab/img/Case{case}Pack/Images')
+        save_path = os.path.join(project_path.split("4DCT-R")[0], f'datasets/dirlab/mhd_resample/case{case}')
         make_dir(save_path)
 
         imgTomhd(img_path, save_path, np.int16, shape, case, crop_range, True)

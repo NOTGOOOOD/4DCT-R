@@ -8,7 +8,7 @@ from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
 
 # import ants
 
-# DIRLAB 4DCT 1-10例的 z y x
+# DIRLAB 4DCT-R 1-10例的 z y x
 case_cfg = {
     1: (94, 256, 256),
     2: (112, 256, 256),
@@ -189,7 +189,7 @@ def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
 
 if __name__ == '__main__':
 
-    project_folder = get_project_path("4DCT").split("4DCT")[0]
+    project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
 
     # read_mhd(os.path.join(project_folder, f'datasets/dirlab/Case1Pack/Images_mhd'))
 

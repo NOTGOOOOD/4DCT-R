@@ -14,8 +14,13 @@ def NCC(real, predict):
 
 
 def MSE(real_copy, predict_copy):
+    if torch.is_tensor(real_copy):
     # return mean_squared_error(real_copy, predict_copy)
-    return torch.mean(torch.square(predict_copy - real_copy))
+        real_copy = real_copy.cuda()
+        predict_copy = predict_copy.cuda()
+        return torch.mean(torch.square(predict_copy - real_copy))
+    else:
+        return np.mean(np.square(predict_copy - real_copy))
 
 
 def calc_dirlab(cfg):
@@ -29,7 +34,7 @@ def calc_dirlab(cfg):
     -------
 
     """
-    project_path = get_project_path("4DCT")
+    project_path = get_project_path("4DCT-R")
     diff = [], landmark00 = []
     for case in range(1, 11):
         landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
@@ -98,8 +103,8 @@ def get_test_photo_loss(args, logger, model, test_loader):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            # warped_image, flow = model(m_img, f_img, True)
-            warped_image, flow = model(m_img, f_img)
+            warped_image, flow = model(m_img, f_img, True)
+            # warped_image, flow = model(m_img, f_img)
             flow_hr = flow[0]
             index = batch + 1
 

@@ -175,7 +175,7 @@ if __name__ == "__main__":
     import os
     from GDIR.process.processing import data_standardization_0_255
 
-    project_folder = ut.get_project_path("4DCT").split("4DCT")[0]
+    project_folder = ut.get_project_path("4DCT-R").split("4DCT-R")[0]
     img_path = os.path.join(project_folder, f'datasets/dirlab/Case4Pack/Images')
     for file_name in os.listdir(img_path):
         file_path = os.path.join(img_path, file_name)

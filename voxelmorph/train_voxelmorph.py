@@ -1,6 +1,5 @@
 import os
 import warnings
-import platform
 import torch
 import numpy as np
 import torch.utils.data as Data
@@ -8,12 +7,12 @@ from tqdm import tqdm
 import logging
 import time
 
-from config import get_args
+from utils.config import get_args
 from datagenerators import Dataset, TestDataset
 from voxelmorph.vmmodel import vmnetwork
-from voxelmorph.vmmodel.losses import NCC, Grad, MSE
+from voxelmorph.vmmodel.losses import Grad, MSE
 from voxelmorph.losses import NCC as NCC_new
-from utils.utilize import set_seed, load_landmarks, save_model
+from utils.utilize import set_seed, load_landmarks
 from utils.scheduler import WarmupCosineSchedule
 from utils.metric import get_test_photo_loss
 
@@ -69,7 +68,7 @@ def train():
 
     # Set optimizer and losses
     # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
     # prepare image loss
     if args.sim_loss == 'ncc':
         # image_loss_func = NCC([args.win_size]*3).loss

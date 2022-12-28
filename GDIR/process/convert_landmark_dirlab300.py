@@ -11,7 +11,7 @@ def convert_landmark(project_path):
         rigid_disp_filename = 'dirlab_case%02d_disp_rigid.pt' % case
         affine_disp_filename = 'dirlab_case%02d_disp_affine.pt' % case
 
-        landmark_path = os.path.join(project_path, 'datasets/dirlab/Case%dPack/ExtremePhases' % case)
+        landmark_path = os.path.join(project_path, 'datasets/dirlab/img/Case%dPack/ExtremePhases' % case)
         landmark_00_file = os.path.join(landmark_path, 'Case%d_300_T00_xyz.txt' % case)
         landmark_50_file = os.path.join(landmark_path, 'Case%d_300_T50_xyz.txt' % case)
         landmark_00 = np.genfromtxt(landmark_00_file, dtype=np.int64) - 1  # change to 0-based indexing
@@ -31,7 +31,7 @@ def convert_landmark(project_path):
 
 if __name__ == '__main__':
     # case = 1
-    project_path = get_project_path("4DCT").split("4DCT")[0]
+    project_path = get_project_path("4DCT-R").split("4DCT-R")[0]
     convert_landmark(project_path)
     # landmark_file = os.path.join(project_path, f'data/dirlab/Case{case}_300_00_50.pt')
     # landmark_info = torch.load(landmark_file)
