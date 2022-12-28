@@ -4,7 +4,7 @@ import os
 
 from utils.metric import calc_tre, MSE
 from utils.utilize import load_landmarks, save_image
-from datagenerators import TestDataset
+from utils.datagenerators import TestDataset
 from voxelmorph.model.regnet import RegNet_pairwise
 from utils.config import get_args
 

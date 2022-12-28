@@ -11,7 +11,7 @@ import time
 
 from voxelmorph.losses import NCC, mse_loss, gradient_loss
 from utils.config import get_args
-from datagenerators import Dataset, TestDataset
+from utils.datagenerators import Dataset, TestDataset
 from voxelmorph.model import regnet
 from utils.scheduler import WarmupCosineSchedule, StopCriterion
 from utils.utilize import set_seed, save_model, load_landmarks

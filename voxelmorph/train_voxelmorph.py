@@ -8,7 +8,7 @@ import logging
 import time
 
 from utils.config import get_args
-from datagenerators import Dataset, TestDataset
+from utils.datagenerators import Dataset, TestDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from voxelmorph.losses import NCC as NCC_new

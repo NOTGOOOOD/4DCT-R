@@ -12,7 +12,7 @@ from Functions import generate_grid, Dataset_epoch, transform_unit_flow_to_flow_
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
     SpatialTransformNearest_unit, smoothloss, neg_Jdet_loss, NCC, multi_resolution_NCC
-from datagenerator import Dataset
+from utils.datagenerators import Dataset
 from utils.config import get_args
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
