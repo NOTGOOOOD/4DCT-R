@@ -68,6 +68,8 @@ def get_args():
     parser.add_argument("--size", type=int, dest="size", default='144')
     parser.add_argument("--initial_channels", type=int, dest="initial_channels", required=True)  # default 16
     parser.add_argument("--bidir", action='store_true')
+    parser.add_argument("--val_dir", type=str, help="data folder with validation",
+                        dest="val_dir", default=r"C:\datasets\registration\val")
 
     # train param
     parser.add_argument("--train_dir", type=str, help="data folder with training",
@@ -84,7 +86,7 @@ def get_args():
     parser.add_argument("--batch_size", type=int, help="batch_size",
                         dest="batch_size", default=1)
     parser.add_argument("--n_save_iter", type=int, help="frequency of model saves",
-                        dest="n_save_iter", required=True)
+                        dest="n_save_iter", default=1)
     parser.add_argument("--model_dir", type=str, help="models folder",
                         dest="model_dir", default='./Checkpoint')
     parser.add_argument("--log_dir", type=str, help="logs folder",

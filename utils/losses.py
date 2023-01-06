@@ -21,20 +21,20 @@ class NCC(nn.Module):
     ----------
     dim : int
         Dimension of the input images.
-    windows_size : int
+    win : int
         Side length of the square window to calculate the local NCC.
     '''
 
-    def __init__(self, dim, windows_size=11):
+    def __init__(self, dim=3, win=11):
         super().__init__()
         assert dim in (2, 3)
         self.dim = dim
         self.num_stab_const = 1e-4  # numerical stability constant
 
-        self.windows_size = windows_size
+        self.win = win
 
-        self.pad = windows_size // 2
-        self.window_volume = windows_size ** self.dim
+        self.pad = win // 2
+        self.window_volume = win ** self.dim
         if self.dim == 2:
             self.conv = F.conv2d
         elif self.dim == 3:
@@ -46,7 +46,7 @@ class NCC(nn.Module):
         ----------
         I and J : (n, 1, h, w) or (n, 1, d, h, w)
             Torch tensor of same shape. The number of image in the first dimension can be different, in which broadcasting will be used.
-        windows_size : int
+        win : int
             Side length of the square window to calculate the local NCC.
 
         Returns
@@ -57,7 +57,7 @@ class NCC(nn.Module):
         try:
             I_sum = self.conv(I, self.sum_filter, padding=self.pad)
         except:
-            self.sum_filter = torch.ones([1, 1] + [self.windows_size, ] * self.dim, dtype=I.dtype, device=I.device)
+            self.sum_filter = torch.ones([1, 1] + [self.win, ] * self.dim, dtype=I.dtype, device=I.device)
             I_sum = self.conv(I, self.sum_filter, padding=self.pad)
 
         J_sum = self.conv(J, self.sum_filter, padding=self.pad)  # (n, 1, h, w) or (n, 1, d, h, w)

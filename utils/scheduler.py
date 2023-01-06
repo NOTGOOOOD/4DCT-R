@@ -5,24 +5,41 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, stop_std=0.001, query_len=100):
-        self.query_len = query_len
-        self.stop_std = stop_std
-        self.loss_list = []
+    def __init__(self, patient_len=9):
+        """
+        Parameters
+        ----------
+        patient_len patient list to stop
+        """
+        self.patient_len = patient_len
+        self.ori_len = patient_len
+        self.ncc_loss_list = []
+        self.mse_loss_list = []
         self.loss_min = 30.
 
-    def add(self, loss):
-        self.loss_list.append(loss)
-        if loss < self.loss_min:
-            self.loss_min = loss
-            self.loss_min_i = len(self.loss_list)
+    def add(self, ncc_loss, mse_loss=None):
+        self.ncc_loss_list.append(ncc_loss)
+        if mse_loss is not None:
+            self.mse_loss_list.append(mse_loss)
+
+        if ncc_loss < self.loss_min:
+            self.loss_min = ncc_loss
+            self.loss_min_i = len(self.ncc_loss_list)
+            self.patient_len = self.ori_len
+
+        else:
+            self.patient_len = self.patient_len - 1
 
     def stop(self):
         # return True if the stop creteria are met
-        query_list = self.loss_list[-self.query_len:]
-        query_std = np.std(query_list)
-        print("query_std: %.5f" % query_std)
-        if query_std < self.stop_std and len(self.loss_list) > self.loss_min_i:
+        query_ncc_list = self.ncc_loss_list[-6:]
+        query_mse_lisst = self.mse_loss_list[-6:]
+        std_ncc = np.std(query_ncc_list)
+        std_mse = np.std(query_mse_lisst)
+
+        # length of patient <=0,and current epoch have no improve
+        if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i) or (
+                std_ncc < 0.001 and std_mse < 0.001 and len(self.ncc_loss_list) > self.loss_min_i):
             return True
         else:
             return False

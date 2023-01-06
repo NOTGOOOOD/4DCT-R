@@ -73,23 +73,39 @@ def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
 def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
     # flow + fixed - moving
     spec = torch.tensor(spacing).cuda()
+
     all_dist = []
+    # zz, yy, xx = flow[0].shape
+    # flow[2, :, :, :] = flow[2, :, :, :] * (zz - 1)/2
+    # flow[1, :, :, :] = flow[1, :, :, :] * (yy - 1)/2
+    # flow[0, :, :, :] = flow[0, :, :, :] * (xx - 1)/2
     for i in range(300):
         # point before warped
-        f_point = f_landmarks[0, i].int()
-        m_point = m_landmarks[0, i].int()
+        f_point = f_landmarks[i].int()
+        # m_point = m_landmarks[i].int()
 
         # point at flow
         move = flow[:, f_point[2], f_point[1], f_point[0]]
         # point after warped
         ori_point = torch.round(f_point + move)
-        dist = ori_point - m_landmarks[0, i]
+        dist = ori_point - m_landmarks[i]
         all_dist.append(dist * spec)
 
     all_dist = torch.stack(all_dist)
     pt_errs_phys = torch.sqrt(torch.sum(all_dist * all_dist, 1))
 
     return torch.mean(pt_errs_phys), torch.std(pt_errs_phys)
+
+    #     ref_lmk = landmark_50.copy()
+    #     for i in range(300):
+    #         wi, hi, di = landmark_50[i]
+    #         w0, h0, d0 = flow[:, di, hi, wi]
+    #         ref_lmk[i] = ref_lmk[i] + [w0, h0, d0]
+    #
+    #     tre = torch.tensor(ref_lmk - landmark_00).pow(2).sum(1).sqrt()
+    #     tre_mean = tre.mean()
+    #     tre_std = tre.std()
+    #     print("%.2f+-%.2f" % (tre_mean, tre_std))
 
 
 def get_test_photo_loss(args, logger, model, test_loader):

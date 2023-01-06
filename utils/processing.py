@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 
 from utils.utilize import plotorsave_ct_scan, get_project_path, make_dir
+from utils.config import get_args
 
 # import ants
 
@@ -35,58 +36,6 @@ copd_case_cfg = {
     9: (116, 512, 512),
     10: (135, 512, 512),
 }
-
-dirlab_crop_range = [{},
-                     {"case": 1,
-                      "crop_range": [slice(0, 88), slice(40, 200), slice(10, 250)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (94, 256, 256)
-                      },
-                     {"case": 2,
-                      "crop_range": [slice(5, 101), slice(24, 200), slice(8, 248)],
-                      "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
-                      "orign_size": (112, 256, 256)
-                      },
-                     {"case": 3,
-                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
-                      "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
-                      "orign_size": (104, 256, 256)
-                      },
-                     {"case": 4,
-                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (99, 256, 256)
-                      },
-                     {"case": 5,
-                      "crop_range": [slice(0, 96), slice(60, 220), slice(10, 250)],
-                      "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
-                      "orign_size": (106, 256, 256)
-                      },
-                     {"case": 6,
-                      "crop_range": [slice(8, 104), slice(144, 328), slice(130, 426)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (128, 512, 512)
-                      },
-                     {"case": 7,
-                      "crop_range": [slice(8, 104), slice(144, 328), slice(112, 424)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (136, 512, 512)
-                      },
-                     {"case": 8,
-                      "crop_range": [slice(16, 120), slice(84, 300), slice(112, 424)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (128, 512, 512)
-                      },
-                     {"case": 9,
-                      "crop_range": [slice(0, 96), slice(126, 334), slice(126, 390)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (128, 512, 512)
-                      },
-                     {"case": 10,
-                      "crop_range": [slice(0, 96), slice(119, 335), slice(138, 386)],
-                      "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-                      "orign_size": (120, 512, 512)
-                      }]
 
 
 def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, resample=None, clamp=None):
@@ -237,7 +186,7 @@ def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     return itkimgResampled
 
 
-def dirlab_test(file_folder, m_path, f_path, datatype, shape, case):
+def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
     for file_name in os.listdir(file_folder):
         if 'T00' in file_name:
             target_path = m_path
@@ -257,9 +206,9 @@ def dirlab_test(file_folder, m_path, f_path, datatype, shape, case):
         img = sitk.GetImageFromArray(file)
 
         img = crop_resampling_resize_clamp(img, None,
-                                           dirlab_crop_range[case]['crop_range'][::-1],
+                                           args.dirlab_cfg[case]['crop_range'][::-1],
                                            [1, 1, 1],
-                                           [100, 900])
+                                           [0, 900])
 
         case_name = 'dirlab_case%02d.nii.gz' % case
         target_file_path = os.path.join(target_path,
@@ -564,6 +513,10 @@ if __name__ == '__main__':
     target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
+    make_dir(target_test_moving_path)
+    make_dir(target_test_fixed_path)
+
+    args = get_args()
 
     # # ================Augment================= #
     # aug(target_fixed_path)
@@ -593,9 +546,9 @@ if __name__ == '__main__':
     #     landmark_50 = case_landmark['landmark_50']
     #
     #     # crop landmark
-    #     crop_range_d = dirlab_crop_range[case]["crop_range"][0].start
-    #     crop_range_h = dirlab_crop_range[case]["crop_range"][1].start
-    #     crop_range_w = dirlab_crop_range[case]["crop_range"][2].start
+    #     crop_range_d = args.dirlab_cfg[case]["crop_range"][0].start
+    #     crop_range_h = args.dirlab_cfg[case]["crop_range"][1].start
+    #     crop_range_w = args.dirlab_cfg[case]["crop_range"][2].start
     #     landmark_00 = landmark_00 - [crop_range_w, crop_range_h, crop_range_d]
     #     landmark_50 = landmark_50 - [crop_range_w, crop_range_h, crop_range_d]
     #
@@ -687,7 +640,7 @@ if __name__ == '__main__':
         case = item[0]
         shape = item[1]
         img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-        dirlab_test(img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
     # print("copd: ")

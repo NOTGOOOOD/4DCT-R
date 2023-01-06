@@ -41,7 +41,7 @@ class Dataset(Data.Dataset):
             print("=================================================")
             # raise ValueError
 
-        return [m_img, m_name], [f_img, f_name]
+        return [[m_img, m_name], [f_img, f_name]]
 
 
 class TestDataset(Data.Dataset):
@@ -56,8 +56,6 @@ class TestDataset(Data.Dataset):
         return len(self.moving_files)
 
     def __getitem__(self, index):
-        # 索引数据集中的某个数据，还可以对数据进行预处理
-        # 下标index参数是必须有的，名字任意
         m_img = sitk.GetArrayFromImage(sitk.ReadImage(self.moving_files[index]))[np.newaxis, ...]
         m_img = data_standardization_0_n(1, m_img)
 
@@ -65,9 +63,8 @@ class TestDataset(Data.Dataset):
         f_img = data_standardization_0_n(1, f_img)
 
         m_name = self.moving_files[index].split('moving\\')[1] if platform.system().lower() == 'windows' else \
-        self.moving_files[index].split('moving/')[1]
+            self.moving_files[index].split('moving/')[1]
         f_name = self.fixed_files[index].split('fixed\\')[1] if platform.system().lower() == 'windows' else \
-        self.fixed_files[index].split('fixed/')[1]
+            self.fixed_files[index].split('fixed/')[1]
 
-        return [[m_img, m_name], [f_img, f_name], self.landmark_files[index]] if self.landmark_files is not None else [[
-            m_img, m_name], [f_img, f_name]]
+        return m_img, f_img, self.landmark_files[index], m_name
