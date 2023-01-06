@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from Functions import generate_grid_unit
+from utils.losses import NCC
 
 
 class Miccai2020_LDR_laplacian_unit_add_lvl1(nn.Module):
@@ -424,6 +425,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         cat_input = self.down_avg(cat_input)
         cat_input_lvl1 = self.down_avg(cat_input)
 
+        down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
@@ -431,7 +433,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
-        warpped_inputx_lvl1_out = self.transform(x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -548,7 +550,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         e0 = self.up(e0)
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         compose_field_e0_lvl1 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl1_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(x_down, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -757,13 +759,13 @@ def neg_Jdet_loss(y_pred, sample_grid):
     return torch.mean(selected_neg_Jdet)
 
 
-class NCC(torch.nn.Module):
+class NCC_bak(torch.nn.Module):
     """
     local (over window) normalized cross correlation
     """
 
     def __init__(self, win=5, eps=1e-8):
-        super(NCC, self).__init__()
+        super(NCC_bak, self).__init__()
         self.win = win
         self.eps = eps
         self.w_temp = win

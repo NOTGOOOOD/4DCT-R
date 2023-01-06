@@ -26,19 +26,24 @@ def generate_grid_unit(imgshape):
 
 
 def transform_unit_flow_to_flow(flow):
-    x, y, z, _ = flow.shape
-    flow[:, :, :, 0] = flow[:, :, :, 0] * (z-1)/2
-    flow[:, :, :, 1] = flow[:, :, :, 1] * (y-1)/2
-    flow[:, :, :, 2] = flow[:, :, :, 2] * (x-1)/2
+    _, z, y, x = flow.shape
+
+    flow[2, :, :, :] = flow[2, :, :, :] * (z - 1) / 2
+    flow[1, :, :, :] = flow[1, :, :, :] * (y - 1) / 2
+    flow[0, :, :, :] = flow[0, :, :, :] * (x - 1) / 2
+    # z, y, x, _ = flow.shape
+    # flow[:, :, :, 2] = flow[:, :, :, 2] * (z-1)/2
+    # flow[:, :, :, 1] = flow[:, :, :, 1] * (y-1)/2
+    # flow[:, :, :, 0] = flow[:, :, :, 0] * (x-1)/2
 
     return flow
 
 
 def transform_unit_flow_to_flow_cuda(flow):
     b, x, y, z, c = flow.shape
-    flow[:, :, :, :, 0] = flow[:, :, :, :, 0] * (z-1)/2
-    flow[:, :, :, :, 1] = flow[:, :, :, :, 1] * (y-1)/2
-    flow[:, :, :, :, 2] = flow[:, :, :, :, 2] * (x-1)/2
+    flow[:, :, :, :, 0] = flow[:, :, :, :, 0] * (z - 1) / 2
+    flow[:, :, :, :, 1] = flow[:, :, :, :, 1] * (y - 1) / 2
+    flow[:, :, :, :, 2] = flow[:, :, :, :, 2] * (x - 1) / 2
 
     return flow
 
@@ -134,8 +139,9 @@ class Dataset_epoch(Data.Dataset):
 
 
 class Dataset_epoch_validation(Data.Dataset):
-  'Characterizes a dataset for PyTorch'
-  def __init__(self, imgs, labels, norm=False):
+    'Characterizes a dataset for PyTorch'
+
+    def __init__(self, imgs, labels, norm=False):
         'Initialization'
         super(Dataset_epoch_validation, self).__init__()
 
@@ -145,11 +151,11 @@ class Dataset_epoch_validation(Data.Dataset):
         self.imgs_pair = list(itertools.permutations(imgs, 2))
         self.labels_pair = list(itertools.permutations(labels, 2))
 
-  def __len__(self):
+    def __len__(self):
         'Denotes the total number of samples'
         return len(self.imgs_pair)
 
-  def __getitem__(self, step):
+    def __getitem__(self, step):
         'Generates one sample of data'
         # Select sample
         img_A = load_4D(self.imgs_pair[step][0])
@@ -162,9 +168,11 @@ class Dataset_epoch_validation(Data.Dataset):
         # print(self.index_pair[step][1])
 
         if self.norm:
-            return torch.from_numpy(imgnorm(img_A)).float(), torch.from_numpy(imgnorm(img_B)).float(), torch.from_numpy(label_A).float(), torch.from_numpy(label_B).float()
+            return torch.from_numpy(imgnorm(img_A)).float(), torch.from_numpy(imgnorm(img_B)).float(), torch.from_numpy(
+                label_A).float(), torch.from_numpy(label_B).float()
         else:
-            return torch.from_numpy(img_A).float(), torch.from_numpy(img_B).float(), torch.from_numpy(label_A).float(), torch.from_numpy(label_B).float()
+            return torch.from_numpy(img_A).float(), torch.from_numpy(img_B).float(), torch.from_numpy(
+                label_A).float(), torch.from_numpy(label_B).float()
 
 
 class Predict_dataset(Data.Dataset):
