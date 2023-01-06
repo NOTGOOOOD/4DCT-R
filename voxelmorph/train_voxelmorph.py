@@ -11,7 +11,7 @@ from utils.config import get_args
 from utils.datagenerators import Dataset, TestDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
-from voxelmorph.losses import NCC as NCC_new
+from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks
 from utils.scheduler import WarmupCosineSchedule
 from utils.metric import get_test_photo_loss

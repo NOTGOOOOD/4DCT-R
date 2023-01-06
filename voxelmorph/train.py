@@ -9,7 +9,7 @@ from tqdm import tqdm
 import logging
 import time
 
-from voxelmorph.losses import NCC, mse_loss, gradient_loss
+from utils.losses import NCC, mse_loss, gradient_loss
 from utils.config import get_args
 from utils.datagenerators import Dataset, TestDataset
 from voxelmorph.model import regnet
@@ -87,7 +87,7 @@ def train():
 
     # set scheduler
     scheduler = WarmupCosineSchedule(opt, warmup_steps=args.warmup_steps, t_total=args.n_iter)
-    stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
+    stop_criterion = StopCriterion()
 
     # load data
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
