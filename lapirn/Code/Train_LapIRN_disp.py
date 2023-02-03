@@ -152,6 +152,7 @@ def train_lvl1():
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(best_loss)
+            logging.info("save model:{}".format(modelname))
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
@@ -262,11 +263,11 @@ def train_lvl2():
             logging.info("modelv2, iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
-            if batch == 0:
-                m_name = str(step) + 'warped_' + moving[1][0]
-                save_image(X_Y, Y, args.output_dir, m_name)
-                m_name = str(step) + 'fixed_' + moving[1][0]
-                save_image(Y_4x, Y, args.output_dir, m_name)
+            # if batch == 0:
+            #     m_name = str(step) + 'warped_' + moving[1][0]
+            #     save_image(X_Y, Y, args.output_dir, m_name)
+            #     m_name = str(step) + 'fixed_' + moving[1][0]
+            #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
         val_ncc_loss, val_mse_loss = validation(args, model, imgshape_2, loss_similarity, step)
@@ -275,6 +276,7 @@ def train_lvl2():
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(best_loss)
+            logging.info("save model:{}".format(modelname))
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
@@ -284,6 +286,9 @@ def train_lvl2():
         stop_criterion.add(val_ncc_loss, val_mse_loss)
         if stop_criterion.stop():
             break
+
+        if step == freeze_step:
+            model.unfreeze_modellvl1()
 
         step += 1
         if step > iteration_lvl2:
@@ -401,11 +406,11 @@ def train_lvl3():
             logging.info("modelv3, iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
-            if batch == 0:
-                m_name = 'l3_' + str(step) + 'moving_' + moving[1][0]
-                save_image(X_Y, Y, args.output_dir, m_name)
-                m_name = 'l3_' + str(step) + 'fixed_' + moving[1][0]
-                save_image(Y_4x, Y, args.output_dir, m_name)
+            # if batch == 0:
+            #     m_name = 'l3_' + str(step) + 'moving_' + moving[1][0]
+            #     save_image(X_Y, Y, args.output_dir, m_name)
+            #     m_name = 'l3_' + str(step) + 'fixed_' + moving[1][0]
+            #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
         val_ncc_loss, val_mse_loss = validation(args, model, imgshape, loss_similarity, step)
@@ -414,8 +419,8 @@ def train_lvl3():
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
-            modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
-                best_loss)
+            modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(best_loss)
+            logging.info("save model:{}".format(modelname))
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
@@ -425,6 +430,9 @@ def train_lvl3():
         stop_criterion.add(val_ncc_loss, val_mse_loss)
         if stop_criterion.stop():
             break
+
+        if step == freeze_step:
+            model.unfreeze_modellvl2()
 
         step += 1
         if step > iteration_lvl3:
@@ -436,7 +444,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_NCC_reg_".format(train_time)
+    model_name = "{}_NCC_reg_disp_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',

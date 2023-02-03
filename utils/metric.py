@@ -139,3 +139,4 @@ def get_test_photo_loss(args, logger, model, test_loader):
             logger.info('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
         return losses
+

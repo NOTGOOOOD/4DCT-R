@@ -121,13 +121,12 @@ def get_args():
     parser.add_argument("--antifold", type=float,
                         dest="antifold", default=0.,
                         help="Anti-fold loss: suggested range 0 to 1000")
-    parser.add_argument("--smooth", type=float,
+    parser.add_argument("--smooth", type=float, choices=[1.0, 3.5],
                         dest="smooth", default=1.0,
-                        help="Gradient smooth loss: suggested range 0.1 to 10")
+                        help="Gradient smooth loss: suggested range 0.1 to 10, diff use 3.5 ")
     parser.add_argument("--freeze_step", type=int,
                         dest="freeze_step", default=2000,
                         help="Number step for freezing the previous level")
-
 
     args = parser.parse_args()
     args.dirlab_cfg = dirlab_crop_range

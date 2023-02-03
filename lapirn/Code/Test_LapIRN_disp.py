@@ -2,21 +2,18 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as Data
-import SimpleITK as sitk
 
 from Functions import generate_grid_unit, transform_unit_flow_to_flow
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
-    multi_resolution_NCC, neg_Jdet_loss
+    neg_Jdet_loss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import calc_tre, MSE, landmark_loss
-from utils.losses import NCC
 from utils.datagenerators import TestDataset, Dataset
 
 
 def validation(args, model, imgshape, loss_similarity, step):
-    # range_flow = 0.4
 
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
@@ -145,6 +142,8 @@ def test_single(args):
 
             # MSE
             _mse = MSE(fixed_img, X_Y)
+
+            # TRE
             _mean, _std = landmark_loss(F_X_Y[0], landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
                                         landmarks50 - torch.tensor(
@@ -152,7 +151,7 @@ def test_single(args):
                                                                                                                   3).cuda(),
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
-            losses.append([_mean.item(), _std.item(), _mse.item()])
+            losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
             print('case=%d after warped, TRE=%.5f+-%.5f MSE=%.5f Jac=%.6f' % (batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
 
             # Save DVF
@@ -164,6 +163,12 @@ def test_single(args):
             # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
             save_image(X_Y, fixed_img, args.output_dir, m_name)
 
+    mean_total = np.mean(losses, 0)
+    mean_tre = mean_total[0]
+    mean_std = mean_total[1]
+    mean_mse = mean_total[2]
+    mean_jac = mean_total[3]
+    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre,mean_std, mean_mse, mean_jac))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):

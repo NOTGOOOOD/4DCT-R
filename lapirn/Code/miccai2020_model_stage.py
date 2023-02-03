@@ -428,7 +428,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
+        # two 3^3 3D conv layer with stride 1
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
+        # one 3^3 3D conv layer with stride 2
         e0 = self.down_conv(fea_e0)
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
@@ -538,7 +540,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         y_down = self.down_avg(y)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
-
+        # correlation_layer = F.conv3D(torch.cat(warpped_x, y_down), torch.ones([1,1]+[3,]*3, dtype=I.dtype, device=I.device), padding=1)
         cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
@@ -649,8 +651,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         lvl2_disp, _, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(x, y)
         lvl2_disp_up = self.up_tri(lvl2_disp)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
-
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+        # cat_input = torch.cat((y, lvl2_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input)
         e0 = self.down_conv(fea_e0)

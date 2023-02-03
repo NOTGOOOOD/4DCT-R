@@ -252,13 +252,19 @@ def copd_processing(img_path, target_path, datatype, shape, case, **cfg):
 
 def learn2reg_processing(fixed_path, moving_path, **cfg):
     print("learn2reg: ")
-    l2r_path = r'E:\datasets\Learn2Reg\all'
+    # l2r_path = r'E:\datasets\Learn2Reg\all'
+    l2r_path = '/home/cqut/project/xxf/Learn2Reg'
 
-    for file_name in os.listdir(l2r_path):
+    file_list = sorted([file_name for file_name in os.listdir(l2r_path) if file_name.lower().endswith('.gz')])
+
+    for file_name in file_list:
         target_path = moving_path
         file = os.path.join(l2r_path, file_name)
         # exp -> fixed insp -> moving
-        if 'exp' in file_name:
+        file_prefix = file_name[:11]
+        file_suffix = file_name.split('_')[2]
+
+        if '0000' in file_suffix:
             target_path = fixed_path
 
         # open nii
@@ -267,26 +273,13 @@ def learn2reg_processing(fixed_path, moving_path, **cfg):
         img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
                                            , cfg['spacing'],
                                            cfg['clamp'])
-
-        # # resampling
-        # img_nii = img_resmaple([0.6, 0.6, 0.6], ori_img_file=img_nii)
-        #
-        # # resize HU[0, 900]
-        # img_arr = sitk.GetArrayFromImage(img_nii)
-        # img_arr = img_arr.astype('float32')
-        # img_tensor = F.interpolate(torch.tensor(img_arr).unsqueeze(0).unsqueeze(0), size=[144, 256, 256],
-        #                            mode='trilinear',
-        #                            align_corners=False).clamp_(min=0, max=900)
-        # img = sitk.GetImageFromArray(np.array(img_tensor)[0, 0, ...])
-
         # save
         make_dir(target_path)
-        case = file_name.split('_')[1]
         target_filepath = os.path.join(target_path,
-                                       f"l2r_case{case}.nii.gz")
+                                       "{}.nii.gz".format(file_prefix))
         # if not os.path.exists(target_filepath):
         sitk.WriteImage(img, target_filepath)
-        print('case{} done'.format(case))
+        print('case{} done'.format(file_prefix))
 
 
 def patient_processing(fixed_path, moving_path, **cfg):
@@ -297,7 +290,6 @@ def patient_processing(fixed_path, moving_path, **cfg):
         for file_name in file_list:
             target_path = moving_path
             file = os.path.join(patient_folder, file_name)
-            # exp -> fixed insp -> moving
             if 'ct_5' in file_name:
                 target_path = fixed_path
 
@@ -332,7 +324,6 @@ def emp10_processing(fixed_path, moving_path, **cfg):
     for file_name in file_list:
         target_path = moving_path
         file = os.path.join(emp_path, file_name)
-        # exp -> fixed insp -> moving
         if 'Fixed' in file_name:
             target_path = fixed_path
 
@@ -503,24 +494,57 @@ def aug(img_path):
     print('done !')
 
 
+def NLST_processing(fixed_path, moving_path, **cfg):
+    print("NLST: ")
+    nlst_path = r'/home/cqut/project/xxf/datasets/NLST_testdata/imagesTs'
+
+    file_list = sorted([file_name for file_name in os.listdir(nlst_path) if file_name.lower().endswith('.gz')])
+
+    for file_name in file_list:
+        target_path = moving_path
+        file = os.path.join(nlst_path, file_name)
+        # exp -> fixed insp -> moving
+        file_prefix = file_name[:9]
+        file_suffix = file_name.split('_')[2]
+
+        if '0000' in file_suffix:
+            target_path = fixed_path
+
+        # open nii
+        img_nii = sitk.ReadImage(file)
+
+        img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
+                                           , cfg['spacing'],
+                                           cfg['clamp'])
+        # save
+        make_dir(target_path)
+        target_filepath = os.path.join(target_path,
+                                       "{}.nii.gz".format(file_prefix))
+        # if not os.path.exists(target_filepath):
+        sitk.WriteImage(img, target_filepath)
+        print('case{} done'.format(file_prefix))
+
+
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
-    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed_'
-    target_moving_path = '/home/cqut/project/xxf/train_144/moving_'
+    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed_bak'
+    target_moving_path = '/home/cqut/project/xxf/train_144/moving_bak'
     # target_fixed_path = r'G:\datasets\registration\patient\fixed'
     # target_moving_path = r'G:\datasets\registration\patient\moving'
-    target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving'
-    target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
+    # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
+    # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
-    make_dir(target_test_moving_path)
-    make_dir(target_test_fixed_path)
+    # make_dir(target_test_moving_path)
+    # make_dir(target_test_fixed_path)
 
     args = get_args()
 
     # # ================Augment================= #
-    # aug(target_fixed_path)
-    # aug(target_moving_path)
+    aug_moving_path = '/home/cqut/project/xxf/train_144/moving_'
+    aug_fixed_path = '/home/cqut/project/xxf/train_144/fixed_'
+    aug(aug_fixed_path)
+    aug(aug_moving_path)
     # # ======================================= #
     # # %% test landmarks
     # # load image
@@ -634,13 +658,13 @@ if __name__ == '__main__':
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
     #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
-    # dirlab for test
-    print("dirlab: ")
-    for item in dirlab_case_cfg.items():
-        case = item[0]
-        shape = item[1]
-        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+    # # dirlab for test
+    # print("dirlab: ")
+    # for item in dirlab_case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
     # print("copd: ")
@@ -660,9 +684,10 @@ if __name__ == '__main__':
     #                     spacing=spacing)
     #
     # # learn2reg
-    # clamp = [0, 900]
+    # clamp = [-1000, 500]
     # crop = None
     # spacing = [1, 1, 1]
+    # resize = [144, 144, 144]
     # learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                      spacing=spacing)
     #
@@ -730,3 +755,11 @@ if __name__ == '__main__':
     #
     # patient_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                    spacing=spacing)
+
+    # Learn2Reg NLST
+    # clamp = [-1100, 500]
+    # crop = None
+    # spacing = [1, 1, 1]
+    # resize = [144, 144, 144]
+    # NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    #                 spacing=spacing)

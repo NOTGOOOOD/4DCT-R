@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, patient_len=9):
+    def __init__(self, patient_len=20):
         """
         Parameters
         ----------
@@ -32,8 +32,8 @@ class StopCriterion(object):
 
     def stop(self):
         # return True if the stop creteria are met
-        query_ncc_list = self.ncc_loss_list[-6:]
-        query_mse_lisst = self.mse_loss_list[-6:]
+        query_ncc_list = self.ncc_loss_list[-7:]
+        query_mse_lisst = self.mse_loss_list[-7:]
         std_ncc = np.std(query_ncc_list)
         std_mse = np.std(query_mse_lisst)
 

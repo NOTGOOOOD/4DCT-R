@@ -40,11 +40,10 @@ def transform_unit_flow_to_flow(flow):
 
 
 def transform_unit_flow_to_flow_cuda(flow):
-    b, x, y, z, c = flow.shape
-    flow[:, :, :, :, 0] = flow[:, :, :, :, 0] * (z - 1) / 2
+    b, z, y, x, c = flow.shape
+    flow[:, :, :, :, 0] = flow[:, :, :, :, 0] * (x - 1) / 2
     flow[:, :, :, :, 1] = flow[:, :, :, :, 1] * (y - 1) / 2
-    flow[:, :, :, :, 2] = flow[:, :, :, :, 2] * (x - 1) / 2
-
+    flow[:, :, :, :, 2] = flow[:, :, :, :, 2] * (z - 1) / 2
     return flow
 
 
