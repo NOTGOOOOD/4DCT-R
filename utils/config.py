@@ -105,21 +105,23 @@ def get_args():
                         dest="test_dir", default=r'C:\datasets\registration\test_ori')
     parser.add_argument("--landmark_dir", type=str, help="landmark directory",
                         dest="landmark_dir", default=r'D:\project\4DCT\data\dirlab')
-    parser.add_argument("--checkpoint_path", type=str, help="model weight file",
-                        dest="checkpoint_path", default="./Checkpoint/2022-12-06-13-09-25_iter15.pth")
+    parser.add_argument("--checkpoint_path", type=str, help="model weight folder",
+                        dest="checkpoint_path", default="./Checkpoint")
+    parser.add_argument("--checkpoint_name", type=str, help="model weight name",
+                        dest="checkpoint_name", default=None)
 
     # LapIRN
     parser.add_argument("--iteration_lvl1", type=int,
-                        dest="iteration_lvl1", default=30001,
+                        dest="iteration_lvl1", default=500,
                         help="number of lvl1 iterations")
     parser.add_argument("--iteration_lvl2", type=int,
-                        dest="iteration_lvl2", default=30001,
+                        dest="iteration_lvl2", default=500,
                         help="number of lvl2 iterations")
     parser.add_argument("--iteration_lvl3", type=int,
-                        dest="iteration_lvl3", default=60001,
+                        dest="iteration_lvl3", default=500,
                         help="number of lvl3 iterations")
     parser.add_argument("--antifold", type=float,
-                        dest="antifold", default=0.,
+                        dest="antifold", default=100,
                         help="Anti-fold loss: suggested range 0 to 1000")
     parser.add_argument("--smooth", type=float, choices=[1.0, 3.5],
                         dest="smooth", default=1.0,
