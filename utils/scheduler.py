@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, patient_len=20):
+    def __init__(self, patient_len=30, min_epoch=10):
         """
         Parameters
         ----------
@@ -13,18 +13,21 @@ class StopCriterion(object):
         """
         self.patient_len = patient_len
         self.ori_len = patient_len
+        self.min_epoch = min_epoch
         self.ncc_loss_list = []
         self.mse_loss_list = []
+        self.total_loss_list = []
         self.loss_min = 30.
 
-    def add(self, ncc_loss, mse_loss=None):
+    def add(self, ncc_loss, mse_loss=None, total_loss=None):
         self.ncc_loss_list.append(ncc_loss)
+        self.total_loss_list.append(total_loss)
         if mse_loss is not None:
             self.mse_loss_list.append(mse_loss)
 
-        if ncc_loss < self.loss_min:
-            self.loss_min = ncc_loss
-            self.loss_min_i = len(self.ncc_loss_list)
+        if total_loss < self.loss_min:
+            self.loss_min = total_loss
+            self.loss_min_i = len(self.total_loss_list)
             self.patient_len = self.ori_len
 
         else:
@@ -34,13 +37,17 @@ class StopCriterion(object):
         # return True if the stop creteria are met
         query_ncc_list = self.ncc_loss_list[-7:]
         query_mse_lisst = self.mse_loss_list[-7:]
+        # query_total_lisst = self.total_loss_list[-7:]
         std_ncc = np.std(query_ncc_list)
         std_mse = np.std(query_mse_lisst)
-
+        # std_total = np.std(query_total_lisst)
         # length of patient <=0,and current epoch have no improve
-        if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i) or (
-                std_ncc < 0.001 and std_mse < 0.001 and len(self.ncc_loss_list) > self.loss_min_i):
-            return True
+        if len(self.total_loss_list) > self.min_epoch:
+            if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i) or (
+                    std_ncc < 0.001 and std_mse < 0.001 and len(self.ncc_loss_list) > self.loss_min_i):
+                return True
+            else:
+                return False
         else:
             return False
 
