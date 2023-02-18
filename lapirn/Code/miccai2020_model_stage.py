@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from Functions import generate_grid_unit
 from utils.losses import NCC
+from utils.Attention import Self_Attn
 
 
 class Miccai2020_LDR_laplacian_unit_add_lvl1(nn.Module):
@@ -372,6 +373,18 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
+        self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
         self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
@@ -413,14 +426,14 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
                 nn.Tanh())
         else:
             layer = nn.Sequential(
-                nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
+                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
+                # nn.LeakyReLU(0.2),
                 nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
     def forward(self, x, y):
-
+        # x: moving y:fixed  b,c,d,h,w
         cat_input = torch.cat((x, y), 1)
         cat_input = self.down_avg(cat_input)
         cat_input_lvl1 = self.down_avg(cat_input)
@@ -434,13 +447,20 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         e0 = self.down_conv(fea_e0)
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-        output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
+
+        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        decoder = x1 + x2
+
+        output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         else:
-            return output_disp_e0_v
+            return output_disp_e0_v, warpped_inputx_lvl1_out
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
@@ -478,8 +498,23 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output_lvl2 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
+
+        # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
+        #                               nn.LeakyReLU(0.2))
 
     def unfreeze_modellvl1(self):
         # unFreeze model_lvl1 weight
@@ -525,39 +560,46 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
                 nn.Tanh())
         else:
             layer = nn.Sequential(
-                nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
+                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
+                # nn.LeakyReLU(0.2),
                 nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, _, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
         lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
-        # correlation_layer = F.conv3D(torch.cat(warpped_x, y_down), torch.ones([1,1]+[3,]*3, dtype=I.dtype, device=I.device), padding=1)
+
         cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
         e0 = self.down_conv(fea_e0)
-
         e0 = e0 + lvl1_embedding
-
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-        output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
-        compose_field_e0_lvl1 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl1_out = self.transform(x_down, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+
+        # correlation_layer = self.cor_conv(torch.cat((warpped_x, y_down), 1))
+        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
+        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        decoder = x1 + x2
+
+        output_disp_e0_v = self.output_lvl2(decoder) * self.range_flow
+        compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, y_down, output_disp_e0_v, lvl1_v, e0
+            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
         else:
-            return compose_field_e0_lvl1
+            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
@@ -593,8 +635,23 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
-        self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output_lvl3 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
+
+        self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
+                                      nn.LeakyReLU(0.2))
 
     def unfreeze_modellvl2(self):
         # unFreeze model_lvl1 weight
@@ -640,17 +697,19 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
                 nn.Tanh())
         else:
             layer = nn.Sequential(
-                nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
+                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
+                # nn.LeakyReLU(0.2),
                 nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
-        lvl2_disp, _, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(x, y)
+        lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
+            x, y)
         lvl2_disp_up = self.up_tri(lvl2_disp)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
 
@@ -660,15 +719,25 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         e0 = e0 + lvl2_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-        output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
+
+        # correlation_layer = self.cor_conv(torch.cat((warpped_x, y), 1))
+        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
+        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        decoder = x1 + x2
+
+        output_disp_e0_v = self.output_lvl3(decoder) * self.range_flow
+
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl1_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
+            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
         else:
-            return compose_field_e0_lvl1
+            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out
 
 
 class PreActBlock(nn.Module):
