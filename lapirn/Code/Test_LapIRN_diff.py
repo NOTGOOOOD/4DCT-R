@@ -12,23 +12,7 @@ from utils.metric import MSE, landmark_loss
 from utils.datagenerators import TestDataset
 
 
-def test(args):
-    range_flow = 0.4
-
-    if not os.path.isdir(args.output_dir):
-        os.mkdir(args.output_dir)
-
-    landmark_list = load_landmarks(args.landmark_dir)
-    fixed_folder = os.path.join(args.test_dir, 'fixed')
-    moving_folder = os.path.join(args.test_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
-    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
+def test(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
@@ -54,7 +38,7 @@ def test(args):
 
             transform = SpatialTransform_unit().cuda()
 
-            model.load_state_dict(torch.load(args.checkpoint_path))
+            model.load_state_dict(torch.load(checkpoint))
             model.eval()
             transform.eval()
 
@@ -86,16 +70,38 @@ def test(args):
             print('case=%d after warped, TRE=%.5f+-%.5f MSE=%.5f Jac=%.6f' % (
                 batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
 
-            # Save DVF
-            # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-            m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
-            save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
-                       m2f_name)
-            m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
-            # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-            save_image(X_Y, fixed_img, args.output_dir, m_name)
+            if is_save:
+                # Save DVF
+                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+                m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
+                save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
+                           m2f_name)
+                m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
+                # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
+                save_image(X_Y, fixed_img, args.output_dir, m_name)
 
 
 if __name__ == '__main__':
     args = get_args()
-    test(args)
+    range_flow = 0.4
+
+    if not os.path.isdir(args.output_dir):
+        os.mkdir(args.output_dir)
+
+    landmark_list = load_landmarks(args.landmark_dir)
+    fixed_folder = os.path.join(args.test_dir, 'fixed')
+    moving_folder = os.path.join(args.test_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
+    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    prefix = '2023-02-01-19-38-09'
+    model_dir = args.checkpoint_path
+    checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+    for checkpoint in checkpoint_list:
+        print(checkpoint)
+        test(args, checkpoint)

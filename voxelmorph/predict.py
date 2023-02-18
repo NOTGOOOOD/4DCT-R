@@ -23,7 +23,7 @@ def do_test(args):
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     model = RegNet_pairwise(3, scale=1, depth=5, initial_channels=args.initial_channels, normalization=True)
-    model.load_state_dict(torch.load(args.checkpoint_path)['model'])
+    model.load_state_dict(torch.load(os.path.join(args.checkpoint_path, args.checkpoint_name))['model'])
     model = model.to(args.device)
 
     with torch.no_grad():

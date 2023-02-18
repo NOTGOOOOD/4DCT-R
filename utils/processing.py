@@ -65,6 +65,7 @@ def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, resam
     # resampling
     if resample is not None:
         img = img_resmaple(resample, ori_img_file=img)
+        # img = resize_image(img, resample)
 
     # resize and clamp HU[min,max]
     file = sitk.GetArrayFromImage(img)
@@ -170,16 +171,22 @@ def img_resmaple(new_spacing, resamplemethod=sitk.sitkLinear, ori_img_file=None,
     # sitk.WriteImage(data, os.path.join(ori_img_file, '_new'))  # 将处理后的数据，保存到一个新的mhd文件中
 
 
-def resize_image_itk(itkimage, newSize, resamplemethod=sitk.sitkLinear):
+def resize_image(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     resampler = sitk.ResampleImageFilter()
     originSize = itkimage.GetSize()  # 原来的体素块尺寸
     originSpacing = itkimage.GetSpacing()
     newSize = np.array(newSize, float)
-    newSpacing = originSpacing * originSize / newSize
+
+    newSpacing = [
+        int(np.round(originSpacing[0] * originSize[0] / newSize[0])),
+        int(np.round(originSpacing[1] * originSize[1] / newSize[1])),
+        int(np.round(originSpacing[2] * originSize[2] / newSize[2])),
+    ]
+
     newSize = newSize.astype(np.int)  # spacing肯定不能是整数
     resampler.SetReferenceImage(itkimage)  # 需要重新采样的目标图像
     resampler.SetSize(newSize.tolist())
-    resampler.SetOutputSpacing(newSpacing.tolist())
+    resampler.SetOutputSpacing(newSpacing)
     resampler.SetTransform(sitk.Transform(3, sitk.sitkIdentity))
     resampler.SetInterpolator(resamplemethod)
     itkimgResampled = resampler.Execute(itkimage)  # 得到重新采样后的图像
@@ -207,7 +214,7 @@ def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
 
         img = crop_resampling_resize_clamp(img, None,
                                            args.dirlab_cfg[case]['crop_range'][::-1],
-                                           [1, 1, 1],
+                                           [144,144,144],
                                            [0, 900])
 
         case_name = 'dirlab_case%02d.nii.gz' % case
@@ -527,26 +534,30 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
-    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed_bak'
-    target_moving_path = '/home/cqut/project/xxf/train_144/moving_bak'
+    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
+    target_moving_path = '/home/cqut/project/xxf/train_144/moving'
     # target_fixed_path = r'G:\datasets\registration\patient\fixed'
     # target_moving_path = r'G:\datasets\registration\patient\moving'
     # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
     # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
-    # make_dir(target_test_moving_path)
-    # make_dir(target_test_fixed_path)
+
+    target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
+    target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
+    make_dir(target_test_moving_path)
+    make_dir(target_test_fixed_path)
 
     args = get_args()
 
-    # # ================Augment================= #
-    aug_moving_path = '/home/cqut/project/xxf/train_144/moving_'
-    aug_fixed_path = '/home/cqut/project/xxf/train_144/fixed_'
-    aug(aug_fixed_path)
-    aug(aug_moving_path)
-    # # ======================================= #
-    # # %% test landmarks
+    # %% ================Augment=================
+    # aug_moving_path = '/home/cqut/project/xxf/val_144/moving'
+    # aug_fixed_path = '/home/cqut/project/xxf/val_144/fixed'
+    # aug(aug_fixed_path)
+    # aug(aug_moving_path)
+    # %%
+
+    # %% test landmarks
     # # load image
     # import SimpleITK as sitk
     #
@@ -618,16 +629,16 @@ if __name__ == '__main__':
     #     disp_00_50 = (ref_lmk - landmark_00).astype(np.float32)
     #     torch.save(disp_00_50, os.path.join(flow_path, 'case%02d_disp_affine.pt' % case))
     #
-    # # %%
+    # %%
 
-    # # %%===================== adjust all registration image=================================
+    # %%===================== adjust all registration image=================================
     # size = [144, 144, 144]
-    # # fixed_path = '/home/cqut/project/xxf/train_256/fixed'
-    # # moving_path = '/home/cqut/project/xxf/train_256/moving'
-    # fixed_path = r'G:\datasets\registration\train_256\fixed'
-    # moving_path = r'G:\datasets\registration\train_256\moving'
+    # fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
+    # moving_path = '/home/cqut/project/xxf/test_ori/moving'
+    # # fixed_path = r'G:\datasets\registration\train_256\fixed'
+    # # moving_path = r'G:\datasets\registration\train_256\moving'
     #
-    # target_path = target_fixed_path
+    # target_path = target_test_fixed_path
     # for f_file_name in os.listdir(fixed_path):
     #     file = os.path.join(fixed_path, f_file_name)
     #     sitk_img = sitk.ReadImage(file)
@@ -636,7 +647,7 @@ if __name__ == '__main__':
     #
     # print('fixed done!')
     #
-    # target_path = target_moving_path
+    # target_path = target_test_moving_path
     # for m_file_name in os.listdir(moving_path):
     #     file = os.path.join(moving_path, m_file_name)
     #     sitk_img = sitk.ReadImage(file)
@@ -658,13 +669,14 @@ if __name__ == '__main__':
     #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
     #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
-    # # dirlab for test
-    # print("dirlab: ")
-    # for item in dirlab_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+    # dirlab for test
+    print("dirlab: ")
+
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
     # print("copd: ")

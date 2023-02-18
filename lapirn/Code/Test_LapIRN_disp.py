@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 
-from Functions import generate_grid_unit, transform_unit_flow_to_flow
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from Functions import generate_grid_unit, transform_unit_flow_to_flow, transform_unit_flow_to_flow_cuda
+from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
-    neg_Jdet_loss
+    neg_Jdet_loss, smoothloss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import calc_tre, MSE, landmark_loss
@@ -14,7 +14,6 @@ from utils.datagenerators import TestDataset, Dataset
 
 
 def validation(args, model, imgshape, loss_similarity, step):
-
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
@@ -41,52 +40,44 @@ def validation(args, model, imgshape, loss_similarity, step):
             input_fixed = fixed[0].to('cuda').float()
             pred = model(input_moving, input_fixed)
 
-            disp_up = pred[0]
+            F_X_Y = pred[0]
             if scale_factor > 1:
-                disp_up = upsample(pred[0])
+                F_X_Y = upsample(pred[0])
 
-            X_Y_up = transform(input_moving, disp_up.permute(0, 2, 3, 4, 1), grid)
-
-            # F_X_Y_cpu = F_X_Y.data.cpu().numpy()[0, :, :, :, :].transpose(1, 2, 3, 0)
-            # F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
-
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
             mse_loss = MSE(X_Y_up, input_fixed)
-            # ncc_loss = loss_similarity(X_Y, Y_4x)
             ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
-            losses.append([ncc_loss_ori.item(), mse_loss.item()])
 
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+
+            # reg2 - use velocity
+            _, _, z, y, x = F_X_Y.shape
+            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
+            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
+            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
+            loss_regulation = smoothloss(F_X_Y)
+
+            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
+
+            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_sum.item()])
             # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
             # save_img(X_Y, args.output_dir + '/warpped_moving.nii.gz')
             # m_name = "{}_warped.nii.gz".format(moving[1][0].split('.nii')[0])
             # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
             # save_image(X_Y, input_fixed, args.output_dir, m_name)
-            if batch == 0:
-                m_name = '{0}_{1}.nii.gz'.format(imgshape[0], step)
-                save_image(pred[1], input_fixed, args.output_dir, m_name)
-                m_name = '{0}_{1}_up.nii.gz'.format(imgshape[0], step)
-                save_image(X_Y_up, input_fixed, args.output_dir, m_name)
+            # if batch == 0:
+            #     m_name = '{0}_{1}.nii.gz'.format(imgshape[0], step)
+            #     save_image(pred[1], input_fixed, args.output_dir, m_name)
+            #     m_name = '{0}_{1}_up.nii.gz'.format(imgshape[0], step)
+            #     save_image(X_Y_up, input_fixed, args.output_dir, m_name)
 
         mean_loss = np.mean(losses, 0)
-        return mean_loss[0], mean_loss[1]
+        return mean_loss[0], mean_loss[1], mean_loss[2]
 
 
-def test_single(args):
-    range_flow = 0.4
-
-    if not os.path.isdir(args.output_dir):
-        os.mkdir(args.output_dir)
-
-    landmark_list = load_landmarks(args.landmark_dir)
-    fixed_folder = os.path.join(args.test_dir, 'fixed')
-    moving_folder = os.path.join(args.test_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
-    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
+def test_single(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
@@ -114,15 +105,15 @@ def test_single(args):
 
             transform = SpatialTransform_unit().cuda()
 
-            model.load_state_dict(torch.load(args.checkpoint_path))
+            model.load_state_dict(torch.load(checkpoint))
             model.eval()
             transform.eval()
             grid = generate_grid_unit(imgshape)
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
-            F_X_Y = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
 
-            X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
+            # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
 
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
@@ -141,7 +132,7 @@ def test_single(args):
             #                        landmarks['disp_affine'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
             # MSE
-            _mse = MSE(fixed_img, X_Y)
+            _mse = MSE(fixed_img, lv3_out)
 
             # TRE
             _mean, _std = landmark_loss(F_X_Y[0], landmarks00 - torch.tensor(
@@ -152,23 +143,35 @@ def test_single(args):
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
             losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
-            print('case=%d after warped, TRE=%.5f+-%.5f MSE=%.5f Jac=%.6f' % (batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
+            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
+            batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
 
-            # Save DVF
-            # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-            m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
-            save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
-                       m2f_name)
-            m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
-            # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-            save_image(X_Y, fixed_img, args.output_dir, m_name)
+            if is_save:
+                # Save DVF
+                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+                m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
+                save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
+                           m2f_name)
+
+                # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
+                # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
+                # save_image(X_Y, fixed_img, args.output_dir, m_name)
+
+                m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
+                save_image(lv1_out, fixed_img, args.output_dir, m_name)
+
+                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+                save_image(lv2_out, fixed_img, args.output_dir, m_name)
+
+                m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
+                save_image(lv3_out, fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
     mean_std = mean_total[1]
     mean_mse = mean_total[2]
     mean_jac = mean_total[3]
-    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre,mean_std, mean_mse, mean_jac))
+    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):
@@ -252,5 +255,32 @@ def test_single(args):
 
 if __name__ == '__main__':
     args = get_args()
-    test_single(args)
+
+    range_flow = 0.4
+
+    if not os.path.isdir(args.output_dir):
+        os.mkdir(args.output_dir)
+
+    landmark_list = load_landmarks(args.landmark_dir)
+    fixed_folder = os.path.join(args.test_dir, 'fixed')
+    moving_folder = os.path.join(args.test_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
+    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    prefix = '2023-02-17-14-38-59'
+    model_dir = args.checkpoint_path
+
+    if args.checkpoint_name is not None:
+        test_single(args, os.path.join(model_dir, args.checkpoint_name), True)
+    else:
+        checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+        for checkpoint in checkpoint_list:
+            print(checkpoint)
+            test_single(args, checkpoint)
+
     # validation(args)
