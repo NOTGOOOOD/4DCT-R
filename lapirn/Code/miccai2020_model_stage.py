@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Self_Attn
+from utils.Attention import Self_Attn, Cross_attention
 
 
 class Miccai2020_LDR_laplacian_unit_add_lvl1(nn.Module):
@@ -374,6 +374,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+        self.ca_module = Cross_attention(self.start_channel * 8, self.start_channel * 8)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
