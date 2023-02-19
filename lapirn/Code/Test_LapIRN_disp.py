@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from Functions import generate_grid_unit, transform_unit_flow_to_flow, transform_unit_flow_to_flow_cuda
-from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
     neg_Jdet_loss, smoothloss
 from utils.utilize import load_landmarks, save_image
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-02-17-14-38-59'
+    prefix = '2023-02-19-10-12-41'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:

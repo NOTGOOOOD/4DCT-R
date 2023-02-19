@@ -448,7 +448,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
-        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
@@ -586,7 +586,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         # correlation_layer = self.cor_conv(torch.cat((warpped_x, y_down), 1))
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
@@ -722,7 +722,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # correlation_layer = self.cor_conv(torch.cat((warpped_x, y), 1))
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        decoder = self.decoder(self.sa_module(torch.cat([e0, fea_e0], dim=1)))
+        decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 

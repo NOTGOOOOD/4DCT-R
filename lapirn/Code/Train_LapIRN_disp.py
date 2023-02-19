@@ -306,13 +306,13 @@ def train_lvl3():
     model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
                                                              range_flow=range_flow, model_lvl1=model_lvl1).to(device)
 
-    model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
-    # model_list = []
-    # for f in os.listdir('../Model/Stage'):
-    #     if model_name + "stagelvl2" in f:
-    #         model_list.append(os.path.join('../Model/Stage', f))
-    #
-    # model_path = sorted(model_list)[-1]
+    # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl2" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+
+    model_path = sorted(model_list)[-1]
     model_lvl2.load_state_dict(torch.load(model_path))
     print("Loading weight for model_lvl2...", model_path)
 
@@ -458,6 +458,6 @@ if __name__ == "__main__":
     imgshape_2 = (144 / 2, 144 / 2, 144 / 2)
 
     range_flow = 0.4
-    # train_lvl1()
-    # train_lvl2()
+    train_lvl1()
+    train_lvl2()
     train_lvl3()
