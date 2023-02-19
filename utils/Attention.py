@@ -96,7 +96,8 @@ class Self_Attn(nn.Module):
 
         proj_value = self.value_conv(x)  # proj_key# #B, C, D, H, W
 
-        out_x = torch.matmul(proj_value.permute(0, 2, 3, 1, 4), attention).permute(0, 3, 1, 2, 4)  # B,D,H,C,W -> B,C,D,H,W
+        out_x = torch.matmul(proj_value.permute(0, 2, 3, 1, 4), attention).permute(0, 3, 1, 2,
+                                                                                   4)  # B,D,H,C,W -> B,C,D,H,W
 
         out = self.beta * out_x + proj_value
 
@@ -107,7 +108,7 @@ class Self_Attn(nn.Module):
 class self_attention_fc(nn.Module):
     """ Self attention Layer"""
 
-    def __init__(self, in_dim, out_dim):  # 1024
+    def __init__(self, in_dim, out_dim):
         super(self_attention_fc, self).__init__()
 
         self.in_dim = in_dim
@@ -128,31 +129,32 @@ class self_attention_fc(nn.Module):
                 out : self attention value + input feature
                 attention: B X N X N (N is Width*Height)
         """
-        proj_query_x = self.query_conv(x)  # [B, in_dim, 1]----->[B, out_dim1, 1]
+        proj_query_x = self.query_conv(x).permute(0, 2, 3, 1, 4)  # B D H C W
 
-        proj_key_y = self.query_conv(y).permute(0, 2, 1)  # [B, 1, out_dim1]
+        proj_key_y = self.query_conv(y).permute(0, 2, 3, 4, 1)  # B D H W C
 
         # energy_x = torch.bmm(proj_query_x,proj_key_x)
         # energy_y = torch.bmm(proj_query_y,proj_key_y)
-        energy_xy = torch.bmm(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分  [B, 64, 64]
+        energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分  [B, 64, 64]  B D H C C
 
         # attention_x = self.softmax(energy_x) #  按行归一化  xi 对 y所有点的注意力
         # attention_y = self.softmax(energy_y)
-        attention_xy = self.softmax(energy_xy)
-        attention_yx = self.softmax(energy_xy.permute(0, 2, 1))
+        attention_xy = self.softmax(energy_xy)  # B D H C C
+        attention_yx = self.softmax(energy_xy.permute(0, 1, 2, 4, 3))  # BDHCC
 
-        proj_value_x = proj_query_x  # self.value_conv_x(x) # [B, out_dim, 64]
-        proj_value_y = proj_key_y.permute(0, 2, 1)  # self.value_conv_x(y) # [B, out_dim, 64]
+        proj_value_x = proj_query_x  # self.value_conv_x(x) # [B, out_dim, 64]  B D H C W
+        proj_value_y = proj_key_y.permute(0, 1, 2, 4,
+                                          3)  # self.value_conv_x(y) # [B, out_dim, 64]  B D H W C -> B D H C W
 
         # value_x, index_x = self.select_k(attention_xy)
         # out_x = proj_value_x.squeeze(2).gather(1, index_x)
 
         # value_y, index_y = self.select_k(attention_yx)
         # out_y = proj_value_y.squeeze(2).gather(1, index_y)
-        out_x = torch.bmm(attention_xy, proj_value_x)  # [B, out_dim]
+        out_x = torch.matmul(attention_xy, proj_value_x)  # [B, out_dim, D, H, W]  B D H C W
         out_x = self.beta * out_x + proj_value_x  # self.kama*
 
-        out_y = torch.bmm(attention_yx, proj_value_y)  # [B, out_dim]
+        out_y = torch.matmul(attention_yx, proj_value_y)  # [B, out_dim, D, H, W] B D H C W
         out_y = self.beta * out_y + proj_value_y  # self.kama *
 
-        return out_x, out_y
+        return torch.cat(out_x, out_y).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
