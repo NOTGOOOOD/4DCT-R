@@ -39,7 +39,7 @@ class Dataset(Data.Dataset):
             print("=================================================")
             print("{} is not match {}".format(m_name, f_name))
             print("=================================================")
-            # raise ValueError
+            raise ValueError
 
         return [[m_img, m_name], [f_img, f_name]]
 
@@ -66,5 +66,11 @@ class TestDataset(Data.Dataset):
             self.moving_files[index].split('moving/')[1]
         f_name = self.fixed_files[index].split('fixed\\')[1] if platform.system().lower() == 'windows' else \
             self.fixed_files[index].split('fixed/')[1]
+
+        if m_name != f_name:
+            print("=================================================")
+            print("{} is not match {}".format(m_name, f_name))
+            print("=================================================")
+            raise ValueError
 
         return m_img, f_img, self.landmark_files[index], m_name
