@@ -61,7 +61,7 @@ def validation(args, model, imgshape, loss_similarity, step):
 
             loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
 
-            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_sum.item()])
+            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
             # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
             # save_img(X_Y, args.output_dir + '/warpped_moving.nii.gz')
             # m_name = "{}_warped.nii.gz".format(moving[1][0].split('.nii')[0])
@@ -74,7 +74,7 @@ def validation(args, model, imgshape, loss_similarity, step):
             #     save_image(X_Y_up, input_fixed, args.output_dir, m_name)
 
         mean_loss = np.mean(losses, 0)
-        return mean_loss[0], mean_loss[1], mean_loss[2]
+        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 
 def test_single(args, checkpoint, is_save=False):
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-02-19-10-12-41'
+    prefix = '2023-02-21-21-09-37'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
