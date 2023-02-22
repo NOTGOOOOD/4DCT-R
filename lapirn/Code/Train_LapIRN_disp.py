@@ -146,7 +146,7 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity, step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -157,8 +157,8 @@ def train_lvl1():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_total_loss))
+        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -176,6 +176,7 @@ def train_lvl2():
     model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
                                                              range_flow=range_flow).to(device)
 
+    # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
     for f in os.listdir('../Model/Stage'):
         if model_name + "stagelvl1" in f:
@@ -271,7 +272,7 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity, step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -282,8 +283,8 @@ def train_lvl2():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_total_loss))
+        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -414,7 +415,7 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_total_loss = validation(args, model, imgshape, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity, step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -426,8 +427,8 @@ def train_lvl3():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_total_loss))
+        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
