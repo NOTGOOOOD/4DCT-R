@@ -20,29 +20,9 @@ from utils.scheduler import StopCriterion
 from utils.utilize import set_seed
 from Test_LapIRN_disp import validation
 
+
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-args = get_args()
-
-lr = args.lr
-start_channel = args.initial_channels
-antifold = args.antifold
-# n_checkpoint = args.n_save_iter
-smooth = args.smooth
-# datapath = opt.datapath
-freeze_step = args.freeze_step
-
-iteration_lvl1 = args.iteration_lvl1
-iteration_lvl2 = args.iteration_lvl2
-iteration_lvl3 = args.iteration_lvl3
-
-fixed_folder = os.path.join(args.train_dir, 'fixed')
-moving_folder = os.path.join(args.train_dir, 'moving')
-f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                          file_name.lower().endswith('.gz')])
-m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                          file_name.lower().endswith('.gz')])
 
 
 def make_dirs():
@@ -146,7 +126,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity,
+                                                                              step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -157,8 +138,9 @@ def train_lvl1():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -272,7 +254,8 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity,
+                                                                              step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -283,8 +266,9 @@ def train_lvl2():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -415,20 +399,27 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity,
+                                                                              step)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+            modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            torch.save(model.state_dict(), modelname)
+        else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
-                best_loss)
+                val_total_loss)
             logging.info("save model:{}".format(modelname))
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -443,6 +434,27 @@ def train_lvl3():
 
 
 if __name__ == "__main__":
+    args = get_args()
+
+    lr = args.lr
+    start_channel = args.initial_channels
+    antifold = args.antifold
+    # n_checkpoint = args.n_save_iter
+    smooth = args.smooth
+    # datapath = opt.datapath
+    freeze_step = args.freeze_step
+
+    iteration_lvl1 = args.iteration_lvl1
+    iteration_lvl2 = args.iteration_lvl2
+    iteration_lvl3 = args.iteration_lvl3
+
+    fixed_folder = os.path.join(args.train_dir, 'fixed')
+    moving_folder = os.path.join(args.train_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
     make_dirs()
     set_seed(1024)
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])

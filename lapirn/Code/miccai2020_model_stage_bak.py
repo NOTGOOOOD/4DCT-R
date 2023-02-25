@@ -488,8 +488,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
-        self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
-                                      nn.LeakyReLU(0.2))
+        # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
+        #                               nn.LeakyReLU(0.2))
 
     def unfreeze_modellvl1(self):
         # unFreeze model_lvl1 weight
@@ -614,8 +614,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
-        self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
-                                      nn.LeakyReLU(0.2))
+        # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
+        #                               nn.LeakyReLU(0.2))
 
     def unfreeze_modellvl2(self):
         # unFreeze model_lvl1 weight

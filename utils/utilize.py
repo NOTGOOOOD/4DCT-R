@@ -14,7 +14,7 @@ def show_slice(img_mov):
     fig, ax = plt.subplots(1, 1)
     img_mov = img_mov[0,0]
     img_shape = int(img_mov.shape[0] / 2)
-    ax[0].imshow(img_mov[img_shape, :, :], cmap='gray')
+    ax.imshow(img_mov[img_shape, :, :], cmap='gray')
     # ax[1].imshow(img_mov[:, img_shape, :], cmap='gray')
     # ax[2].imshow(img_mov[:, :, img_shape], cmap='gray')
     plt.show()
