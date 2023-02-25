@@ -268,10 +268,10 @@ def learn2reg_processing(fixed_path, moving_path, **cfg):
         target_path = moving_path
         file = os.path.join(l2r_path, file_name)
         # exp -> fixed insp -> moving
-        file_prefix = file_name[:11]
+        file_prefix = file_name[:8]
         file_suffix = file_name.split('_')[2]
 
-        if '0000' in file_suffix:
+        if '0000' or 'exp' in file_suffix:
             target_path = fixed_path
 
         # open nii
@@ -553,9 +553,12 @@ if __name__ == '__main__':
     # %% ================Augment=================
     # aug_moving_path = '/home/cqut/project/xxf/val_144/moving'
     # aug_fixed_path = '/home/cqut/project/xxf/val_144/fixed'
+    # aug_moving_path = 'D:/xxf/val_small_popi_emp/moving'
+    # aug_fixed_path = 'D:/xxf/val_small_popi_emp/fixed'
+    #
     # aug(aug_fixed_path)
     # aug(aug_moving_path)
-    # %%
+
 
     # %% test landmarks
     # # load image
@@ -670,13 +673,13 @@ if __name__ == '__main__':
     #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
 
     # dirlab for test
-    print("dirlab: ")
-
-    for item in dirlab_case_cfg.items():
-        case = item[0]
-        shape = item[1]
-        img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+    # print("dirlab: ")
+    #
+    # for item in dirlab_case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
+    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
     # print("copd: ")
