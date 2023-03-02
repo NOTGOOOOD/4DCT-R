@@ -214,7 +214,7 @@ def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
 
         img = crop_resampling_resize_clamp(img, None,
                                            args.dirlab_cfg[case]['crop_range'][::-1],
-                                           [144,144,144],
+                                           [144, 144, 144],
                                            [0, 900])
 
         case_name = 'dirlab_case%02d.nii.gz' % case
@@ -259,8 +259,8 @@ def copd_processing(img_path, target_path, datatype, shape, case, **cfg):
 
 def learn2reg_processing(fixed_path, moving_path, **cfg):
     print("learn2reg: ")
-    # l2r_path = r'E:\datasets\Learn2Reg\all'
-    l2r_path = '/home/cqut/project/xxf/Learn2Reg'
+    l2r_path = r'E:\datasets\Learn2Reg\all'
+    # l2r_path = '/home/cqut/project/xxf/Learn2Reg'
 
     file_list = sorted([file_name for file_name in os.listdir(l2r_path) if file_name.lower().endswith('.gz')])
 
@@ -271,7 +271,38 @@ def learn2reg_processing(fixed_path, moving_path, **cfg):
         file_prefix = file_name[:8]
         file_suffix = file_name.split('_')[2]
 
-        if '0000' or 'exp' in file_suffix:
+        if 'exp' in file_suffix:
+            target_path = fixed_path
+
+        # open nii
+        img_nii = sitk.ReadImage(file)
+
+        img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
+                                           , cfg['spacing'],
+                                           cfg['clamp'])
+        # save
+        make_dir(target_path)
+        target_filepath = os.path.join(target_path,
+                                       "l2r_{}.nii.gz".format(file_prefix))
+        # if not os.path.exists(target_filepath):
+        sitk.WriteImage(img, target_filepath)
+        print('case{} done'.format(file_prefix))
+
+
+def learn2reg_lungct_processing(fixed_path, moving_path, **cfg):
+    print("learn2reg: ")
+    l2r_path = r'E:\datasets\LungCT\all'
+
+    file_list = sorted([file_name for file_name in os.listdir(l2r_path) if file_name.lower().endswith('.gz')])
+
+    for file_name in file_list:
+        target_path = moving_path
+        file = os.path.join(l2r_path, file_name)
+        # exp -> fixed insp -> moving
+        file_prefix = file_name[:11]
+        file_suffix = file_name.split('_')[2]
+
+        if '0000' in file_suffix:
             target_path = fixed_path
 
         # open nii
@@ -372,11 +403,11 @@ def popi_processing(fixed_path, moving_path, **cfg):
             if case == 5 or case == 6:
                 img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
                                                    [slice(100, 400), slice(120, 360), slice(None)], cfg['spacing'],
-                                                   [-800, -100])
+                                                   [None, 500])
             else:
                 img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
                                                    [slice(70, 460), slice(40, 380), slice(None)], cfg['spacing'],
-                                                   [-800, -100])
+                                                   [None, 500])
 
             # save
             make_dir(target_path)
@@ -410,8 +441,8 @@ def popi_processing(fixed_path, moving_path, **cfg):
         img_path = os.path.join(mhd_path, T)
         sitk_img = sitk.ReadImage(img_path)
         img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
-                                           [slice(70, 460), slice(25, None, None), slice(None)], cfg['spacing'],
-                                           [-900, -100])
+                                           [slice(70, 460), slice(25, 350), slice(None)], cfg['spacing'],
+                                           [None, 500])
 
         # save
         make_dir(target_path)
@@ -503,7 +534,8 @@ def aug(img_path):
 
 def NLST_processing(fixed_path, moving_path, **cfg):
     print("NLST: ")
-    nlst_path = r'/home/cqut/project/xxf/datasets/NLST_testdata/imagesTs'
+    # nlst_path = r'/home/cqut/project/xxf/datasets/NLST_testdata/imagesTs'
+    nlst_path = r'E:\datasets\NLST\all'
 
     file_list = sorted([file_name for file_name in os.listdir(nlst_path) if file_name.lower().endswith('.gz')])
 
@@ -534,19 +566,20 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
-    target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
-    target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    # target_fixed_path = r'G:\datasets\registration\patient\fixed'
-    # target_moving_path = r'G:\datasets\registration\patient\moving'
+    # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
+    # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
+    target_fixed_path = r'E:\datasets\registration\popi_144\fixed'
+    target_moving_path = r'E:\datasets\registration\popi_144\moving'
+    resize = [144, 144, 144]
     # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
     # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
-    target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
-    make_dir(target_test_moving_path)
-    make_dir(target_test_fixed_path)
+    # target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
+    # target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
+    # make_dir(target_test_moving_path)
+    # make_dir(target_test_fixed_path)
 
     args = get_args()
 
@@ -558,7 +591,6 @@ if __name__ == '__main__':
     #
     # aug(aug_fixed_path)
     # aug(aug_moving_path)
-
 
     # %% test landmarks
     # # load image
@@ -682,37 +714,56 @@ if __name__ == '__main__':
     #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # COPD数据集img转nii.gz
-    # print("copd: ")
-    # clamp = [0, 900]
+    print("copd: ")
+    target_fixed_path = r'E:\datasets\registration\copd_144\fixed'
+    target_moving_path = r'E:\datasets\registration\copd_144\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
+    resize = [144, 144, 144]
+    clamp = [-200, 1000]
     # crop = [slice(70, 470), slice(30, 470), slice(None)]
-    # resize = [144, 256, 256]
-    # spacing = [1, 1, 1]
-    # for item in copd_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #
-    #     fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
-    #     moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
-    #     copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
-    #                     spacing=spacing)
-    #     copd_processing(moving_path, target_moving_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
-    #                     spacing=spacing)
-    #
-    # # learn2reg
-    # clamp = [-1000, 500]
-    # crop = None
-    # spacing = [1, 1, 1]
-    # resize = [144, 144, 144]
-    # learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                      spacing=spacing)
-    #
+    crop = None
+    # resize = [256, 256, 256]
+
+    spacing = [1, 1, 1]
+    for item in copd_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+
+        fixed_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_eBHCT.img'
+        moving_path = f'E:/datasets/copd/copd{case}/copd{case}/copd{case}_iBHCT.img'
+        copd_processing(fixed_path, target_fixed_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+                        spacing=spacing)
+        copd_processing(moving_path, target_moving_path, np.int16, shape, case, resize=resize, crop=crop, clamp=clamp,
+                        spacing=spacing)
+
+    # learn2reg
+    target_fixed_path = r'E:\datasets\registration\l2r_144\fixed'
+    target_moving_path = r'E:\datasets\registration\l2r_144\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+    resize = [144, 144, 144]
+
+    clamp = [None, 1100]
+    crop = None
+    spacing = [1, 1, 1]
+    learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                         spacing=spacing)
+
     # emp10
-    # clamp = [-750, -100]  # before -900 500
-    # crop = None
-    # spacing = [1, 1, 1]
-    # emp10_processing(target_fixed_path, target_moving_path, resize=None, crop=crop, clamp=clamp,
-    #                  spacing=spacing)
-    #
+    target_fixed_path = r'E:\datasets\registration\emp_144\fixed'
+    target_moving_path = r'E:\datasets\registration\emp_144\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
+    resize = [144, 144, 144]
+    clamp = [None, 500]  # before -900 500
+    crop = None
+    spacing = [1, 1, 1]
+    emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                     spacing=spacing)
+
     # # creatis-popi
     # spacing = [1, 1, 1]
     # popi_processing(target_fixed_path, target_moving_path, resize=resize,
@@ -771,10 +822,30 @@ if __name__ == '__main__':
     # patient_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                    spacing=spacing)
 
+    # learn2reg LungCT
+    target_fixed_path = r'E:\datasets\registration\LungCT_144\fixed'
+    target_moving_path = r'E:\datasets\registration\LungCT_144\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
+    resize = [144, 144, 144]
+    clamp = [-1000, 500]
+    crop = None
+    spacing = [1, 1, 1]
+
+    learn2reg_lungct_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                         spacing=spacing)
+
     # Learn2Reg NLST
-    # clamp = [-1100, 500]
-    # crop = None
-    # spacing = [1, 1, 1]
-    # resize = [144, 144, 144]
-    # NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                 spacing=spacing)
+    target_fixed_path = r'E:\datasets\registration\NLST_144\fixed'
+    target_moving_path = r'E:\datasets\registration\NLST_144\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
+    resize = [144, 144, 144]
+    clamp = [-1100, 500]
+    crop = None
+    spacing = [1, 1, 1]
+
+    NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                    spacing=spacing)
