@@ -104,12 +104,11 @@ class Self_Attn(nn.Module):
         return out
 
 
-# cross
 class Cross_attention(nn.Module):
     """ Self attention Layer"""
 
     def __init__(self, in_dim, out_dim):
-        super(Cross_attention, self).__init__()
+        super(Cross_attention_bak, self).__init__()
 
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -151,17 +150,70 @@ class Cross_attention(nn.Module):
         return torch.cat([out_x, out_y], dim=3).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
 
 
+# cross
+class Cross_attention_2(nn.Module):
+    """ Self attention Layer"""
+
+    def __init__(self, in_dim, out_dim):
+        super(Cross_attention_2, self).__init__()
+
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+
+        self.query_conv = BasicConv3D(in_dim, out_dim)
+
+        self.beta = nn.Parameter(torch.zeros(1))
+        self.activate = nn.LeakyReLU(0.2)
+
+    def forward(self, x, y):  # B, C, D, H, W
+        """
+            inputs :
+                x : current level feature maps ( B, C, D, H, W )
+                y : i-1 level feature maps
+            returns :
+                out : B, C, D, H, W
+        """
+        D = x.shape[2]
+        H = x.shape[3]
+        W = x.shape[4]
+
+        proj_query_x = self.query_conv(x).squeeze().reshape(1, -1)  # (1, DHW)
+
+        proj_key_y = self.query_conv(y).squeeze().reshape(-1, 1)  # (DHW, 1)
+
+        energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分   (DHW, DHW)
+
+        attention_xy = self.activate(energy_xy)  # (DHW, DHW)
+
+        proj_value_x = proj_query_x  # (1, dhw)
+        proj_value_y = proj_key_y  # (1, dhw)
+
+        out_x = torch.matmul(attention_xy, proj_value_x)  # (1, dhw)
+        out_x = self.beta * out_x + proj_value_x  # self.kama*
+        out_x = out_x.reshape(1, 1, D, H, W)
+
+        out_y = torch.matmul(attention_xy, proj_value_y)  # (1, dhw)
+        out_y = self.beta * out_y + proj_value_y  # self.kama *
+        out_y = out_y.reshape(1, 1, D, H, W)
+
+        return torch.cat([out_x, out_y], dim=3)  # B D H C W -> B,C,D,H,W
+
+
 class SCSEModule(nn.Module):
     def __init__(self, in_channels, reduction=16):
         super().__init__()
         self.cSE = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(in_channels, in_channels // reduction, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels // reduction, in_channels, 1),
-            nn.Sigmoid(),
+            nn.Conv3d(in_channels, in_channels // reduction, 1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(in_channels // reduction, in_channels, 1),
+            nn.LeakyReLU(0.2),
         )
-        self.sSE = nn.Sequential(nn.Conv2d(in_channels, 1, 1), nn.Sigmoid())
+        self.sSE = nn.Sequential(nn.Conv3d(in_channels, 1, 1), nn.LeakyReLU(0.2))
 
-    def forward(self, x):
-        return x * self.cSE(x) + x * self.sSE(x)
+        self.activate = nn.LeakyReLU(0.2)
+
+    def forward(self, x, att):
+        pre = x * self.cSE(x) + x * self.sSE(x)
+
+        return pre + self.activate(torch.matmul(pre, att))
