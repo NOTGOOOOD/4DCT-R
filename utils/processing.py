@@ -570,7 +570,7 @@ if __name__ == '__main__':
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
     target_fixed_path = r'E:\datasets\registration\popi_144\fixed'
     target_moving_path = r'E:\datasets\registration\popi_144\moving'
-    resize = [144, 144, 144]
+    resize = [144, 144, 80]
     # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
     # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
     make_dir(target_moving_path)
@@ -715,12 +715,12 @@ if __name__ == '__main__':
 
     # COPD数据集img转nii.gz
     print("copd: ")
-    target_fixed_path = r'E:\datasets\registration\copd_144\fixed'
-    target_moving_path = r'E:\datasets\registration\copd_144\moving'
+    target_fixed_path = r'E:\datasets\registration\copd_80\fixed'
+    target_moving_path = r'E:\datasets\registration\copd_80\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [144, 144, 144]
+    resize = [80, 144, 144]
     clamp = [-200, 1000]
     # crop = [slice(70, 470), slice(30, 470), slice(None)]
     crop = None
@@ -739,11 +739,11 @@ if __name__ == '__main__':
                         spacing=spacing)
 
     # learn2reg
-    target_fixed_path = r'E:\datasets\registration\l2r_144\fixed'
-    target_moving_path = r'E:\datasets\registration\l2r_144\moving'
+    target_fixed_path = r'E:\datasets\registration\l2r_80\fixed'
+    target_moving_path = r'E:\datasets\registration\l2r_80\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
-    resize = [144, 144, 144]
+    resize = [80, 144, 144]
 
     clamp = [None, 1100]
     crop = None
@@ -752,22 +752,26 @@ if __name__ == '__main__':
                          spacing=spacing)
 
     # emp10
-    target_fixed_path = r'E:\datasets\registration\emp_144\fixed'
-    target_moving_path = r'E:\datasets\registration\emp_144\moving'
+    target_fixed_path = r'E:\datasets\registration\emp_80\fixed'
+    target_moving_path = r'E:\datasets\registration\emp_80\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [144, 144, 144]
+    resize = [80, 144, 144]
     clamp = [None, 500]  # before -900 500
     crop = None
     spacing = [1, 1, 1]
     emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
                      spacing=spacing)
 
-    # # creatis-popi
-    # spacing = [1, 1, 1]
-    # popi_processing(target_fixed_path, target_moving_path, resize=resize,
-    #                 spacing=spacing)
+    # creatis-popi
+    spacing = [1, 1, 1]
+    target_fixed_path = r'E:\datasets\registration\popi_80\fixed'
+    target_moving_path = r'E:\datasets\registration\popi_80\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+    popi_processing(target_fixed_path, target_moving_path, resize=resize,
+                    spacing=spacing)
 
     ## TCIA
 
@@ -823,12 +827,12 @@ if __name__ == '__main__':
     #                    spacing=spacing)
 
     # learn2reg LungCT
-    target_fixed_path = r'E:\datasets\registration\LungCT_144\fixed'
-    target_moving_path = r'E:\datasets\registration\LungCT_144\moving'
+    target_fixed_path = r'E:\datasets\registration\LungCT_80\fixed'
+    target_moving_path = r'E:\datasets\registration\LungCT_80\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [144, 144, 144]
+    resize = [80, 144, 144]
     clamp = [-1000, 500]
     crop = None
     spacing = [1, 1, 1]
@@ -837,12 +841,12 @@ if __name__ == '__main__':
                          spacing=spacing)
 
     # Learn2Reg NLST
-    target_fixed_path = r'E:\datasets\registration\NLST_144\fixed'
-    target_moving_path = r'E:\datasets\registration\NLST_144\moving'
+    target_fixed_path = r'E:\datasets\registration\NLST_80\fixed'
+    target_moving_path = r'E:\datasets\registration\NLST_80\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [144, 144, 144]
+    resize = [80, 144, 144]
     clamp = [-1100, 500]
     crop = None
     spacing = [1, 1, 1]
