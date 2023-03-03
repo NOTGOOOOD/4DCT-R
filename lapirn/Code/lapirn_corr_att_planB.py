@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Self_Attn, Cross_attention_2
+from utils.Attention import Self_Attn, Cross_attention_2, Cross_head
 from utils.utilize import show_slice
 
 
@@ -42,6 +42,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
         self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
+        self.cross_att = Cross_head()
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -122,16 +123,17 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         # embeding = torch.cat([e0, fea_e0], dim=1) + att
         # embeding = att
         # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        att = self.ca_module(e0, fea_e0)    # B,C, DHW/d, DHW/d
+        embeding = torch.cat([e0, fea_e0], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
-        decoder = x1 + x2
+        decoder = x1 + x2  # B, C, D, H, W
+        decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape(0),decoder.shape(1),decoder.shape(2),decoder.shape(3),decoder.shape(4))
 
-        output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
+        output_disp_e0_v = self.output_lvl1(decoder_plus) * self.range_flow
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
@@ -176,6 +178,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
+        self.cross_att = Cross_head()
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -266,14 +269,16 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        embeding = torch.cat([e0, fea_e0], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
         decoder = x1 + x2
+        decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape(0), decoder.shape(1), decoder.shape(2),
+                                                            decoder.shape(3), decoder.shape(4))
 
-        disp_lv2 = self.output_lvl2(decoder)
+        disp_lv2 = self.output_lvl2(decoder_plus)
         output_disp_e0_v = disp_lv2 * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
@@ -320,6 +325,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
         self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
+        self.cross_att = Cross_head()
+
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
@@ -407,15 +414,17 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        embeding = torch.cat([e0, fea_e0], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
         decoder = x1 + x2
+        decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape(0), decoder.shape(1), decoder.shape(2),
+                                                            decoder.shape(3), decoder.shape(4))
 
-        disp_lv3 = self.output_lvl3(decoder)
+        disp_lv3 = self.output_lvl3(decoder_plus)
         output_disp_e0_v = disp_lv3 * self.range_flow
 
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
