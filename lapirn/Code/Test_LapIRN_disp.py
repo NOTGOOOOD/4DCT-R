@@ -10,10 +10,10 @@ from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import calc_tre, MSE, landmark_loss
-from utils.datagenerators import TestDataset, Dataset
+from utils.datagenerators import DirLabDataset, PatientDataset, Dataset
 
 
-def validation(args, model, imgshape, loss_similarity, step):
+def validation(args, model, imgshape, loss_similarity, ori_shape):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
@@ -27,10 +27,10 @@ def validation(args, model, imgshape, loss_similarity, step):
     transform = SpatialTransform_unit().cuda()
     transform.eval()
 
-    grid = generate_grid_unit([args.size] * 3)
+    grid = generate_grid_unit(ori_shape)
     grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
-    scale_factor = args.size / imgshape[0]
+    scale_factor = ori_shape[0] / imgshape[0]
     upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
     with torch.no_grad():
         model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
@@ -134,17 +134,20 @@ def test_single(args, checkpoint, is_save=False):
             # MSE
             _mse = MSE(fixed_img, lv3_out)
 
-            # TRE
-            _mean, _std = landmark_loss(F_X_Y[0], landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
+            # # TRE
+            # _mean, _std = landmark_loss(F_X_Y[0], landmarks00 - torch.tensor(
+            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+            #                             landmarks50 - torch.tensor(
+            #                                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+            #                                                                                                       3).cuda(),
+            #                             args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
-            losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
-            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
-            batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
+            # losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
+            # print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
+            #     batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
+            losses.append([_mse.item(), Jac.item()])
+            print('case=%d after warped,MSE=%.5f Jac=%.6f' % (
+                batch + 1, _mse.item(), Jac.item()))
 
             if is_save:
                 # Save DVF
@@ -167,11 +170,10 @@ def test_single(args, checkpoint, is_save=False):
                 save_image(lv3_out, fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
-    mean_tre = mean_total[0]
-    mean_std = mean_total[1]
-    mean_mse = mean_total[2]
-    mean_jac = mean_total[3]
-    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
+    mean_mse = mean_total[0]
+    mean_jac = mean_total[1]
+    # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
+    print('mean MSE=%.3f Jac=%.6f' % (mean_mse, mean_jac))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):
@@ -269,10 +271,11 @@ if __name__ == '__main__':
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
 
-    test_dataset = TestDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
+    # test_dataset = DirLabDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
+    test_dataset = PatientDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-02-21-21-09-37'
+    prefix = '2023-03-04-12-26-02'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
