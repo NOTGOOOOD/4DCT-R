@@ -8,7 +8,7 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.datagenerators import Dataset, TestDataset
+from utils.datagenerators import Dataset, DirLabDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
@@ -96,7 +96,7 @@ def train():
 
     # load data
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    test_dataset = TestDataset(moving_files=test_moving_list, fixed_files=test_fixed_list, landmark_files=landmark_list)
+    test_dataset = DirLabDataset(moving_files=test_moving_list, fixed_files=test_fixed_list, landmark_files=landmark_list)
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
