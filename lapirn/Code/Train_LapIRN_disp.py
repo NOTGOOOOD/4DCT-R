@@ -127,7 +127,7 @@ def train_lvl1():
 
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity,
-                                                                              step)
+                                                                              imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -255,7 +255,7 @@ def train_lvl2():
 
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity,
-                                                                              step)
+                                                                              imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -400,7 +400,7 @@ def train_lvl3():
 
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity,
-                                                                              step)
+                                                                              imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
