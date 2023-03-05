@@ -15,7 +15,7 @@ def NCC(real, predict):
 
 def MSE(real_copy, predict_copy):
     if torch.is_tensor(real_copy):
-    # return mean_squared_error(real_copy, predict_copy)
+        # return mean_squared_error(real_copy, predict_copy)
         real_copy = real_copy.cuda()
         predict_copy = predict_copy.cuda()
         return torch.mean(torch.square(predict_copy - real_copy))
@@ -112,7 +112,7 @@ def get_test_photo_loss(args, logger, model, test_loader):
     with torch.no_grad():
         model.eval()
         losses = []
-        for batch, (moving, fixed, landmarks) in enumerate(test_loader):
+        for batch, (moving, fixed, landmarks, _) in enumerate(test_loader):
             m_img = moving[0].to('cuda').float()
             f_img = fixed[0].to('cuda').float()
 
@@ -139,4 +139,3 @@ def get_test_photo_loss(args, logger, model, test_loader):
             logger.info('case=%d after warped, TRE=%.5f+-%.5f' % (index, _mean.item(), _std.item()))
 
         return losses
-
