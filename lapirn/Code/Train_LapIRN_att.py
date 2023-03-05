@@ -146,7 +146,7 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity, imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -272,7 +272,7 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity, imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -415,7 +415,7 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity, step)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity, imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
