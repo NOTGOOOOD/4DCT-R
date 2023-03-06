@@ -51,7 +51,6 @@ class DirLabDataset(Data.Dataset):
         self.landmark_files = landmark_files
 
     def __len__(self):
-        # 返回数据集的大小
         return len(self.moving_files)
 
     def __getitem__(self, index):
@@ -72,7 +71,7 @@ class DirLabDataset(Data.Dataset):
             print("=================================================")
             raise ValueError
 
-        return m_img, f_img, self.landmark_files[index], m_name
+        return [m_img, f_img, self.landmark_files[index], m_name]
 
 
 class PatientDataset(Data.Dataset):
@@ -101,5 +100,5 @@ class PatientDataset(Data.Dataset):
             print("=================================================")
             raise ValueError
 
-        return m_img, f_img, m_name
+        return [m_img, f_img, m_name]
 
