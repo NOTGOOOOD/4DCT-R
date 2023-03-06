@@ -123,7 +123,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         # embeding = torch.cat([e0, fea_e0], dim=1) + att
         # embeding = att
         # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
-        embeding = torch.cat([e0, fea_e0], dim=1)
+        att = self.ca_module(e0, fea_e0)
+        embeding = torch.cat([e0 + att, fea_e0 + att], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
@@ -131,10 +132,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         decoder = x1 + x2  # B, C, D, H, W
 
-        att = self.ca_module(e0, fea_e0)  # B,C, DHW/d, DHW/d
-        decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0],-1,decoder.shape[2],decoder.shape[3],decoder.shape[4])
+        # att = self.ca_module(e0, fea_e0)  # B,C, DHW/d, DHW/d
+        # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0],-1,decoder.shape[2],decoder.shape[3],decoder.shape[4])
 
-        output_disp_e0_v = self.output_lvl1(decoder_plus) * self.range_flow
+        output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
@@ -178,7 +179,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention_3(self.start_channel * 4, self.start_channel * 8)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -327,7 +328,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention_3(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -418,7 +419,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # att = self.ca_module(e0, fea_e0)
         # embeding = torch.cat([e0, fea_e0], dim=1)
         att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        embeding = torch.cat([e0+att, fea_e0+att], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
