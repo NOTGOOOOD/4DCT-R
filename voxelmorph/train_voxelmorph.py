@@ -67,8 +67,8 @@ def train():
     model = model.to(device)
 
     # Set optimizer and losses
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
     # prepare image loss
     if args.sim_loss == 'ncc':
         # image_loss_func = NCC([args.win_size]*3).loss
@@ -91,7 +91,7 @@ def train():
     weights += [args.alpha]
 
     # # set scheduler
-    scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
+    # scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
     # stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
 
     # load data
@@ -147,7 +147,7 @@ def train():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            scheduler.step()
+            # scheduler.step()
 
             # if i % args.n_save_iter == 0:
             #     # save warped image0
