@@ -2,8 +2,15 @@ import torch
 import numpy as np
 import os
 from scipy import interpolate
+from skimage.metrics import structural_similarity
 
 from utils.utilize import get_project_path
+
+
+def SSIM(real, predict):
+    real_copy = np.copy(real)
+    predict_copy = np.copy(predict)
+    return structural_similarity(real_copy, predict_copy)
 
 
 def NCC(real, predict):
@@ -113,8 +120,8 @@ def get_test_photo_loss(args, logger, model, test_loader):
         model.eval()
         losses = []
         for batch, (moving, fixed, landmarks, _) in enumerate(test_loader):
-            m_img = moving[0].to('cuda').float()
-            f_img = fixed[0].to('cuda').float()
+            m_img = moving.to('cuda').float()
+            f_img = fixed.to('cuda').float()
 
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             # landmarks50 = landmarks['landmark_50'].squeeze().cuda()
