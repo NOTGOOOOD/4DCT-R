@@ -7,10 +7,10 @@ from skimage.metrics import structural_similarity
 from utils.utilize import get_project_path
 
 
-def SSIM(real, predict):
+def SSIM(real, predict, data_range=1):
     real_copy = np.copy(real)
     predict_copy = np.copy(predict)
-    return structural_similarity(real_copy, predict_copy)
+    return structural_similarity(real_copy, predict_copy, data_range=data_range)
 
 
 def NCC(real, predict):

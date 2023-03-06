@@ -9,7 +9,7 @@ from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, 
     neg_Jdet_loss, smoothloss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import calc_tre, MSE, landmark_loss
+from utils.metric import calc_tre, MSE, landmark_loss, SSIM
 from utils.datagenerators import DirLabDataset, PatientDataset, Dataset
 
 
@@ -295,34 +295,14 @@ def test_patient(args, checkpoint, is_save=False):
 
             Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
 
-            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-
-            # TRE
-            # _mean, _std = calc_tre(F_X_Y[0], landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-            #                        torch.tensor(landmarks['disp_00_50']).squeeze(),
-            #                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
-            # _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-            #                        landmarks['disp_affine'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
-
             # MSE
             _mse = MSE(fixed_img, lv3_out)
+            # SSIM
+            _ssim = SSIM(fixed_img.cpu().detach().numpy()[0,0], lv3_out.cpu().detach().numpy()[0,0])
 
-            # # TRE
-            # _mean, _std = landmark_loss(F_X_Y[0], landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-            #                             landmarks50 - torch.tensor(
-            #                                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-            #                                                                                                       3).cuda(),
-            #                             args.dirlab_cfg[batch + 1]['pixel_spacing'])
-
-            # losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
-            # print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
-            #     batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
-            losses.append([_mse.item(), Jac.item()])
-            print('case=%d after warped,MSE=%.5f Jac=%.6f' % (
-                batch + 1, _mse.item(), Jac.item()))
+            losses.append([_mse.item(), Jac.item(), _ssim.item()])
+            print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f' % (
+                batch + 1, _mse.item(), Jac.item(), _ssim.item()))
 
             if is_save:
                 # Save DVF
@@ -347,8 +327,9 @@ def test_patient(args, checkpoint, is_save=False):
     mean_total = np.mean(losses, 0)
     mean_mse = mean_total[0]
     mean_jac = mean_total[1]
+    mean_ssim = mean_total[2]
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
-    print('mean MSE=%.3f Jac=%.6f' % (mean_mse, mean_jac))
+    print('mean MSE=%.3f Jac=%.6f SSIM=%.5f' % (mean_mse, mean_jac, mean_ssim))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):
@@ -439,19 +420,29 @@ if __name__ == '__main__':
         os.mkdir(args.output_dir)
 
     landmark_list = load_landmarks(args.landmark_dir)
-    fixed_folder = os.path.join(args.test_dir, 'fixed')
-    moving_folder = os.path.join(args.test_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    dir_moving_folder = os.path.join(args.test_dir, 'moving')
+    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    pa_moving_folder = r'D:\xxf\test_patient\moving'
+
+    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
                               file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+    m_dir_file_list = sorted([os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
                               file_name.lower().endswith('.gz')])
 
-    test_dataset_dirlab = DirLabDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
-    test_dataset_patient = PatientDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    f_patient_file_list = sorted([os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_patient_file_list = sorted([os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                        landmark_files=landmark_list)
+    test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
+                                          num_workers=0)
 
-    prefix = '2023-03-05-10-58-23'
+    prefix = '2023-03-06-09-45-47'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
