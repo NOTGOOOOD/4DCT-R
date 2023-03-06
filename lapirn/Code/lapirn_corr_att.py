@@ -251,10 +251,14 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
-        lvl1_disp_up = self.up_tri(lvl1_disp)
+        # lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
+
+        lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -397,7 +401,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
             x, y)
-        lvl2_disp_up = self.up_tri(lvl2_disp)
+        # lvl2_disp_up = self.up_tri(lvl2_disp)
+        lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
