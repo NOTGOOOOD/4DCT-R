@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from Functions import generate_grid_unit, transform_unit_flow_to_flow, transform_unit_flow_to_flow_cuda
-from lapirn_corr_att import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
     neg_Jdet_loss, smoothloss
 from utils.utilize import load_landmarks, save_image
@@ -80,7 +80,7 @@ def validation(args, model, imgshape, loss_similarity, ori_shape):
 def test_dirlab(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
-        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
@@ -257,7 +257,7 @@ def test_dirlab(args, checkpoint, is_save=False):
 def test_patient(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
-        for batch, (moving, fixed, img_name) in enumerate(test_loader):
+        for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
@@ -446,19 +446,22 @@ if __name__ == '__main__':
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
 
-    test_dataset = DirLabDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
-    # test_dataset = PatientDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    test_dataset_dirlab = DirLabDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list, landmark_files=landmark_list)
+    test_dataset_patient = PatientDataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-03-04-19-37-11'
+    prefix = '2023-03-05-10-58-23'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
         test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+        test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
             test_dirlab(args, checkpoint)
+            test_patient(args, checkpoint)
 
     # validation(args)
