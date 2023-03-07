@@ -15,6 +15,7 @@ from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks
 from utils.scheduler import WarmupCosineSchedule
 from utils.metric import get_test_photo_loss
+from lapirn.Code.Test_LapIRN_disp import validation
 
 args = get_args()
 
@@ -48,6 +49,7 @@ def train():
 
     test_fixed_folder = os.path.join(args.test_dir, 'fixed')
     test_moving_folder = os.path.join(args.test_dir, 'moving')
+
     test_fixed_list = sorted(
         [os.path.join(test_fixed_folder, file_name) for file_name in os.listdir(test_fixed_folder) if
          file_name.lower().endswith('.gz')])
@@ -122,7 +124,7 @@ def train():
             y_true = [input_fixed, input_moving] if args.bidir else [input_fixed, None]
             y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
 
-            loss = 0
+            loss = 0.
             loss_list = []
             for n, loss_function in enumerate(losses):
                 curr_loss = loss_function(y_true[n], y_pred[n]) * weights[n]
@@ -162,18 +164,24 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        test_loss = get_test_photo_loss(args, logging, model, test_loader)
-        mean_tre = torch.mean(torch.tensor(test_loss), 0)[0]
-        mean_std = torch.mean(torch.tensor(test_loss), 0)[1]
-        mean_mse = torch.mean(torch.tensor(test_loss), 0)[2]
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, [144,144,144], image_loss_func,
+                                                                              [144,144,144])
+        print("iter: %d, mean train loss:%2.5f, val total_loss:%.5f ncc:%.5f, test mse:%.5f test jac:%.5f test" % (
+            i, np.mean(loss_total), val_total_loss.item(), val_ncc_loss.item(), val_mse_loss.item(), val_jac_loss.item()))
+
+
+        # test_loss = get_test_photo_loss(args, logging, model, test_loader)
+        # mean_tre = torch.mean(torch.tensor(test_loss), 0)[0]
+        # mean_std = torch.mean(torch.tensor(test_loss), 0)[1]
+        # mean_mse = torch.mean(torch.tensor(test_loss), 0)[2]
 
         # if mean_tre < best_tre and best_tre - mean_tre > 0.01:
         #     best_tre = mean_tre
         #     save_model(args, model, optimizer, None, train_time)
         #     logging.info("best tre{}".format(test_loss))
 
-        print("iter: %d, mean train loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
-            i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
+        # print("iter: %d, mean train loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
+        #     i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
 
 
 if __name__ == "__main__":
