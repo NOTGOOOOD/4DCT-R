@@ -190,7 +190,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
             flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
             flow[:, 1, :, :, :] = flow[:, 1, :, :, :] * (y - 1)
             flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
-            loss_regulation = smoothloss(flow)
+            # loss_regulation = smoothloss(flow)
 
             loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian
 
