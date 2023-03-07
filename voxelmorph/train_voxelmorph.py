@@ -63,7 +63,7 @@ def train():
         dim=3,
         nb_unet_features=[enc_nf, dec_nf],
         bidir=args.bidir,
-        int_steps=7,
+        int_steps=0,
         int_downsize=2
     )
     model = model.to(device)
@@ -98,7 +98,8 @@ def train():
 
     # load data
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    test_dataset = DirLabDataset(moving_files=test_moving_list, fixed_files=test_fixed_list, landmark_files=landmark_list)
+    test_dataset = DirLabDataset(moving_files=test_moving_list, fixed_files=test_fixed_list,
+                                 landmark_files=landmark_list)
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -164,11 +165,12 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, [144, 144, 144], image_loss_func
-                                                                                     )
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, [144, 144, 144],
+                                                                                 image_loss_func
+                                                                                 )
         print("iter: %d, mean train loss:%2.5f, val total_loss:%.5f ncc:%.5f, test mse:%.5f test jac:%.5f test" % (
-            i, np.mean(loss_total), val_total_loss.item(), val_ncc_loss.item(), val_mse_loss.item(), val_jac_loss.item()))
-
+            i, np.mean(loss_total), val_total_loss.item(), val_ncc_loss.item(), val_mse_loss.item(),
+            val_jac_loss.item()))
 
         # test_loss = get_test_photo_loss(args, logging, model, test_loader)
         # mean_tre = torch.mean(torch.tensor(test_loss), 0)[0]

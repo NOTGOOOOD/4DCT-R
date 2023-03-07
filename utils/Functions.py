@@ -192,7 +192,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
             flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
             loss_regulation = smoothloss(flow)
 
-            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
+            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian
 
             losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
             # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
