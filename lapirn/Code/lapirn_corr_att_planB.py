@@ -8,7 +8,7 @@ from utils.losses import NCC
 from utils.Attention import Cross_attention
 
 
-def resblock_seq(self, in_channels, bias_opt=False):
+def resblock_seq(in_channels, bias_opt=False):
     layer = nn.Sequential(
         PreActBlock(in_channels, in_channels, bias=bias_opt),
         nn.LeakyReLU(0.2),
@@ -24,7 +24,7 @@ def resblock_seq(self, in_channels, bias_opt=False):
     return layer
 
 
-def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
+def input_feature_extract(in_channels, out_channels, kernel_size=3, stride=1, padding=1,
                           bias=False, batchnorm=False):
     if batchnorm:
         layer = nn.Sequential(
@@ -39,7 +39,7 @@ def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride
     return layer
 
 
-def outputs(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0,
+def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
             bias=False, batchnorm=False):
     if batchnorm:
         layer = nn.Sequential(
