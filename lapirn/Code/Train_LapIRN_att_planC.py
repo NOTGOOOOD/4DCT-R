@@ -169,7 +169,7 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-
+        break
 
 def train_lvl2():
     print("Training lvl2...")
@@ -300,7 +300,7 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
-
+        break
 
 def train_lvl3():
     print("Training lvl3...")

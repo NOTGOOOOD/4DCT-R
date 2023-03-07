@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Self_Attn, Cross_attention
+from utils.Attention import Self_Attn, Cross_attention_2 as Cross_attention
 from utils.utilize import show_slice
 
 
@@ -54,7 +54,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl1 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl1 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
     def resblock_seq(self, in_channels, bias_opt=False):
@@ -97,7 +97,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             layer = nn.Sequential(
                 # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
                 # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+                nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
@@ -118,6 +118,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
 
         e0 = self.up(e0)
+
+        if e0.shape != fea_e0.shape:
+            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
+                                            mode='trilinear',
+                                            align_corners=True)
 
         att = self.ca_module(e0, fea_e0)
         embeding = torch.cat([e0, fea_e0], dim=1) + att
@@ -192,7 +198,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl2 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl2 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -244,17 +250,21 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             layer = nn.Sequential(
                 # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
                 # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+                nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
-        lvl1_disp_up = self.up_tri(lvl1_disp)
+        # lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
+
+        lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -268,6 +278,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         e0 = self.up(e0)
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
+        if e0.shape != fea_e0.shape:
+            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
+                                            mode='trilinear',
+                                            align_corners=True)
+
         att = self.ca_module(e0, fea_e0)
         embeding = torch.cat([e0, fea_e0], dim=1) + att
 
@@ -341,7 +357,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl3 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl3 = self.outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                         bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -393,7 +409,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             layer = nn.Sequential(
                 # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
                 # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+                nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
                 nn.Softsign())
         return layer
 
@@ -401,7 +417,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
             x, y)
-        lvl2_disp_up = self.up_tri(lvl2_disp)
+        # lvl2_disp_up = self.up_tri(lvl2_disp)
+        lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
@@ -413,6 +432,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         e0 = e0 + lvl2_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
+
+        if e0.shape != fea_e0.shape:
+            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
+                                            mode='trilinear',
+                                            align_corners=True)
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         # att = self.ca_module(e0, fea_e0)

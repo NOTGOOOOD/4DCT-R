@@ -9,7 +9,7 @@ import time
 
 from Functions import generate_grid, transform_unit_flow_to_flow_cuda, \
     generate_grid_unit
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
     SpatialTransformNearest_unit, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.datagenerators import Dataset
