@@ -199,55 +199,55 @@ class Cross_attention_2(nn.Module):
             returns :
                 out : B, C, D, H, W
         """
-        # proj_query_x = self.query_conv(x).permute(0, 2, 3, 1, 4)  # B D H C W
-        #
-        # proj_key_y = self.query_conv(y).permute(0, 2, 3, 4, 1)  # B D H W C
-        #
-        # energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分   B D H C C
-        #
-        # attention_xy = self.activate(energy_xy)  # B D H C C
-        # attention_yx = self.activate(energy_xy.permute(0, 1, 2, 4, 3))  # BDHCC
-        #
-        # proj_value_x = proj_query_x  # self.value_conv_x(x) # [B, out_dim, 64]  B D H C W
-        # proj_value_y = proj_key_y.permute(0, 1, 2, 4,
-        #                                   3)  # self.value_conv_x(y) # [B, out_dim, 64]  B D H W C -> B D H C W
-        #
-        # out_x = torch.matmul(attention_xy, proj_value_x)  # [B, out_dim, D, H, W]  B D H C W
-        # out_x = self.beta * out_x + proj_value_x  # self.kama*
-        #
-        # out_y = torch.matmul(attention_yx, proj_value_y)  # [B, out_dim, D, H, W] B D H C W
-        # out_y = self.beta * out_y + proj_value_y  # self.kama *
-        #
-        # # # At last, a mutiplication between out_x and out_y then follow an active function, instead of concat
-        # # return self.activate(torch.mul(out_x, out_y)).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
-        # return torch.cat([out_x, out_y], dim=3).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
+        proj_query_x = self.query_conv(x).permute(0, 2, 3, 1, 4)  # B D H C W
+
+        proj_key_y = self.query_conv(y).permute(0, 2, 3, 4, 1)  # B D H W C
+
+        energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分   B D H C C
+
+        attention_xy = self.activate(energy_xy)  # B D H C C
+        attention_yx = self.activate(energy_xy.permute(0, 1, 2, 4, 3))  # BDHCC
+
+        proj_value_x = proj_query_x  # self.value_conv_x(x) # [B, out_dim, 64]  B D H C W
+        proj_value_y = proj_key_y.permute(0, 1, 2, 4,
+                                          3)  # self.value_conv_x(y) # [B, out_dim, 64]  B D H W C -> B D H C W
+
+        out_x = torch.matmul(attention_xy, proj_value_x)  # [B, out_dim, D, H, W]  B D H C W
+        out_x = self.beta * out_x + proj_value_x  # self.kama*
+
+        out_y = torch.matmul(attention_yx, proj_value_y)  # [B, out_dim, D, H, W] B D H C W
+        out_y = self.beta * out_y + proj_value_y  # self.kama *
+
+        # # At last, a mutiplication between out_x and out_y then follow an active function, instead of concat
+        # return self.activate(torch.mul(out_x, out_y)).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
+        return torch.cat([out_x.permute(0, 3, 1, 2, 4)+x, out_y.permute(0, 3, 1, 2, 4)+y], dim=1)  # B D H C W -> B,C,D,H,W
 
         # BCDHW B DHW C
         # B C DHW -> B C 1
         # B DHW 1
 
-        proj_query_x = self.query_conv(x).permute(0, 3, 4, 1, 2)  # B H W C D
-
-        proj_key_y = self.query_conv(y).permute(0, 3, 4, 2, 1)  # B H W D C
-
-        energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分   B H W C C
-
-        attention_xy = self.activate(energy_xy)  # B H W C C
-        attention_yx = self.activate(energy_xy.permute(0, 1, 2, 4, 3))  # BHWCC
-
-        proj_value_x = proj_query_x  # B H W C D
-        proj_value_y = proj_key_y.permute(0, 1, 2, 4,
-                                          3)  # B H W C D
-
-        out_x = torch.matmul(attention_xy, proj_value_x)  # B H W C D
-        out_x = self.beta * out_x + proj_value_x  # self.kama*
-
-        out_y = torch.matmul(attention_yx, proj_value_y)  # B H W C D
-        out_y = self.beta * out_y + proj_value_y  # self.kama *
-
-        # # At last, a mutiplication between out_x and out_y then follow an active function, instead of concat
-        # return self.activate(torch.mul(out_x, out_y)).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
-        return torch.cat([out_x, out_y], dim=3).permute(0, 3, 4, 1, 2)  # B,C,D,H,W
+        # proj_query_x = self.query_conv(x).permute(0, 3, 4, 1, 2)  # B H W C D
+        #
+        # proj_key_y = self.query_conv(y).permute(0, 3, 4, 2, 1)  # B H W D C
+        #
+        # energy_xy = torch.matmul(proj_query_x, proj_key_y)  # xi 对 y所有点的注意力得分   B H W C C
+        #
+        # attention_xy = self.activate(energy_xy)  # B H W C C
+        # attention_yx = self.activate(energy_xy.permute(0, 1, 2, 4, 3))  # BHWCC
+        #
+        # proj_value_x = proj_query_x  # B H W C D
+        # proj_value_y = proj_key_y.permute(0, 1, 2, 4,
+        #                                   3)  # B H W C D
+        #
+        # out_x = torch.matmul(attention_xy, proj_value_x)  # B H W C D
+        # out_x = self.beta * out_x + proj_value_x  # self.kama*
+        #
+        # out_y = torch.matmul(attention_yx, proj_value_y)  # B H W C D
+        # out_y = self.beta * out_y + proj_value_y  # self.kama *
+        #
+        # # # At last, a mutiplication between out_x and out_y then follow an active function, instead of concat
+        # # return self.activate(torch.mul(out_x, out_y)).permute(0, 3, 1, 2, 4)  # B D H C W -> B,C,D,H,W
+        # return torch.cat([out_x, out_y], dim=3).permute(0, 3, 4, 1, 2)  # B,C,D,H,W
 
 
 # cross
