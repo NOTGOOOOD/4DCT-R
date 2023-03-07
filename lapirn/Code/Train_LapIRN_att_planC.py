@@ -1,4 +1,3 @@
-import glob
 import os
 import sys
 import numpy as np
@@ -7,18 +6,15 @@ import torch.utils.data as Data
 import logging
 import time
 
-from Functions import generate_grid, transform_unit_flow_to_flow_cuda, \
-    generate_grid_unit
+from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda
 from lapirn_corr_att_planC import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit, \
-    SpatialTransformNearest_unit, smoothloss, neg_Jdet_loss, multi_resolution_NCC
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC
-from utils.utilize import save_image, save_model
+from utils.losses import NCC,smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed
-from Test_LapIRN_disp import validation
+from utils.Functions import validation_lapirn
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -146,7 +142,7 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_4, loss_similarity,
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4, loss_similarity,
                                                                               imgshape)
 
         # with lr 1e-3 + with bias
@@ -274,7 +270,7 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape_2, loss_similarity,
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2, loss_similarity,
                                                                               imgshape)
 
         # with lr 1e-3 + with bias
@@ -420,7 +416,7 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, imgshape, loss_similarity,
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape, loss_similarity,
                                                                               imgshape)
 
         # with lr 1e-3 + with bias

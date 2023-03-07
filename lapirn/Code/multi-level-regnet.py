@@ -6,15 +6,15 @@ import torch.utils.data as Data
 import logging
 import time
 
-from Functions import generate_grid, generate_grid_unit, transform_unit_flow_to_flow_cuda, transform_unit_flow_to_flow
+from utils.Functions import generate_grid, generate_grid_unit, transform_unit_flow_to_flow_cuda
 from unet import UNet_lv1, UNet_lv2, UNet_lv3, SpatialTransform_unit
 from miccai2020_model_stage import smoothloss, neg_Jdet_loss, multi_resolution_NCC
-from utils.datagenerators import Dataset, TestDataset
+from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, load_landmarks, save_image
-from utils.metric import MSE, landmark_loss
+from utils.utilize import set_seed
+from utils.metric import MSE
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"

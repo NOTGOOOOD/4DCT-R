@@ -6,13 +6,14 @@ from matplotlib import pyplot as plt
 import cv2
 from PIL import Image
 import random
+import torch.nn as nn
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 def show_slice(img_mov):
     fig, ax = plt.subplots(1, 1)
-    img_mov = img_mov[0,0]
+    img_mov = img_mov[0, 0]
     img_shape = int(img_mov.shape[0] / 2)
     ax.imshow(img_mov[img_shape, :, :], cmap='gray')
     # ax[1].imshow(img_mov[:, img_shape, :], cmap='gray')

@@ -9,7 +9,7 @@ import torch
 import torch.utils.data as Data
 import torch.nn.functional as F
 
-from Functions import generate_grid, Dataset_epoch, transform_unit_flow_to_flow_cuda, \
+from utils.Functions import generate_grid, Dataset_epoch, transform_unit_flow_to_flow_cuda, \
     generate_grid_unit, Dataset_epoch_validation
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
     Miccai2020_LDR_laplacian_unit_add_lvl3, SpatialTransform_unit, SpatialTransformNearest_unit, smoothloss, \

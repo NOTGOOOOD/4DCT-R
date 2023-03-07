@@ -1,12 +1,8 @@
 import os
 from argparse import ArgumentParser
 
-import numpy as np
-import torch
-
-from Functions import generate_grid_unit, save_img, save_flow, transform_unit_flow_to_flow, load_4D
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3, SpatialTransform_unit
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 parser = ArgumentParser()
 parser.add_argument("--modelpath", type=str,

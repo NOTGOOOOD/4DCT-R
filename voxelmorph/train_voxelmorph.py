@@ -15,7 +15,7 @@ from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks
 from utils.scheduler import WarmupCosineSchedule
 from utils.metric import get_test_photo_loss
-from lapirn.Code.Test_LapIRN_disp import validation
+from utils.Functions import validation_vm
 
 args = get_args()
 
@@ -164,8 +164,8 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, [144,144,144], image_loss_func,
-                                                                              [144,144,144])
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, [144, 144, 144], image_loss_func
+                                                                                     )
         print("iter: %d, mean train loss:%2.5f, val total_loss:%.5f ncc:%.5f, test mse:%.5f test jac:%.5f test" % (
             i, np.mean(loss_total), val_total_loss.item(), val_ncc_loss.item(), val_mse_loss.item(), val_jac_loss.item()))
 

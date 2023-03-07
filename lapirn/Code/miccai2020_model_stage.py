@@ -3,10 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Functions import generate_grid_unit
+from utils.Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Self_Attn, Cross_attention
-from utils.utilize import show_slice
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):

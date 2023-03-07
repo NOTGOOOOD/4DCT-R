@@ -6,15 +6,14 @@ import torch.utils.data as Data
 import logging
 import time
 
-from Functions import generate_grid, Dataset_epoch, transform_unit_flow_to_flow_cuda, \
-    generate_grid_unit
+from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
-    Miccai2020_LDR_laplacian_unit_add_lvl3, SpatialTransform_unit, SpatialTransformNearest_unit, smoothloss, \
+    Miccai2020_LDR_laplacian_unit_add_lvl3, SpatialTransform_unit, smoothloss, \
     neg_Jdet_loss, multi_resolution_NCC
 from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC
-from utils.utilize import save_image, save_model
+from utils.utilize import save_image
 from utils.scheduler import StopCriterion
 from Test_LapIRN_disp import validation
 

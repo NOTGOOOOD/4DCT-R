@@ -123,7 +123,7 @@ def get_args():
     parser.add_argument("--antifold", type=float,
                         dest="antifold", default=100,
                         help="Anti-fold loss: suggested range 0 to 1000")
-    parser.add_argument("--smooth", type=float, choices=[1.0, 3.5],
+    parser.add_argument("--smooth", type=float,
                         dest="smooth", default=1.0,
                         help="Gradient smooth loss: suggested range 0.1 to 10, diff use 3.5 ")
     parser.add_argument("--freeze_step", type=int,

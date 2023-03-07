@@ -73,6 +73,7 @@ class NCC(nn.Module):
 
         return -torch.mean(cc)
 
+
 # 平滑正则损失
 def gradient_loss(s, penalty='l2'):
     '''
@@ -175,50 +176,50 @@ def Get_Ja(flow):
     return D1 - D2 + D3
 
 
-def jacobian_determinant(disp):
-    """
-    jacobian determinant of a displacement field.
-    NB: to compute the spatial gradients, we use np.gradient.
-
-    Parameters:
-        disp: 2D or 3D displacement field of size [*vol_shape, nb_dims],
-              where vol_shape is of len nb_dims
-
-    Returns:
-        jacobian determinant (scalar)
-    """
-
-    # check inputs
-    volshape = disp.shape[:-1]
-    nb_dims = len(volshape)
-    assert len(volshape) in (2, 3), 'flow has to be 2D or 3D'
-
-    # compute grid
-    grid_lst = nd.volsize2ndgrid(volshape)
-    grid = np.stack(grid_lst, len(volshape))
-
-    # compute gradients
-    J = np.gradient(disp + grid)
-
-    # 3D glow
-    if nb_dims == 3:
-        dx = J[0]
-        dy = J[1]
-        dz = J[2]
-
-        # compute jacobian components
-        Jdet0 = dx[..., 0] * (dy[..., 1] * dz[..., 2] - dy[..., 2] * dz[..., 1])
-        Jdet1 = dx[..., 1] * (dy[..., 0] * dz[..., 2] - dy[..., 2] * dz[..., 0])
-        Jdet2 = dx[..., 2] * (dy[..., 0] * dz[..., 1] - dy[..., 1] * dz[..., 0])
-
-        return Jdet0 - Jdet1 + Jdet2
-
-    else:  # must be 2
-
-        dfdx = J[0]
-        dfdy = J[1]
-
-        return dfdx[..., 0] * dfdy[..., 1] - dfdy[..., 0] * dfdx[..., 1]
+# def jacobian_determinant(disp):
+#     """
+#     jacobian determinant of a displacement field.
+#     NB: to compute the spatial gradients, we use np.gradient.
+#
+#     Parameters:
+#         disp: 2D or 3D displacement field of size [*vol_shape, nb_dims],
+#               where vol_shape is of len nb_dims
+#
+#     Returns:
+#         jacobian determinant (scalar)
+#     """
+#
+#     # check inputs
+#     volshape = disp.shape[:-1]
+#     nb_dims = len(volshape)
+#     assert len(volshape) in (2, 3), 'flow has to be 2D or 3D'
+#
+#     # compute grid
+#     grid_lst = nd.volsize2ndgrid(volshape)
+#     grid = np.stack(grid_lst, len(volshape))
+#
+#     # compute gradients
+#     J = np.gradient(disp + grid)
+#
+#     # 3D glow
+#     if nb_dims == 3:
+#         dx = J[0]
+#         dy = J[1]
+#         dz = J[2]
+#
+#         # compute jacobian components
+#         Jdet0 = dx[..., 0] * (dy[..., 1] * dz[..., 2] - dy[..., 2] * dz[..., 1])
+#         Jdet1 = dx[..., 1] * (dy[..., 0] * dz[..., 2] - dy[..., 2] * dz[..., 0])
+#         Jdet2 = dx[..., 2] * (dy[..., 0] * dz[..., 1] - dy[..., 1] * dz[..., 0])
+#
+#         return Jdet0 - Jdet1 + Jdet2
+#
+#     else:  # must be 2
+#
+#         dfdx = J[0]
+#         dfdy = J[1]
+#
+#         return dfdx[..., 0] * dfdy[..., 1] - dfdy[..., 0] * dfdx[..., 1]
 
 
 def NJ_loss(ypred):
@@ -227,3 +228,58 @@ def NJ_loss(ypred):
     '''
     Neg_Jac = 0.5 * (torch.abs(Get_Ja(ypred)) - Get_Ja(ypred))
     return torch.sum(Neg_Jac)
+
+
+def JacboianDet(y_pred, sample_grid):
+    J = y_pred + sample_grid
+    dy = J[:, 1:, :-1, :-1, :] - J[:, :-1, :-1, :-1, :]
+    dx = J[:, :-1, 1:, :-1, :] - J[:, :-1, :-1, :-1, :]
+    dz = J[:, :-1, :-1, 1:, :] - J[:, :-1, :-1, :-1, :]
+
+    Jdet0 = dx[:, :, :, :, 0] * (dy[:, :, :, :, 1] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 1])
+    Jdet1 = dx[:, :, :, :, 1] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 0])
+    Jdet2 = dx[:, :, :, :, 2] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 1] - dy[:, :, :, :, 1] * dz[:, :, :, :, 0])
+
+    Jdet = Jdet0 - Jdet1 + Jdet2
+
+    return Jdet
+
+
+def smoothloss(y_pred):
+    dy = torch.abs(y_pred[:, :, 1:, :, :] - y_pred[:, :, :-1, :, :])
+    dx = torch.abs(y_pred[:, :, :, 1:, :] - y_pred[:, :, :, :-1, :])
+    dz = torch.abs(y_pred[:, :, :, :, 1:] - y_pred[:, :, :, :, :-1])
+    return (torch.mean(dx * dx) + torch.mean(dy * dy) + torch.mean(dz * dz)) / 3.0
+
+
+def neg_Jdet_loss(y_pred, sample_grid):
+    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
+    selected_neg_Jdet = F.relu(neg_Jdet)
+
+    return torch.mean(selected_neg_Jdet)
+
+
+class multi_resolution_NCC(torch.nn.Module):
+    """
+    local (over window) normalized cross correlation
+    """
+
+    def __init__(self, win=None, eps=1e-5, scale=3):
+        super(multi_resolution_NCC, self).__init__()
+        self.num_scale = scale
+        self.similarity_metric = []
+
+        for i in range(scale):
+            self.similarity_metric.append(NCC(win=win - (i * 2)))
+
+    def forward(self, I, J):
+        total_NCC = []
+
+        for i in range(self.num_scale):
+            current_NCC = self.similarity_metric[i](I, J)
+            total_NCC.append(current_NCC / (2 ** i))
+
+            I = nn.functional.avg_pool3d(I, kernel_size=3, stride=2, padding=1, count_include_pad=False)
+            J = nn.functional.avg_pool3d(J, kernel_size=3, stride=2, padding=1, count_include_pad=False)
+
+        return sum(total_NCC)

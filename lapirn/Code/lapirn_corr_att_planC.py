@@ -3,10 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from Functions import generate_grid_unit
+from utils.Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Self_Attn, Cross_attention_3, Cross_head
-from utils.utilize import show_slice
+from utils.Attention import Cross_attention_3, Cross_head
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
@@ -503,35 +502,6 @@ class DiffeomorphicTransform_unit(nn.Module):
         return flow
 
 
-def smoothloss(y_pred):
-    dy = torch.abs(y_pred[:, :, 1:, :, :] - y_pred[:, :, :-1, :, :])
-    dx = torch.abs(y_pred[:, :, :, 1:, :] - y_pred[:, :, :, :-1, :])
-    dz = torch.abs(y_pred[:, :, :, :, 1:] - y_pred[:, :, :, :, :-1])
-    return (torch.mean(dx * dx) + torch.mean(dy * dy) + torch.mean(dz * dz)) / 3.0
-
-
-def JacboianDet(y_pred, sample_grid):
-    J = y_pred + sample_grid
-    dy = J[:, 1:, :-1, :-1, :] - J[:, :-1, :-1, :-1, :]
-    dx = J[:, :-1, 1:, :-1, :] - J[:, :-1, :-1, :-1, :]
-    dz = J[:, :-1, :-1, 1:, :] - J[:, :-1, :-1, :-1, :]
-
-    Jdet0 = dx[:, :, :, :, 0] * (dy[:, :, :, :, 1] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 1])
-    Jdet1 = dx[:, :, :, :, 1] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 0])
-    Jdet2 = dx[:, :, :, :, 2] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 1] - dy[:, :, :, :, 1] * dz[:, :, :, :, 0])
-
-    Jdet = Jdet0 - Jdet1 + Jdet2
-
-    return Jdet
-
-
-def neg_Jdet_loss(y_pred, sample_grid):
-    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
-    selected_neg_Jdet = F.relu(neg_Jdet)
-
-    return torch.mean(selected_neg_Jdet)
-
-
 class NCC_bak(torch.nn.Module):
     """
     local (over window) normalized cross correlation
@@ -584,29 +554,3 @@ class NCC_bak(torch.nn.Module):
 
         # return negative cc.
         return -1.0 * torch.mean(cc)
-
-
-class multi_resolution_NCC(torch.nn.Module):
-    """
-    local (over window) normalized cross correlation
-    """
-
-    def __init__(self, win=None, eps=1e-5, scale=3):
-        super(multi_resolution_NCC, self).__init__()
-        self.num_scale = scale
-        self.similarity_metric = []
-
-        for i in range(scale):
-            self.similarity_metric.append(NCC(win=win - (i * 2)))
-
-    def forward(self, I, J):
-        total_NCC = []
-
-        for i in range(self.num_scale):
-            current_NCC = self.similarity_metric[i](I, J)
-            total_NCC.append(current_NCC / (2 ** i))
-
-            I = nn.functional.avg_pool3d(I, kernel_size=3, stride=2, padding=1, count_include_pad=False)
-            J = nn.functional.avg_pool3d(J, kernel_size=3, stride=2, padding=1, count_include_pad=False)
-
-        return sum(total_NCC)
