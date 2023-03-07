@@ -165,7 +165,6 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-        break
 
 def train_lvl2():
     print("Training lvl2...")
@@ -189,7 +188,7 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, start_channel, is_train=True, imgshape=imgshape_2,
                                                         range_flow=range_flow, model_lvl1=model_lvl1).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
@@ -296,7 +295,6 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
-        break
 
 def train_lvl3():
     print("Training lvl3...")
