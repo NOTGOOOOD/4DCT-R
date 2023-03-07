@@ -5,7 +5,54 @@ import torch.nn.functional as F
 
 from utils.Functions import generate_grid_unit
 from utils.losses import NCC
-from utils.Attention import Cross_attention_3, Cross_head
+from utils.Attention import Cross_attention_2
+
+
+def resblock_seq(in_channels, bias_opt=False):
+    layer = nn.Sequential(
+        PreActBlock(in_channels, in_channels, bias=bias_opt),
+        nn.LeakyReLU(0.2),
+        PreActBlock(in_channels, in_channels, bias=bias_opt),
+        nn.LeakyReLU(0.2),
+        PreActBlock(in_channels, in_channels, bias=bias_opt),
+        nn.LeakyReLU(0.2),
+        PreActBlock(in_channels, in_channels, bias=bias_opt),
+        nn.LeakyReLU(0.2),
+        PreActBlock(in_channels, in_channels, bias=bias_opt),
+        nn.LeakyReLU(0.2)
+    )
+    return layer
+
+
+def input_feature_extract(in_channels, out_channels, kernel_size=3, stride=1, padding=1,
+                          bias=False, batchnorm=False):
+    if batchnorm:
+        layer = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU())
+    else:
+        layer = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
+    return layer
+
+
+def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
+            bias=False, batchnorm=False):
+    if batchnorm:
+        layer = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.BatchNorm3d(out_channels),
+            nn.Tanh())
+    else:
+        layer = nn.Sequential(
+            # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
+            # nn.LeakyReLU(0.2),
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.Softsign())
+    return layer
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
@@ -27,12 +74,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = self.resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
 
         self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
@@ -40,8 +87,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        self.ca_module = Cross_attention_3(self.start_channel * 4, self.start_channel * 4)
-        self.cross_att = Cross_head(self.start_channel * 4, 3)
+        self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -53,52 +99,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl1 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
-
-    def resblock_seq(self, in_channels, bias_opt=False):
-        layer = nn.Sequential(
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2)
-        )
-        return layer
-
-    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
-                              bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
-                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
-        return layer
-
-    def outputs(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0,
-                bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.Tanh())
-        else:
-            layer = nn.Sequential(
-                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.Softsign())
-        return layer
+        self.output_lvl1 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+                                   bias=False)
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w
@@ -109,36 +111,28 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
-        # two 3^3 3D conv layer with stride 1
-        fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
-        # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
-        # one 3^3 3D conv layer with stride 2
-        e0 = self.down_conv(fea_e0)
-        e0 = self.resblock_group_lvl1(e0)
+        fea_x = self.input_encoder_lvl1(down_x)
+        fea_y = self.input_encoder_lvl1(down_y)
 
-        e0 = self.up(e0)
+        # Dual stream
+        fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x)))
+        fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y)))
 
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
-        # embeding = att
-        # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0 + att, fea_e0 + att], dim=1)
+        fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
+        embeding = self.ca_module(fea_x_e0, fea_y_e0)
 
+        # correlation layer
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
         decoder = x1 + x2  # B, C, D, H, W
 
-        # att = self.ca_module(e0, fea_e0)  # B,C, DHW/d, DHW/d
-        # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0],-1,decoder.shape[2],decoder.shape[3],decoder.shape[4])
-
         output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, fea_xy_e0
         else:
             return output_disp_e0_v, warpped_inputx_lvl1_out
 
@@ -165,12 +159,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = self.resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
         self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
@@ -178,7 +172,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.ca_module = Cross_attention_3(self.start_channel * 4, self.start_channel * 8)
+        self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -192,8 +186,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl2 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+        self.output_lvl2 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -203,50 +197,6 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         print("\nunfreeze model_lvl1 parameter")
         for param in self.model_lvl1.parameters():
             param.requires_grad = True
-
-    def resblock_seq(self, in_channels, bias_opt=False):
-        layer = nn.Sequential(
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2)
-        )
-        return layer
-
-    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
-                              bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
-                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
-        return layer
-
-    def outputs(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0,
-                bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.Tanh())
-        else:
-            layer = nn.Sequential(
-                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.Softsign())
-        return layer
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -258,18 +208,18 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
-        cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
+        # cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
-        fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
+        fea_x = self.input_encoder_lvl1(torch.cat((warpped_x, lvl1_disp_up), 1))
+        fea_y = self.input_encoder_lvl1(torch.cat((y_down, lvl1_disp_up), 1))
 
-        e0 = self.down_conv(fea_e0)
-        e0 = e0 + lvl1_embedding
-        e0 = self.resblock_group_lvl1(e0)
-        e0 = self.up(e0)
+        x_embedding = lvl1_embedding[:, 0:28, ...]
+        y_embedding = lvl1_embedding[:, 28:, ...]
+        fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x) + x_embedding))
+        fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y) + y_embedding))
 
-        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
+        embeding = self.ca_module(fea_x_e0, fea_y_e0)
 
         # embeding = torch.cat([e0, fea_e0], dim=1)
         decoder = self.decoder(embeding)
@@ -287,7 +237,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, fea_xy_e0
         else:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
 
@@ -314,12 +264,12 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = self.resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
         self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
@@ -327,7 +277,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
-        self.ca_module = Cross_attention_3(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention_2(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -341,8 +291,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl3 = self.outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+        self.output_lvl3 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -353,50 +303,6 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         for param in self.model_lvl2.parameters():
             param.requires_grad = True
 
-    def resblock_seq(self, in_channels, bias_opt=False):
-        layer = nn.Sequential(
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2),
-            PreActBlock(in_channels, in_channels, bias=bias_opt),
-            nn.LeakyReLU(0.2)
-        )
-        return layer
-
-    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
-                              bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
-                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
-        return layer
-
-    def outputs(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0,
-                bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.Tanh())
-        else:
-            layer = nn.Sequential(
-                # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
-                # nn.LeakyReLU(0.2),
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.Softsign())
-        return layer
-
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
@@ -404,21 +310,17 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         lvl2_disp_up = self.up_tri(lvl2_disp)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
-        cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
-        # cat_input = torch.cat((y, lvl2_disp_up), 1)
+        fea_x = self.input_encoder_lvl1(torch.cat((warpped_x, lvl2_disp_up), 1))
+        fea_y = self.input_encoder_lvl1(torch.cat((y, lvl2_disp_up), 1))
 
-        fea_e0 = self.input_encoder_lvl1(cat_input)
+        x_embedding = lvl2_embedding[:, 0:28, ...]
+        y_embedding = lvl2_embedding[:, 28:, ...]
 
-        e0 = self.down_conv(fea_e0)
-        e0 = e0 + lvl2_embedding
-        e0 = self.resblock_group_lvl1(e0)
-        e0 = self.up(e0)
+        fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x) + x_embedding))
+        fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y) + y_embedding))
 
-        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1)
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0+att, fea_e0+att], dim=1)
+        fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
+        embeding = self.ca_module(fea_x_e0, fea_y_e0)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
@@ -436,7 +338,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
 
         if self.is_train is True:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
+            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, fea_xy_e0
         else:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out
 

@@ -56,7 +56,7 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, start_channel, is_train=True, imgshape=imgshape_4,
                                                         range_flow=range_flow).to(device)
 
     loss_similarity = NCC(win=3)
@@ -171,7 +171,7 @@ def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, start_channel, is_train=True, imgshape=imgshape_4,
                                                              range_flow=range_flow).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl1_000_-0.3839.pth'
@@ -302,9 +302,9 @@ def train_lvl3():
     print("Training lvl3...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, start_channel, is_train=True, imgshape=imgshape_4,
                                                              range_flow=range_flow).to(device)
-    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
+    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, start_channel, is_train=True, imgshape=imgshape_2,
                                                              range_flow=range_flow, model_lvl1=model_lvl1).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
@@ -322,7 +322,7 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True, imgshape=imgshape,
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(1, 3, start_channel, is_train=True, imgshape=imgshape,
                                                         range_flow=range_flow, model_lvl2=model_lvl2).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
