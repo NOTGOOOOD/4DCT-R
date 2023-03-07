@@ -80,17 +80,16 @@ def train():
     else:
         raise ValueError('Image loss should be "mse" or "ncc", but found "%s"' % args.image_loss)
 
-    # need two image loss functions if bidirectional
-    if args.bidir:
-        losses = [image_loss_func, image_loss_func]
-        weights = [0.5, 0.5]
-    else:
-        losses = [image_loss_func]
-        weights = [1]
+    # # need two image loss functions if bidirectional
+    # if args.bidir:
+    #     losses = [image_loss_func, image_loss_func]
+    #     weights = [0.5, 0.5]
+    # else:
+    #     losses = [image_loss_func]
+    #     weights = [1]
 
     # prepare deformation loss
-    losses += [Grad('l2', loss_mult=2).loss]
-    weights += [args.alpha]
+    regular_loss = Grad('l2', loss_mult=2).loss
 
     # # set scheduler
     # scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
@@ -125,13 +124,19 @@ def train():
             y_true = [input_fixed, input_moving] if args.bidir else [input_fixed, None]
             y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
 
-            loss = 0.
             loss_list = []
-            for n, loss_function in enumerate(losses):
-                curr_loss = loss_function(y_true[n], y_pred[n]) * weights[n]
-                loss_list.append(curr_loss.item())
-                loss += curr_loss
+            r_loss = args.alpha * regular_loss(None, y_pred[1])
+            sim_loss = image_loss_func(y_true[0], y_pred[0])
 
+            # _, _, z, y, x = flow.shape
+            # flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
+            # flow[:, 1, :, :, :] = flow[:, 1, :, :, :] * (y - 1)
+            # flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
+            # # loss_regulation = smoothloss(flow)
+
+            loss = r_loss + sim_loss
+            loss_list.append(r_loss.item())
+            loss_list.append(sim_loss.item())
             loss_total.append(loss.item())
 
             moving_name = moving_file[1][0]
@@ -144,7 +149,7 @@ def train():
                     i, i_step, loss.item(), loss_list[0], loss_list[1]))
 
             epoch_iterator.set_description(
-                "Training (%d / %d Steps) (loss=%2.5f)" % (i_step, len(train_loader), loss.item())
+                "Training (%d / %d Steps) (loss=%2.5f, grad=%.5f)" % (i_step, len(train_loader), loss.item(), r_loss.item())
             )
             # Backwards and optimize
             optimizer.zero_grad()
