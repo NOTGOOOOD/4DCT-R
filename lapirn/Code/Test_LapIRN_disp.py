@@ -77,7 +77,8 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
                                                                                                                   3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0])
 
             losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
             print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (

@@ -5,6 +5,7 @@ from scipy import interpolate
 from skimage.metrics import structural_similarity
 
 from utils.utilize import get_project_path
+from matplotlib import pyplot as plt
 
 
 def SSIM(real, predict, data_range=1):
@@ -77,7 +78,7 @@ def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
     return np.mean(diff), np.std(diff)
 
 
-def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
+def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None):
     # flow + fixed - moving
     spec = torch.tensor(spacing).cuda()
 
@@ -86,6 +87,8 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
     # flow[2, :, :, :] = flow[2, :, :, :] * (zz - 1)/2
     # flow[1, :, :, :] = flow[1, :, :, :] * (yy - 1)/2
     # flow[0, :, :, :] = flow[0, :, :, :] * (xx - 1)/2
+    fig, ax = plt.subplots(1, 1)
+    ax.imshow(fixed_img[m_landmarks[2]], cmap='gray')
     for i in range(300):
         # point before warped
         f_point = f_landmarks[i].int()
@@ -96,8 +99,14 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing):
         # point after warped
         ori_point = torch.round(f_point + move)
         dist = ori_point - m_landmarks[i]
+
+        ax.scatter([m_landmarks[0]], [m_landmarks[1]], 10, color='red')
+        ax.scatter([ori_point[0]], [ori_point[1]], 10, color='green')
+        ax.set_title('landmark')
+
         all_dist.append(dist * spec)
 
+    plt.show()
     all_dist = torch.stack(all_dist)
     pt_errs_phys = torch.sqrt(torch.sum(all_dist * all_dist, 1))
 
