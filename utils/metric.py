@@ -78,7 +78,7 @@ def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
     return np.mean(diff), np.std(diff)
 
 
-def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None):
+def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_save=False):
     # flow + fixed - moving
     spec = torch.tensor(spacing).cuda()
 
@@ -87,8 +87,10 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None):
     # flow[2, :, :, :] = flow[2, :, :, :] * (zz - 1)/2
     # flow[1, :, :, :] = flow[1, :, :, :] * (yy - 1)/2
     # flow[0, :, :, :] = flow[0, :, :, :] * (xx - 1)/2
-    fig, ax = plt.subplots(1, 1)
-    ax.imshow(fixed_img[m_landmarks[2]], cmap='gray')
+    if is_save:
+        fig, ax = plt.subplots(1, 1)
+        ax.imshow(fixed_img[30], cmap='gray')
+
     for i in range(300):
         # point before warped
         f_point = f_landmarks[i].int()
@@ -100,13 +102,16 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None):
         ori_point = torch.round(f_point + move)
         dist = ori_point - m_landmarks[i]
 
-        ax.scatter([m_landmarks[0]], [m_landmarks[1]], 10, color='red')
-        ax.scatter([ori_point[0]], [ori_point[1]], 10, color='green')
-        ax.set_title('landmark')
+        if is_save:
+            ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10, color='red')
+            ax.scatter([ori_point[0].cpu().detach().int().item()], [ori_point[1].cpu().detach().int().item()], 10, color='green')
+            ax.set_title('landmark')
 
         all_dist.append(dist * spec)
 
-    plt.show()
+    if is_save:
+        plt.show()
+
     all_dist = torch.stack(all_dist)
     pt_errs_phys = torch.sqrt(torch.sum(all_dist * all_dist, 1))
 
