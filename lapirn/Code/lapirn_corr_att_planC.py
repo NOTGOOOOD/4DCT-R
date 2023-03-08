@@ -118,6 +118,15 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x)))
         fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y)))
 
+        if fea_x_e0.shape != fea_x.shape:
+            fea_x_e0 = F.interpolate(fea_x_e0, size=fea_x.shape[2:],
+                               mode='trilinear',
+                               align_corners=True)
+
+            fea_y_e0 = F.interpolate(fea_y_e0, size=fea_y.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
+
         fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
         embeding = self.ca_module(fea_x_e0, fea_y_e0)
 
@@ -201,10 +210,13 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
-        lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
+
+        lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -217,6 +229,15 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         y_embedding = lvl1_embedding[:, 28:, ...]
         fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x) + x_embedding))
         fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y) + y_embedding))
+
+        if fea_x_e0.shape != fea_x.shape:
+            fea_x_e0 = F.interpolate(fea_x_e0, size=fea_x.shape[2:],
+                               mode='trilinear',
+                               align_corners=True)
+
+            fea_y_e0 = F.interpolate(fea_y_e0, size=fea_y.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
         embeding = self.ca_module(fea_x_e0, fea_y_e0)
@@ -307,7 +328,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
             x, y)
-        lvl2_disp_up = self.up_tri(lvl2_disp)
+
+        lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
         fea_x = self.input_encoder_lvl1(torch.cat((warpped_x, lvl2_disp_up), 1))
@@ -318,6 +342,15 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         fea_x_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_x) + x_embedding))
         fea_y_e0 = self.up(self.resblock_group_lvl1(self.down_conv(fea_y) + y_embedding))
+
+        if fea_x_e0.shape != fea_x.shape:
+            fea_x_e0 = F.interpolate(fea_x_e0, size=fea_x.shape[2:],
+                               mode='trilinear',
+                               align_corners=True)
+
+            fea_y_e0 = F.interpolate(fea_y_e0, size=fea_y.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         fea_xy_e0 = torch.cat([fea_x_e0, fea_y_e0], dim=1)
         embeding = self.ca_module(fea_x_e0, fea_y_e0)

@@ -454,7 +454,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_lapirn_corr_att_planB_".format(train_time)
+    model_name = "{}_lapirn_corr_att_planC_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',

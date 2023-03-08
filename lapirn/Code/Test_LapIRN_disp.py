@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow, SpatialTransform_unit
-from lapirn_corr_att_planB import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from lapirn_corr_att_planC import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.losses import neg_Jdet_loss
@@ -28,15 +28,15 @@ def test_dirlab(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
+            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_4,
                                                                      range_flow=range_flow).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
+            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_2,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
+            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(1, 3, args.initial_channels, is_train=False,
                                                                 imgshape=imgshape,
                                                                 range_flow=range_flow, model_lvl2=model_lvl2).cuda()
 
@@ -78,7 +78,7 @@ def test_dirlab(args, checkpoint, is_save=False):
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
                                                                                                                   3).cuda(),
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        fixed_img.cpu().detach().numpy()[0, 0])
+                                        fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
             losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
             print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
@@ -204,15 +204,15 @@ def test_patient(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
+            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_4,
                                                                      range_flow=range_flow).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
+            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_2,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
+            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(1, 3, args.initial_channels, is_train=False,
                                                                 imgshape=imgshape,
                                                                 range_flow=range_flow, model_lvl2=model_lvl2).cuda()
 
@@ -383,17 +383,17 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-07-11-14-24'
+    prefix = '2023-03-07-18-12-40'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
-        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
         test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            # test_dirlab(args, checkpoint)
+            test_dirlab(args, checkpoint)
             test_patient(args, checkpoint)
 
     # validation(args)
