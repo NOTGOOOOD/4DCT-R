@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit,SpatialTransform_unit
+from utils.Functions import generate_grid_unit, SpatialTransform_unit
 from utils.losses import NCC
 from utils.Attention import Cross_attention
 
@@ -54,6 +54,7 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
             nn.Softsign())
     return layer
 
+
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl1, self).__init__()
@@ -86,7 +87,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
@@ -100,7 +101,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl1 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w
@@ -185,7 +186,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -200,7 +201,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl2 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -300,7 +301,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -315,7 +316,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl3 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -457,4 +458,3 @@ class NCC_bak(torch.nn.Module):
 
         # return negative cc.
         return -1.0 * torch.mean(cc)
-

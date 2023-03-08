@@ -7,7 +7,7 @@ import logging
 import time
 
 from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, validation_lapirn, SpatialTransform_unit
-from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
@@ -462,9 +462,10 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    imgshape = (144, 144, 144)
-    imgshape_4 = (144 / 4, 144 / 4, 144 / 4)
-    imgshape_2 = (144 / 2, 144 / 2, 144 / 2)
+    size = [144,192,160] # z y x
+    imgshape = (size[0], size[1], size[2])
+    imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
+    imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
 
     range_flow = 0.4
     train_lvl1()

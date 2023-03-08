@@ -446,6 +446,7 @@ def train_lvl3():
 if __name__ == "__main__":
     make_dirs()
     set_seed(1024)
+
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
@@ -455,9 +456,10 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    imgshape = (144, 144, 144)
-    imgshape_4 = (144 / 4, 144 / 4, 144 / 4)
-    imgshape_2 = (144 / 2, 144 / 2, 144 / 2)
+    size = [160,160,160] # z y x
+    imgshape = (size[0], size[1], size[2])
+    imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
+    imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
 
     range_flow = 0.4
     train_lvl1()
