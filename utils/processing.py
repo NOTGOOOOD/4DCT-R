@@ -321,7 +321,7 @@ def learn2reg_lungct_processing(fixed_path, moving_path, **cfg):
 
 
 def patient_processing(fixed_path, moving_path, **cfg):
-    patient_path = r'G:\datasets\patient'
+    patient_path = r'E:\datasets\patient'
     for patient_name in os.listdir(patient_path):
         patient_folder = os.path.join(patient_path, patient_name)
         file_list = sorted([file_name for file_name in os.listdir(patient_folder) if file_name.lower().endswith('.gz')])
@@ -566,15 +566,14 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
+    resize = [144, 192, 160]   # z y x
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    target_fixed_path = r'E:\datasets\registration\popi_144\fixed'
-    target_moving_path = r'E:\datasets\registration\popi_144\moving'
-    resize = [144, 144, 80]
+
     # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
     # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
-    make_dir(target_moving_path)
-    make_dir(target_fixed_path)
+    # make_dir(target_moving_path)
+    # make_dir(target_fixed_path)
 
     # target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
     # target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
@@ -715,16 +714,14 @@ if __name__ == '__main__':
 
     # COPD数据集img转nii.gz
     print("copd: ")
-    target_fixed_path = r'E:\datasets\registration\copd_80\fixed'
-    target_moving_path = r'E:\datasets\registration\copd_80\moving'
+    target_fixed_path = r'E:\datasets\registration\copd_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\copd_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [80, 144, 144]
     clamp = [-200, 1000]
     # crop = [slice(70, 470), slice(30, 470), slice(None)]
     crop = None
-    # resize = [256, 256, 256]
 
     spacing = [1, 1, 1]
     for item in copd_case_cfg.items():
@@ -739,11 +736,10 @@ if __name__ == '__main__':
                         spacing=spacing)
 
     # learn2reg
-    target_fixed_path = r'E:\datasets\registration\l2r_80\fixed'
-    target_moving_path = r'E:\datasets\registration\l2r_80\moving'
+    target_fixed_path = r'E:\datasets\registration\l2r_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\l2r_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
-    resize = [80, 144, 144]
 
     clamp = [None, 1100]
     crop = None
@@ -752,12 +748,11 @@ if __name__ == '__main__':
                          spacing=spacing)
 
     # emp10
-    target_fixed_path = r'E:\datasets\registration\emp_80\fixed'
-    target_moving_path = r'E:\datasets\registration\emp_80\moving'
+    target_fixed_path = r'E:\datasets\registration\emp_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\emp_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [80, 144, 144]
     clamp = [None, 500]  # before -900 500
     crop = None
     spacing = [1, 1, 1]
@@ -766,8 +761,8 @@ if __name__ == '__main__':
 
     # creatis-popi
     spacing = [1, 1, 1]
-    target_fixed_path = r'E:\datasets\registration\popi_80\fixed'
-    target_moving_path = r'E:\datasets\registration\popi_80\moving'
+    target_fixed_path = r'E:\datasets\registration\popi_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\popi_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
     popi_processing(target_fixed_path, target_moving_path, resize=resize,
@@ -816,37 +811,39 @@ if __name__ == '__main__':
     #
     # imgTomhd(img_path, moving_path, fixed_path, np.int16, shape, case, True)
 
-    # # 真实病例
-    # print("patient: ")
-    # clamp = [-900, 500]
-    # crop = [slice(70, 430), slice(120, 370), slice(None)]
-    # resize = None
-    # spacing = [1, 1, 1]
-    #
-    # patient_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                    spacing=spacing)
-
-    # learn2reg LungCT
-    target_fixed_path = r'E:\datasets\registration\LungCT_80\fixed'
-    target_moving_path = r'E:\datasets\registration\LungCT_80\moving'
+    # 真实病例
+    print("patient: ")
+    target_fixed_path = r'E:\datasets\registration\patient_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\patient_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [80, 144, 144]
+    clamp = [None, 500]
+    crop = [slice(70, 430), slice(120, 370), slice(None)]
+    spacing = [1, 1, 1]
+
+    patient_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                       spacing=spacing)
+
+    # learn2reg LungCT
+    target_fixed_path = r'E:\datasets\registration\LungCT_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\LungCT_144_192_160\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
     clamp = [-1000, 500]
     crop = None
     spacing = [1, 1, 1]
 
     learn2reg_lungct_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-                         spacing=spacing)
+                                spacing=spacing)
 
     # Learn2Reg NLST
-    target_fixed_path = r'E:\datasets\registration\NLST_80\fixed'
-    target_moving_path = r'E:\datasets\registration\NLST_80\moving'
+    target_fixed_path = r'E:\datasets\registration\NLST_144_192_160\fixed'
+    target_moving_path = r'E:\datasets\registration\NLST_144_192_160\moving'
     make_dir(target_moving_path)
     make_dir(target_fixed_path)
 
-    resize = [80, 144, 144]
     clamp = [-1100, 500]
     crop = None
     spacing = [1, 1, 1]
