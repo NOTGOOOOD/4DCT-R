@@ -200,7 +200,7 @@ class SpatialTransformer(nn.Module):
                                             device=flow.device) - 1.)  # the coefficients to map image coordinates to [-1, 1]
             self.grid_dict[img_shape] = grid
             self.norm_coeff_dict[img_shape] = norm_coeff
-            logging.info(f'\nAdd grid shape {tuple(img_shape)}')
+            # logging.info(f'\nAdd grid shape {tuple(img_shape)}')
         new_grid = grid + flow
 
         if self.dim == 2:

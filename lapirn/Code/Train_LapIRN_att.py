@@ -6,6 +6,9 @@ import torch.utils.data as Data
 import logging
 import time
 
+from utils.utilize import set_seed
+set_seed(20)
+
 from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda,validation_lapirn, SpatialTransform_unit
 from lapirn_corr_att import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
@@ -14,7 +17,7 @@ from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC,smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed
+
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -142,7 +145,7 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4, loss_similarity, imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4,loss_similarity, ori_shape=imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -445,7 +448,6 @@ def train_lvl3():
 
 if __name__ == "__main__":
     make_dirs()
-    set_seed(1024)
 
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
@@ -456,7 +458,7 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    size = [160,160,160] # z y x
+    size = [144,192,160] # z y x
     imgshape = (size[0], size[1], size[2])
     imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
     imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)

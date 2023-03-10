@@ -460,7 +460,7 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    size = [160,160,160] # z y x
+    size = [144,192,160] # z y x
     imgshape = (size[0], size[1], size[2])
     imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
     imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)

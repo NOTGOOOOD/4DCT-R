@@ -87,7 +87,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
@@ -186,7 +186,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -301,7 +301,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4, 3, 1, 1)
+        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 

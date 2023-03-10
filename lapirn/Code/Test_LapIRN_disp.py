@@ -4,10 +4,10 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow, SpatialTransform_unit
-from lapirn_corr_att_planC import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
-from utils.losses import neg_Jdet_loss
+from utils.losses import neg_Jdet_loss, NCC
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import MSE, landmark_loss, SSIM
@@ -28,15 +28,15 @@ def test_dirlab(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, args.initial_channels, is_train=True,
+            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_4,
                                                                      range_flow=range_flow).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, args.initial_channels, is_train=True,
+            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_2,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(1, 3, args.initial_channels, is_train=False,
+            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
                                                                 imgshape=imgshape,
                                                                 range_flow=range_flow, model_lvl2=model_lvl2).cuda()
 
@@ -193,6 +193,8 @@ def test_dirlab(args, checkpoint, is_save=False):
 
 
 def test_patient(args, checkpoint, is_save=False):
+    loss_similarity = NCC(win=7)
+
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
@@ -204,15 +206,15 @@ def test_patient(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(1, 3, args.initial_channels, is_train=True,
+            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_4,
                                                                      range_flow=range_flow).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(1, 3, args.initial_channels, is_train=True,
+            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
                                                                      imgshape=imgshape_2,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(1, 3, args.initial_channels, is_train=False,
+            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
                                                                 imgshape=imgshape,
                                                                 range_flow=range_flow, model_lvl2=model_lvl2).cuda()
 
@@ -233,14 +235,17 @@ def test_patient(args, checkpoint, is_save=False):
 
             Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
 
+            # NCC
+            _ncc = loss_similarity(lv3_out, fixed_img)
+
             # MSE
             _mse = MSE(fixed_img, lv3_out)
             # SSIM
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mse.item(), Jac.item(), _ssim.item()])
-            print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f' % (
-                batch + 1, _mse.item(), Jac.item(), _ssim.item()))
+            losses.append([_mse.item(), Jac.item(), _ssim.item(), _ncc.item()])
+            print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
+                batch + 1, _mse.item(), Jac.item(), _ssim.item(), _ncc.item()))
 
             if is_save:
                 # Save DVF
@@ -266,8 +271,9 @@ def test_patient(args, checkpoint, is_save=False):
     mean_mse = mean_total[0]
     mean_jac = mean_total[1]
     mean_ssim = mean_total[2]
+    mean_ncc = mean_total[3]
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
-    print('mean SSIM=%.5f Jac=%.6f MSE=%.5f' % (mean_ssim, mean_jac, mean_mse))
+    print('mean SSIM=%.5f Jac=%.6f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):
@@ -383,17 +389,17 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-07-18-12-40'
+    prefix = '2023-03-09-14-16-33'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
-        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
         test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            test_dirlab(args, checkpoint)
+            # test_dirlab(args, checkpoint)
             test_patient(args, checkpoint)
 
     # validation(args)

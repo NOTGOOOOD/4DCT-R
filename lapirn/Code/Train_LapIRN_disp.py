@@ -5,8 +5,9 @@ import torch
 import torch.utils.data as Data
 import logging
 import time
+from utils.utilize import set_seed
+set_seed(20)
 
-from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, validation_lapirn, SpatialTransform_unit
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
@@ -14,8 +15,7 @@ from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed
-
+from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, validation_lapirn, Grid,validation_lapirn_bak
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -36,24 +36,16 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                        range_flow=range_flow).to(device)
+    grid_class = Grid()
 
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
+                                                        range_flow=range_flow, grid=grid_class).to(device)
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
 
-    transform = SpatialTransform_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
     # OASIS
     # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid_4 = generate_grid(imgshape_4)
-    grid_4 = torch.from_numpy(np.reshape(grid_4, (1,) + grid_4.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -95,6 +87,8 @@ def train_lvl1():
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
+            grid_4 = grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4])
+
             loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
 
             # reg2 - use velocity
@@ -122,8 +116,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_bak(args, model, loss_similarity,
+                                                                                     grid_class, 4)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -250,8 +244,9 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2,
+                                                                                     loss_similarity,
+                                                                                     imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -395,8 +390,9 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape,
+                                                                                     loss_similarity,
+                                                                                     imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -452,7 +448,6 @@ if __name__ == "__main__":
                               file_name.lower().endswith('.gz')])
 
     make_dirs()
-    set_seed(1024)
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
@@ -462,10 +457,10 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    size = [144,192,160] # z y x
-    imgshape = (size[0], size[1], size[2])
-    imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
-    imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
+    # size = [160, 160, 160]  # z y x
+    # imgshape = (size[0], size[1], size[2])
+    # imgshape_4 = (size[0] / 4, size[1] / 4, size[2] / 4)
+    # imgshape_2 = (size[0] / 2, size[1] / 2, size[2] / 2)
 
     range_flow = 0.4
     train_lvl1()

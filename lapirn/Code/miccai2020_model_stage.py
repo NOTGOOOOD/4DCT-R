@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit
+from utils.Functions import generate_grid_unit, Grid, AdaptiveSpatialTransformer
 from utils.losses import NCC
 
 
@@ -53,8 +53,9 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
             nn.Softsign())
     return layer
 
+
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -63,12 +64,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
+        self.grid_1 = grid
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -98,7 +96,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl1 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w
@@ -109,25 +107,20 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
-        # two 3^3 3D conv layer with stride 1
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
 
-        # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
-        # one 3^3 3D conv layer with stride 2
         e0 = self.down_conv(fea_e0)
         e0 = self.resblock_group_lvl1(e0)
-        e0 = self.up(e0)
-
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
+        # e0 = self.up(e0)
+        e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
 
-        if e0.shape != fea_e0.shape:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
-            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-                                            mode='trilinear',
-                                            align_corners=True)
+        # if e0.shape != fea_e0.shape:
+        #     print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+        #     e0 = F.interpolate(e0, size=fea_e0.shape[2:],
+        #                                     mode='trilinear',
+        #                                     align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -136,7 +129,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         decoder = x1 + x2
 
         output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
-        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -162,7 +156,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         self.grid_1 = generate_grid_unit(self.imgshape)
         self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
 
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -193,7 +187,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl2 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -257,8 +251,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         # lvl1_disp_up = self.up_tri(lvl1_disp)
         lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
-                                            mode='trilinear',
-                                            align_corners=True)
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -277,8 +271,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         if e0.shape != fea_e0.shape:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-                                            mode='trilinear',
-                                            align_corners=True)
+                               mode='trilinear',
+                               align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -314,7 +308,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.grid_1 = generate_grid_unit(self.imgshape)
         self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
 
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -343,7 +337,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             nn.LeakyReLU(0.2))
 
         self.output_lvl3 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
-                                        bias=False)
+                                   bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
         #                               nn.LeakyReLU(0.2))
@@ -405,8 +399,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # lvl2_disp_up = self.up_tri(lvl2_disp)
 
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
-                                            mode='trilinear',
-                                            align_corners=True)
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -427,8 +421,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         if e0.shape != fea_e0.shape:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-                                            mode='trilinear',
-                                            align_corners=True)
+                               mode='trilinear',
+                               align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -472,70 +466,6 @@ class PreActBlock(nn.Module):
 
         out += shortcut
         return out
-
-
-class SpatialTransform_unit(nn.Module):
-    def __init__(self):
-        super(SpatialTransform_unit, self).__init__()
-
-    def forward(self, x, flow, sample_grid):
-        sample_grid = sample_grid + flow
-        flow = torch.nn.functional.grid_sample(x, sample_grid, mode='bilinear', padding_mode="border",
-                                               align_corners=True)
-        return flow
-
-
-class SpatialTransformNearest_unit(nn.Module):
-    def __init__(self):
-        super(SpatialTransformNearest_unit, self).__init__()
-
-    def forward(self, x, flow, sample_grid):
-        sample_grid = sample_grid + flow
-        flow = torch.nn.functional.grid_sample(x, sample_grid, mode='nearest', padding_mode="border",
-                                               align_corners=True)
-        return flow
-
-
-class DiffeomorphicTransform_unit(nn.Module):
-    def __init__(self, time_step=7):
-        super(DiffeomorphicTransform_unit, self).__init__()
-        self.time_step = time_step
-
-    def forward(self, velocity, sample_grid):
-        flow = velocity / (2.0 ** self.time_step)
-        for _ in range(self.time_step):
-            grid = sample_grid + flow.permute(0, 2, 3, 4, 1)
-            flow = flow + F.grid_sample(flow, grid, mode='bilinear', padding_mode="border", align_corners=True)
-        return flow
-
-
-def smoothloss(y_pred):
-    dy = torch.abs(y_pred[:, :, 1:, :, :] - y_pred[:, :, :-1, :, :])
-    dx = torch.abs(y_pred[:, :, :, 1:, :] - y_pred[:, :, :, :-1, :])
-    dz = torch.abs(y_pred[:, :, :, :, 1:] - y_pred[:, :, :, :, :-1])
-    return (torch.mean(dx * dx) + torch.mean(dy * dy) + torch.mean(dz * dz)) / 3.0
-
-
-def JacboianDet(y_pred, sample_grid):
-    J = y_pred + sample_grid
-    dy = J[:, 1:, :-1, :-1, :] - J[:, :-1, :-1, :-1, :]
-    dx = J[:, :-1, 1:, :-1, :] - J[:, :-1, :-1, :-1, :]
-    dz = J[:, :-1, :-1, 1:, :] - J[:, :-1, :-1, :-1, :]
-
-    Jdet0 = dx[:, :, :, :, 0] * (dy[:, :, :, :, 1] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 1])
-    Jdet1 = dx[:, :, :, :, 1] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 2] - dy[:, :, :, :, 2] * dz[:, :, :, :, 0])
-    Jdet2 = dx[:, :, :, :, 2] * (dy[:, :, :, :, 0] * dz[:, :, :, :, 1] - dy[:, :, :, :, 1] * dz[:, :, :, :, 0])
-
-    Jdet = Jdet0 - Jdet1 + Jdet2
-
-    return Jdet
-
-
-def neg_Jdet_loss(y_pred, sample_grid):
-    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
-    selected_neg_Jdet = F.relu(neg_Jdet)
-
-    return torch.mean(selected_neg_Jdet)
 
 
 class NCC_bak(torch.nn.Module):
@@ -590,29 +520,3 @@ class NCC_bak(torch.nn.Module):
 
         # return negative cc.
         return -1.0 * torch.mean(cc)
-
-
-class multi_resolution_NCC(torch.nn.Module):
-    """
-    local (over window) normalized cross correlation
-    """
-
-    def __init__(self, win=None, eps=1e-5, scale=3):
-        super(multi_resolution_NCC, self).__init__()
-        self.num_scale = scale
-        self.similarity_metric = []
-
-        for i in range(scale):
-            self.similarity_metric.append(NCC(win=win - (i * 2)))
-
-    def forward(self, I, J):
-        total_NCC = []
-
-        for i in range(self.num_scale):
-            current_NCC = self.similarity_metric[i](I, J)
-            total_NCC.append(current_NCC / (2 ** i))
-
-            I = nn.functional.avg_pool3d(I, kernel_size=3, stride=2, padding=1, count_include_pad=False)
-            J = nn.functional.avg_pool3d(J, kernel_size=3, stride=2, padding=1, count_include_pad=False)
-
-        return sum(total_NCC)
