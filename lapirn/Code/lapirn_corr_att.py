@@ -125,9 +125,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
                                mode='trilinear',
                                align_corners=True)
 
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
-        embeding = torch.cat([e0, fea_e0], dim=1)
+        att = self.ca_module(e0, fea_e0)
+        embeding = torch.cat([e0, fea_e0], dim=1) + att
         # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
 
         decoder = self.decoder(embeding)

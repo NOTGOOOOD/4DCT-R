@@ -65,7 +65,6 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.is_train = is_train
 
         self.grid_1 = grid
-
         self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
@@ -111,16 +110,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         e0 = self.down_conv(fea_e0)
         e0 = self.resblock_group_lvl1(e0)
-        # e0 = self.up(e0)
-        e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+        e0 = self.up(e0)
 
-        # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
-
-        # if e0.shape != fea_e0.shape:
-        #     print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
-        #     e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-        #                                     mode='trilinear',
-        #                                     align_corners=True)
+        if e0.shape != fea_e0.shape:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -139,8 +132,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl1=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl1=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl2, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -149,12 +142,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl1 = model_lvl1
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
+        self.grid_1 = grid
 
         self.transform = AdaptiveSpatialTransformer()
 
@@ -254,7 +244,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
                                      mode='trilinear',
                                      align_corners=True)
 
-        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1),
+                                   self.grid_1.get_grid(x_down.shape[2:], True))
 
         cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
@@ -263,16 +254,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         e0 = e0 + lvl1_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-
-        # correlation_layer = self.cor_conv(torch.cat((warpped_x, y_down), 1))
-        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
-
         if e0.shape != fea_e0.shape:
-            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-                               mode='trilinear',
-                               align_corners=True)
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -282,7 +265,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         output_disp_e0_v = self.output_lvl2(decoder) * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -291,8 +274,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl2=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl2=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl3, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -301,12 +284,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl2 = model_lvl2
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
+        self.grid_1 = grid
 
         self.transform = AdaptiveSpatialTransformer()
 
@@ -402,7 +382,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
                                      mode='trilinear',
                                      align_corners=True)
 
-        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
@@ -413,16 +393,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         e0 = e0 + lvl2_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-
-        # correlation_layer = self.cor_conv(torch.cat((warpped_x, y), 1))
-        # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
-
         if e0.shape != fea_e0.shape:
-            e0 = F.interpolate(e0, size=fea_e0.shape[2:],
-                               mode='trilinear',
-                               align_corners=True)
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         x1 = self.conv_block(decoder)
@@ -434,7 +406,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0

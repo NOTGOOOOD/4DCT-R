@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit
+from utils.Functions import generate_grid_unit, AdaptiveSpatialTransformer
 from utils.losses import NCC
 
 
@@ -356,7 +356,7 @@ class Miccai2020_LDR_laplacian_unit_add_lvl3(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -365,12 +365,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
+        self.grid_1 = grid
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -460,7 +457,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
                                align_corners=True)
 
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
-        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -469,8 +466,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl1=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl1=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl2, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -478,15 +475,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         self.range_flow = range_flow
         self.is_train = is_train
-
-        self.imgshape = imgshape
-
         self.model_lvl1 = model_lvl1
+        self.grid_1 = grid
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -576,7 +568,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
                                      mode='trilinear',
                                      align_corners=True)
 
-        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
@@ -597,7 +589,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         # correlation_layer = self.cor_conv(torch.cat((warpped_x, y_down), 1))
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -606,8 +598,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl2=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl2=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl3, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -616,14 +608,11 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl2 = model_lvl2
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
+        self.grid_1 = grid
 
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -705,7 +694,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
                                      align_corners=True)
-        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
@@ -727,7 +716,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0

@@ -119,7 +119,7 @@ def imgnorm(img):
     return norm_img
 
 
-def validation_lapirn_bak(args, model, loss_similarity, grid_class, scale_factor):
+def validation_lapirn(args, model, loss_similarity, grid_class, scale_factor):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
@@ -130,8 +130,7 @@ def validation_lapirn_bak(args, model, loss_similarity, grid_class, scale_factor
     val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    transform = SpatialTransform_unit().cuda()
-    transform.eval()
+    transform = AdaptiveSpatialTransformer()
 
     upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
     with torch.no_grad():
@@ -143,19 +142,14 @@ def validation_lapirn_bak(args, model, loss_similarity, grid_class, scale_factor
             pred = model(input_moving, input_fixed)
             F_X_Y = pred[0]
 
-            if grid_class == None:
-                grid = generate_grid_unit(input_moving.shape[2:])
-                grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-            else:
-                grid = grid_class.get_grid(input_moving.shape[2:], True)
+            grid = grid_class.get_grid(input_moving.shape[2:], True)
 
-            warped_img = pred[1]
             if scale_factor > 1:
                 F_X_Y = upsample(pred[0])
-                warped_img = upsample(pred[1])
 
-            mse_loss = MSE(warped_img, input_fixed)
-            ncc_loss_ori = loss_similarity(warped_img, input_fixed)
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
+            mse_loss = MSE(X_Y_up, input_fixed)
+            ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
@@ -184,7 +178,6 @@ def validation_lapirn_bak(args, model, loss_similarity, grid_class, scale_factor
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
-
 
 def validation_vm(args, model, imgshape, loss_similarity):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
@@ -243,7 +236,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
-def validation_lapirn(args, model, imgshape, loss_similarity, ori_shape):
+def validation_lapirn_bak(args, model, imgshape, loss_similarity, ori_shape):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if

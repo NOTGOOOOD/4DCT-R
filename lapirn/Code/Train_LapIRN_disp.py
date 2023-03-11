@@ -6,16 +6,18 @@ import torch.utils.data as Data
 import logging
 import time
 from utils.utilize import set_seed
+
 set_seed(20)
 
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
-from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, validation_lapirn, Grid,validation_lapirn_bak
+from utils.Functions import transform_unit_flow_to_flow_cuda, validation_lapirn, Grid
+
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -32,11 +34,47 @@ def make_dirs():
         os.makedirs(args.output_dir)
 
 
+def get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X2Y, X2Y, Y):
+    """
+
+    get train loss
+    Parameters
+    ----------
+    loss_similarity function
+    loss_Jdet       function
+    loss_smooth     function
+    F_X2Y           flow of x to y
+    X2Y             warped image (x to y)
+    Y               fixed image
+
+    Returns
+    -------
+    loss_multiNCC, loss_Jacobian, loss_regulation
+
+    """
+
+    # 3 level deep supervision NCC
+    loss_multiNCC = loss_similarity(X2Y, Y)
+
+    F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X2Y.permute(0, 2, 3, 4, 1).clone())
+
+    grid_4 = grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4])
+
+    loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
+
+    # reg2 - use velocity
+    _, _, z, y, x = F_X2Y.shape
+    F_X2Y[:, 2, :, :, :] = F_X2Y[:, 2, :, :, :] * (z - 1)
+    F_X2Y[:, 1, :, :, :] = F_X2Y[:, 1, :, :, :] * (y - 1)
+    F_X2Y[:, 0, :, :, :] = F_X2Y[:, 0, :, :, :] * (x - 1)
+    loss_regulation = loss_smooth(F_X2Y)
+
+    return loss_multiNCC, loss_Jacobian, loss_regulation
+
+
 def train_lvl1():
     print("Training lvl1...")
     device = args.device
-
-    grid_class = Grid()
 
     model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
                                                         range_flow=range_flow, grid=grid_class).to(device)
@@ -82,21 +120,8 @@ def train_lvl1():
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
             F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            grid_4 = grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4])
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -116,8 +141,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_bak(args, model, loss_similarity,
-                                                                                     grid_class, 4)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                         grid_class, 4)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -140,13 +165,13 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
-
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                             range_flow=range_flow).to(device)
+    grid_class = Grid()
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                                                             grid=grid_class).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
@@ -163,24 +188,15 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                        range_flow=range_flow, model_lvl1=model_lvl1).to(device)
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                                                        model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
 
-    transform = SpatialTransform_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
     # OASIS
     # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid_2 = generate_grid(imgshape_2)
-    grid_2 = torch.from_numpy(np.reshape(grid_2, (1,) + grid_2.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -205,19 +221,8 @@ def train_lvl2():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
             F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_2)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -244,9 +249,8 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2,
-                                                                                     loss_similarity,
-                                                                                     imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                     grid_class, 2)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -277,10 +281,11 @@ def train_lvl3():
     print("Training lvl3...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                             range_flow=range_flow).to(device)
-    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                             range_flow=range_flow, model_lvl1=model_lvl1).to(device)
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
+                                                             range_flow=range_flow, grid=grid_class).to(device)
+    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
+                                                             range_flow=range_flow, model_lvl1=model_lvl1,
+                                                             grid=grid_class).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
     model_list = []
@@ -296,25 +301,12 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True, imgshape=imgshape,
-                                                        range_flow=range_flow, model_lvl2=model_lvl2).to(device)
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,
+                                                        range_flow=range_flow, model_lvl2=model_lvl2,grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
-
-    transform = SpatialTransform_unit().to(device)
-    # transform_nearest = SpatialTransformNearest_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid = generate_grid(imgshape)
-    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -323,8 +315,6 @@ def train_lvl3():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-    # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
-    #                                      shuffle=True, num_workers=2)
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
@@ -350,19 +340,8 @@ def train_lvl3():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -390,9 +369,8 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape,
-                                                                                     loss_similarity,
-                                                                                     imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                     grid_class,1)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -462,6 +440,7 @@ if __name__ == "__main__":
     # imgshape_4 = (size[0] / 4, size[1] / 4, size[2] / 4)
     # imgshape_2 = (size[0] / 2, size[1] / 2, size[2] / 2)
 
+    grid_class = Grid()
     range_flow = 0.4
     train_lvl1()
     train_lvl2()

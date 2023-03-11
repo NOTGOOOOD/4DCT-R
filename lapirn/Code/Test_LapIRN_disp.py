@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 
-from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow, SpatialTransform_unit
+from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow, AdaptiveSpatialTransformer,Grid
 from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
@@ -29,24 +29,17 @@ def test_dirlab(args, checkpoint, is_save=False):
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
             model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     imgshape=imgshape_4,
-                                                                     range_flow=range_flow).cuda()
+                                                                     range_flow=range_flow,grid=grid_class).cuda()
             model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
-                                                                     imgshape=imgshape_2,
                                                                      range_flow=range_flow,
-                                                                     model_lvl1=model_lvl1).cuda()
+                                                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
 
             model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                imgshape=imgshape,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2).cuda()
+                                                                range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).cuda()
 
-            transform = SpatialTransform_unit().cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()
-            transform.eval()
-            grid = generate_grid_unit(imgshape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
             F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
 
@@ -55,7 +48,7 @@ def test_dirlab(args, checkpoint, is_save=False):
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
-            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
+            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
 
@@ -207,24 +200,17 @@ def test_patient(args, checkpoint, is_save=False):
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
             model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     imgshape=imgshape_4,
+                                                                     grid=grid_class,
                                                                      range_flow=range_flow).cuda()
             model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
-                                                                     imgshape=imgshape_2,
                                                                      range_flow=range_flow,
-                                                                     model_lvl1=model_lvl1).cuda()
+                                                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
 
             model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                imgshape=imgshape,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2).cuda()
-
-            transform = SpatialTransform_unit().cuda()
+                                                                range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()
-            transform.eval()
-            grid = generate_grid_unit(imgshape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
             F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
 
@@ -233,7 +219,7 @@ def test_patient(args, checkpoint, is_save=False):
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
-            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
+            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
 
             # NCC
             _ncc = loss_similarity(lv3_out, fixed_img)
@@ -357,7 +343,7 @@ def test_patient(args, checkpoint, is_save=False):
 
 if __name__ == '__main__':
     args = get_args()
-
+    grid_class = Grid()
     range_flow = 0.4
 
     if not os.path.isdir(args.output_dir):
@@ -389,7 +375,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-09-14-16-33'
+    prefix = '2023-03-10-18-31-19'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
