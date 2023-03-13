@@ -13,13 +13,13 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, \
-    generate_grid_unit, Grid, validation_lapirn_ori, neg_Jdet_loss, smoothloss
+    generate_grid_unit, Grid, validation_lapirn_ori, neg_Jdet_loss, smoothloss,SpatialTransform_unit
 from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1, \
-    Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2, Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3, \
-    SpatialTransform_unit, NCC, multi_resolution_NCC
+    Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2, Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
+from utils.losses import NCC, multi_resolution_NCC
 
 # parser = ArgumentParser()
 # parser.add_argument("--lr", type=float,
