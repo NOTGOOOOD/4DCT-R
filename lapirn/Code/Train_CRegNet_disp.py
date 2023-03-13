@@ -5,19 +5,18 @@ import torch
 import torch.utils.data as Data
 import logging
 import time
-
 from utils.utilize import set_seed
 
 set_seed(20)
 
-from utils.Functions import generate_grid, get_loss, validation_lapirn, Grid
-from lapirn_corr_att import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
+from utils.Functions import validation_lapirn, Grid, get_loss
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -41,7 +40,6 @@ def train_lvl1():
 
     model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
                                                         range_flow=range_flow, grid=grid_class).to(device)
-
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
@@ -81,8 +79,7 @@ def train_lvl1():
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
             F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
-                                                                     loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class,loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
@@ -104,7 +101,7 @@ def train_lvl1():
 
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
-                                                                                     grid_class, 4)
+                                                                                         grid_class, 4)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -127,7 +124,6 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
-
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
@@ -135,7 +131,7 @@ def train_lvl2():
     model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow,
                                                              grid=grid_class).to(device)
 
-    # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-21-09-56-51_NCC_reg_disp_stagelvl1_070_-0.4229.pth'
+    # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
     for f in os.listdir('../Model/Stage'):
         if model_name + "stagelvl1" in f:
@@ -180,8 +176,7 @@ def train_lvl2():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
             F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
-                                                                     loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
@@ -262,8 +257,7 @@ def train_lvl3():
         param.requires_grad = False
 
     model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,
-                                                        range_flow=range_flow, model_lvl2=model_lvl2,
-                                                        grid=grid_class).to(device)
+                                                        range_flow=range_flow, model_lvl2=model_lvl2,grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
@@ -276,8 +270,6 @@ def train_lvl3():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-    # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
-    #                                      shuffle=True, num_workers=2)
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
@@ -303,8 +295,7 @@ def train_lvl3():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
-                                                                     loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class,loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
@@ -390,20 +381,19 @@ if __name__ == "__main__":
                               file_name.lower().endswith('.gz')])
 
     make_dirs()
-
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_lapirn_corr_att_".format(train_time)
+    model_name = "{}_NCC_reg_disp_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    # size = [144,192,160] # z y x
+    # size = [160, 160, 160]  # z y x
     # imgshape = (size[0], size[1], size[2])
-    # imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
-    # imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
+    # imgshape_4 = (size[0] / 4, size[1] / 4, size[2] / 4)
+    # imgshape_2 = (size[0] / 2, size[1] / 2, size[2] / 2)
 
     grid_class = Grid()
     range_flow = 0.4

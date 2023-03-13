@@ -1,7 +1,7 @@
 import os
 from argparse import ArgumentParser
 
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 parser = ArgumentParser()

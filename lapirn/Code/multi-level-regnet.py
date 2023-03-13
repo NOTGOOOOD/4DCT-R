@@ -8,7 +8,7 @@ import time
 
 from utils.Functions import generate_grid, generate_grid_unit, transform_unit_flow_to_flow_cuda
 from unet import UNet_lv1, UNet_lv2, UNet_lv3, SpatialTransform_unit
-from miccai2020_model_stage import smoothloss, neg_Jdet_loss, multi_resolution_NCC
+from CRegNet import smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC

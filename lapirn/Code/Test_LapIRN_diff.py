@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
+from CRegNet import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
     Miccai2020_LDR_laplacian_unit_add_lvl3, SpatialTransform_unit, neg_Jdet_loss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
