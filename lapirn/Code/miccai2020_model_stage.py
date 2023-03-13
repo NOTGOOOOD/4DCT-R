@@ -265,7 +265,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         output_disp_e0_v = self.output_lvl2(decoder) * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -406,7 +407,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(x.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0

@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 
-from utils.Functions import generate_grid_unit, transform_unit_flow_to_flow, AdaptiveSpatialTransformer,Grid
-from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from utils.Functions import transform_unit_flow_to_flow, Grid
+from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.losses import neg_Jdet_loss, NCC
@@ -375,7 +375,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-10-18-31-19'
+    prefix = '2023-03-11-13-05-47'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:

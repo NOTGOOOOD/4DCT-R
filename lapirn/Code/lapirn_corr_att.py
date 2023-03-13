@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit, SpatialTransform_unit
+from utils.Functions import AdaptiveSpatialTransformer
 from utils.Attention import Cross_attention
 
 
@@ -55,7 +55,7 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -64,12 +64,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
+        self.grid_1 = grid
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -145,8 +141,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl1=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl1=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl2, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -155,14 +151,11 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
+        self.grid_1 = grid
+
+        self.transform = AdaptiveSpatialTransformer()
 
         self.model_lvl1 = model_lvl1
-
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
 
         bias_opt = False
 
@@ -254,8 +247,8 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl2=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl2=None, grid=None):
         super(Miccai2020_LDR_laplacian_unit_disp_add_lvl3, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -264,14 +257,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl2 = model_lvl2
-
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
 
         bias_opt = False
 
@@ -330,7 +316,6 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape != fea_e0.shape:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)

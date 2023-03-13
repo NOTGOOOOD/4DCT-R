@@ -9,14 +9,14 @@ from utils.utilize import set_seed
 
 set_seed(20)
 
-from miccai2020_model_stage_bak import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from miccai2020_model_stage import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
-from utils.Functions import transform_unit_flow_to_flow_cuda, validation_lapirn, Grid
+from utils.Functions import validation_lapirn, Grid, get_loss
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -34,44 +34,6 @@ def make_dirs():
         os.makedirs(args.output_dir)
 
 
-def get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X2Y, X2Y, Y):
-    """
-
-    get train loss
-    Parameters
-    ----------
-    loss_similarity function
-    loss_Jdet       function
-    loss_smooth     function
-    F_X2Y           flow of x to y
-    X2Y             warped image (x to y)
-    Y               fixed image
-
-    Returns
-    -------
-    loss_multiNCC, loss_Jacobian, loss_regulation
-
-    """
-
-    # 3 level deep supervision NCC
-    loss_multiNCC = loss_similarity(X2Y, Y)
-
-    F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X2Y.permute(0, 2, 3, 4, 1).clone())
-
-    grid_4 = grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4])
-
-    loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
-
-    # reg2 - use velocity
-    _, _, z, y, x = F_X2Y.shape
-    F_X2Y[:, 2, :, :, :] = F_X2Y[:, 2, :, :, :] * (z - 1)
-    F_X2Y[:, 1, :, :, :] = F_X2Y[:, 1, :, :, :] * (y - 1)
-    F_X2Y[:, 0, :, :, :] = F_X2Y[:, 0, :, :, :] * (x - 1)
-    loss_regulation = loss_smooth(F_X2Y)
-
-    return loss_multiNCC, loss_Jacobian, loss_regulation
-
-
 def train_lvl1():
     print("Training lvl1...")
     device = args.device
@@ -81,9 +43,6 @@ def train_lvl1():
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
-
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -120,7 +79,7 @@ def train_lvl1():
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
             F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class,loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
@@ -169,7 +128,6 @@ def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    grid_class = Grid()
     model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow,
                                                              grid=grid_class).to(device)
 
@@ -195,9 +153,6 @@ def train_lvl2():
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
 
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
-
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     stop_criterion = StopCriterion()
@@ -221,7 +176,7 @@ def train_lvl2():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
             F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
@@ -340,7 +295,7 @@ def train_lvl3():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
 
-            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class,loss_similarity, loss_Jdet, loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation

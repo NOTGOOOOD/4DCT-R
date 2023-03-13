@@ -7,41 +7,21 @@ import logging
 import time
 
 from utils.utilize import set_seed
+
 set_seed(20)
 
-from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda,validation_lapirn, SpatialTransform_unit
+from utils.Functions import generate_grid, get_loss, validation_lapirn, Grid
 from lapirn_corr_att import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC,smoothloss, neg_Jdet_loss, multi_resolution_NCC
+from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-args = get_args()
-
-lr = args.lr
-start_channel = args.initial_channels
-antifold = args.antifold
-# n_checkpoint = args.n_save_iter
-smooth = args.smooth
-# datapath = opt.datapath
-freeze_step = args.freeze_step
-
-iteration_lvl1 = args.iteration_lvl1
-iteration_lvl2 = args.iteration_lvl2
-iteration_lvl3 = args.iteration_lvl3
-
-fixed_folder = os.path.join(args.train_dir, 'fixed')
-moving_folder = os.path.join(args.train_dir, 'moving')
-f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                          file_name.lower().endswith('.gz')])
-m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                          file_name.lower().endswith('.gz')])
 
 
 def make_dirs():
@@ -59,24 +39,12 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                        range_flow=range_flow).to(device)
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
+                                                        range_flow=range_flow, grid=grid_class).to(device)
 
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
-
-    transform = SpatialTransform_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid_4 = generate_grid(imgshape_4)
-    grid_4 = torch.from_numpy(np.reshape(grid_4, (1,) + grid_4.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -113,19 +81,9 @@ def train_lvl1():
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
             F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
+                                                                     loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -145,7 +103,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4,loss_similarity, ori_shape=imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                     grid_class, 4)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -156,8 +115,9 @@ def train_lvl1():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -172,8 +132,8 @@ def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                             range_flow=range_flow).to(device)
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                                                             grid=grid_class).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-21-09-56-51_NCC_reg_disp_stagelvl1_070_-0.4229.pth'
     model_list = []
@@ -190,24 +150,12 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                        range_flow=range_flow, model_lvl1=model_lvl1).to(device)
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                                                        model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
-
-    transform = SpatialTransform_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid_2 = generate_grid(imgshape_2)
-    grid_2 = torch.from_numpy(np.reshape(grid_2, (1,) + grid_2.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -232,19 +180,9 @@ def train_lvl2():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
             F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_2)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
+                                                                     loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -271,7 +209,8 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2, loss_similarity, imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                     grid_class, 2)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -282,8 +221,9 @@ def train_lvl2():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -301,10 +241,11 @@ def train_lvl3():
     print("Training lvl3...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                             range_flow=range_flow).to(device)
-    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                             range_flow=range_flow, model_lvl1=model_lvl1).to(device)
+    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
+                                                             range_flow=range_flow, grid=grid_class).to(device)
+    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
+                                                             range_flow=range_flow, model_lvl1=model_lvl1,
+                                                             grid=grid_class).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
     model_list = []
@@ -320,25 +261,13 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True, imgshape=imgshape,
-                                                        range_flow=range_flow, model_lvl2=model_lvl2).to(device)
+    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,
+                                                        range_flow=range_flow, model_lvl2=model_lvl2,
+                                                        grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
-
-    transform = SpatialTransform_unit().to(device)
-    # transform_nearest = SpatialTransformNearest_unit().to(device)
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-    # OASIS
-    # names = sorted(glob.glob(datapath + '/*.nii'))
-
-    grid = generate_grid(imgshape)
-    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).to(device).float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -374,19 +303,9 @@ def train_lvl3():
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
 
-            # 3 level deep supervision NCC
-            loss_multiNCC = loss_similarity(X_Y, Y_4x)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid)
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = loss_smooth(F_X_Y)
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
+                                                                     loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -414,7 +333,8 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape, loss_similarity, imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
+                                                                                     grid_class,1)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -431,8 +351,9 @@ def train_lvl3():
             torch.save(model.state_dict(), modelname)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-            mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
         if stop_criterion.stop():
@@ -447,6 +368,27 @@ def train_lvl3():
 
 
 if __name__ == "__main__":
+    args = get_args()
+
+    lr = args.lr
+    start_channel = args.initial_channels
+    antifold = args.antifold
+    # n_checkpoint = args.n_save_iter
+    smooth = args.smooth
+    # datapath = opt.datapath
+    freeze_step = args.freeze_step
+
+    iteration_lvl1 = args.iteration_lvl1
+    iteration_lvl2 = args.iteration_lvl2
+    iteration_lvl3 = args.iteration_lvl3
+
+    fixed_folder = os.path.join(args.train_dir, 'fixed')
+    moving_folder = os.path.join(args.train_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
     make_dirs()
 
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
@@ -458,11 +400,12 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    size = [144,192,160] # z y x
-    imgshape = (size[0], size[1], size[2])
-    imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
-    imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
+    # size = [144,192,160] # z y x
+    # imgshape = (size[0], size[1], size[2])
+    # imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
+    # imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
 
+    grid_class = Grid()
     range_flow = 0.4
     train_lvl1()
     train_lvl2()

@@ -88,6 +88,42 @@ def transform_unit_flow_to_flow(flow):
 
     return flow
 
+def get_loss(grid_class, loss_similarity, loss_Jdet, loss_smooth, F_X2Y, X2Y, Y):
+    """
+
+    get train loss
+    Parameters
+    ----------
+    loss_similarity function
+    loss_Jdet       function
+    loss_smooth     function
+    F_X2Y           flow of x to y
+    X2Y             warped image (x to y)
+    Y               fixed image
+
+    Returns
+    -------
+    loss_multiNCC, loss_Jacobian, loss_regulation
+
+    """
+
+    # 3 level deep supervision NCC
+    loss_multiNCC = loss_similarity(X2Y, Y)
+
+    F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X2Y.permute(0, 2, 3, 4, 1).clone())
+
+    grid_4 = grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4])
+
+    loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
+
+    # reg2 - use velocity
+    _, _, z, y, x = F_X2Y.shape
+    F_X2Y[:, 2, :, :, :] = F_X2Y[:, 2, :, :, :] * (z - 1)
+    F_X2Y[:, 1, :, :, :] = F_X2Y[:, 1, :, :, :] * (y - 1)
+    F_X2Y[:, 0, :, :, :] = F_X2Y[:, 0, :, :, :] * (x - 1)
+    loss_regulation = loss_smooth(F_X2Y)
+
+    return loss_multiNCC, loss_Jacobian, loss_regulation
 
 def transform_unit_flow_to_flow_cuda(flow):
     b, z, y, x, c = flow.shape
