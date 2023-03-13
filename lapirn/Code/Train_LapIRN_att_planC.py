@@ -14,7 +14,7 @@ from utils.config import get_args
 from utils.losses import NCC,smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed
-from utils.Functions import validation_lapirn
+from utils.Functions import validation_ccregnet
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -142,8 +142,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_4, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, imgshape_4, loss_similarity,
+                                                                                       imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -269,8 +269,8 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape_2, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, imgshape_2, loss_similarity,
+                                                                                       imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -414,8 +414,8 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, imgshape, loss_similarity,
-                                                                              imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, imgshape, loss_similarity,
+                                                                                       imgshape)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:

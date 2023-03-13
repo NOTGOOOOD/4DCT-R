@@ -88,6 +88,7 @@ def transform_unit_flow_to_flow(flow):
 
     return flow
 
+
 def get_loss(grid_class, loss_similarity, loss_Jdet, loss_smooth, F_X2Y, X2Y, Y):
     """
 
@@ -125,6 +126,7 @@ def get_loss(grid_class, loss_similarity, loss_Jdet, loss_smooth, F_X2Y, X2Y, Y)
 
     return loss_multiNCC, loss_Jacobian, loss_regulation
 
+
 def transform_unit_flow_to_flow_cuda(flow):
     b, z, y, x, c = flow.shape
     flow[:, :, :, :, 0] = flow[:, :, :, :, 0] * (x - 1) / 2
@@ -155,7 +157,7 @@ def imgnorm(img):
     return norm_img
 
 
-def validation_lapirn(args, model, loss_similarity, grid_class, scale_factor):
+def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
@@ -215,6 +217,68 @@ def validation_lapirn(args, model, loss_similarity, grid_class, scale_factor):
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
+
+def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
+    max_smooth = 10.
+    antifold = 100.
+
+    fixed_folder = os.path.join(args.val_dir, 'fixed')
+    moving_folder = os.path.join(args.val_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    transform = SpatialTransform_unit().cuda()
+    transform.eval()
+
+    grid = generate_grid_unit(ori_shape)
+    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
+
+    scale_factor = ori_shape[0] / imgshape[0]
+    upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
+    with torch.no_grad():
+        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
+        losses = []
+        for batch, (moving, fixed) in enumerate(val_loader):
+            input_moving = moving[0].to('cuda').float()
+            input_fixed = fixed[0].to('cuda').float()
+
+            reg_code = torch.rand(1, dtype=input_moving.dtype, device=input_moving.device).unsqueeze(dim=0)
+
+            pred = model(input_moving, input_fixed, reg_code)
+            F_X_Y = pred[0]
+            if scale_factor > 1:
+                F_X_Y = upsample(pred[0])
+
+            loss_multiNCC = loss_similarity(pred[1], pred[2])
+
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
+            mse_loss = MSE(X_Y_up, input_fixed)
+
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+
+            _, _, x, y, z = F_X_Y.shape
+            norm_vector = torch.zeros((1, 3, 1, 1, 1), dtype=F_X_Y.dtype, device=F_X_Y.device)
+            norm_vector[0, 0, 0, 0, 0] = (z - 1)
+            norm_vector[0, 1, 0, 0, 0] = (y - 1)
+            norm_vector[0, 2, 0, 0, 0] = (x - 1)
+            loss_regulation = smoothloss(F_X_Y * norm_vector)
+
+            smo_weight = reg_code * max_smooth
+            loss = loss_multiNCC + antifold * loss_Jacobian + smo_weight * loss_regulation
+
+            losses.append([loss_multiNCC.item(), mse_loss.item(), loss_Jacobian.item(), loss.item()])
+
+        mean_loss = np.mean(losses, 0)
+        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+
+
 def validation_vm(args, model, imgshape, loss_similarity):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
@@ -271,6 +335,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+
 
 def validation_lapirn_bak(args, model, imgshape, loss_similarity, ori_shape):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
@@ -334,6 +399,7 @@ def validation_lapirn_bak(args, model, imgshape, loss_similarity, ori_shape):
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+
 
 class Grid():
     """

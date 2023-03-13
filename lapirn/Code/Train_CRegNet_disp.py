@@ -16,7 +16,7 @@ from utils.datagenerators import Dataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
 from utils.scheduler import StopCriterion
-from utils.Functions import validation_lapirn, Grid, get_loss
+from utils.Functions import validation_ccregnet, Grid, get_loss
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -100,8 +100,8 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
-                                                                                         grid_class, 4)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+                                                                                       grid_class, 4)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -204,8 +204,8 @@ def train_lvl2():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
-                                                                                     grid_class, 2)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+                                                                                       grid_class, 2)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
@@ -324,8 +324,8 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn(args, model, loss_similarity,
-                                                                                     grid_class,1)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+                                                                                       grid_class, 1)
 
         # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
