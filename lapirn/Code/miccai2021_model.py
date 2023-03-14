@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit
+from utils.Functions import generate_grid_unit, SpatialTransform_unit
 
 
 class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(nn.Module):
@@ -116,6 +116,10 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(nn.Module):
                 e0 = self.resblock_group_lvl1[i](e0)
 
         e0 = self.up(e0)
+
+        if e0.shape != fea_e0.shape:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         warpped_inputx_lvl1_out = self.transform(x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -227,10 +231,14 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(nn.Module):
     def forward(self, x, y, reg_code):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         lvl1_disp, _, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y, reg_code)
-        lvl1_disp_up = self.up_tri(lvl1_disp)
+        # lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
+
+        lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
 
         warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
@@ -249,6 +257,10 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(nn.Module):
                 e0 = self.resblock_group_lvl1[i](e0)
 
         e0 = self.up(e0)
+
+        if e0.shape != fea_e0.shape:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         compose_field_e0_lvl1 = lvl1_disp_up + output_disp_e0_v
         warpped_inputx_lvl1_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
@@ -361,7 +373,11 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(nn.Module):
     def forward(self, x, y, reg_code):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         lvl2_disp, _, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(x, y, reg_code)
-        lvl2_disp_up = self.up_tri(lvl2_disp)
+
+        lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+                                     mode='trilinear',
+                                     align_corners=True)
+
         warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
@@ -378,6 +394,10 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(nn.Module):
                 e0 = self.resblock_group_lvl1[i](e0)
 
         e0 = self.up(e0)
+
+        if e0.shape != fea_e0.shape:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 

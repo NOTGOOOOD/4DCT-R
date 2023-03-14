@@ -439,7 +439,7 @@ if __name__ == "__main__":
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_cLapIRN_".format(train_time)
 
-    size = [144, 144, 144]  # z y x
+    size = [144, 192, 160]  # z y x
     imgshape = (size[0], size[1], size[2])
     imgshape_4 = (size[0] / 4, size[1] / 4, size[2] / 4)
     imgshape_2 = (size[0] / 2, size[1] / 2, size[2] / 2)
