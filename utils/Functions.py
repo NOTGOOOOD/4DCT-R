@@ -220,7 +220,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
 
 def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
     max_smooth = 10.
-    antifold = 100.
+    antifold = args.antifold
 
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
