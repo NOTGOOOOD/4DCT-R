@@ -1,13 +1,12 @@
 import os
 
 import numpy as np
-import torch.utils.data as Data
-# import nibabel as nib
 import torch
-import itertools
 import torch.nn as nn
 from torch.utils import data as Data
 
+from midir.model.loss import l2reg_loss
+from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset
 from utils.losses import neg_Jdet_loss, smoothloss
 from utils.metric import MSE
@@ -274,6 +273,49 @@ def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
             loss = loss_multiNCC + antifold * loss_Jacobian + smo_weight * loss_regulation
 
             losses.append([loss_multiNCC.item(), mse_loss.item(), loss_Jacobian.item(), loss.item()])
+
+        mean_loss = np.mean(losses, 0)
+        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+
+
+def validation_midir(args, model, imgshape, loss_similarity):
+    fixed_folder = os.path.join(args.val_dir, 'fixed')
+    moving_folder = os.path.join(args.val_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    transform = CubicBSplineFFDTransform(ndim=3, img_size=imgshape, cps=(4, 4, 4), svf=True
+                                         , svf_steps=7
+                                         , svf_scale=1)
+    reg_weight = 0.1
+    with torch.no_grad():
+        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
+        losses = []
+        for batch, (moving, fixed) in enumerate(val_loader):
+            input_moving = moving[0].to('cuda').float()
+            input_fixed = fixed[0].to('cuda').float()
+
+            svf = model(input_fixed, input_moving)
+            flow, disp = transform(svf)
+            wapred_x = warp(input_moving, disp)
+
+            mse_loss = MSE(wapred_x, input_fixed)
+            loss_ncc = loss_similarity(wapred_x, input_fixed)
+            loss_reg = l2reg_loss(disp)
+
+            grid = generate_grid(imgshape)
+            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
+
+            loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
+
+            loss = loss_ncc + loss_reg * reg_weight
+
+            losses.append([loss_ncc.item(), mse_loss.item(), loss_Jacobian.item(), loss.item()])
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
