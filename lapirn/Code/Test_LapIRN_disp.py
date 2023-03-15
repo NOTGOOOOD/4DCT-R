@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.losses import neg_Jdet_loss, NCC
