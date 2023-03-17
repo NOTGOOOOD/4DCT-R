@@ -212,7 +212,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-13-13-59-48'
+    prefix = '2023-03-15-10-13-05'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:

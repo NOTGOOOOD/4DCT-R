@@ -384,7 +384,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_NCC_reg_disp_".format(train_time)
+    model_name = "{}_CRegNet_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
