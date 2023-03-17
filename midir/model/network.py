@@ -205,7 +205,9 @@ class CubicBSplineNet(UNet):
             dec_out = fm_enc[-1]
             for i, dec in enumerate(self.dec):
                 dec_out = dec(dec_out)
-                dec_out = self.upsample(dec_out)
+                dec_out = F.interpolate(dec_out, fm_enc[-2-i].shape[2:], mode='trilinear',
+                                  align_corners=True)
+                # dec_out = self.upsample(dec_out)
                 dec_out = torch.cat([dec_out, fm_enc[-2-i]], dim=1)
         else:
             dec_out = fm_enc
