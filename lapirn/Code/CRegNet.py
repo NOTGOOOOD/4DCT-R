@@ -69,9 +69,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 2, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 2, self.start_channel * 4, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
@@ -85,7 +85,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
@@ -150,9 +150,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 2, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 2, self.start_channel * 4, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
@@ -167,7 +167,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
@@ -249,9 +249,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 2, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 2, self.start_channel * 4, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
@@ -264,7 +264,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
