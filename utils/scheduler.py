@@ -43,11 +43,15 @@ class StopCriterion(object):
         # std_total = np.std(query_total_lisst)
         # length of patient <=0,and current epoch have no improve
         if len(self.total_loss_list) > self.min_epoch:
-            if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i) or (
-                    std_ncc < 0.001 and std_mse < 0.001 and len(self.ncc_loss_list) > self.loss_min_i):
+            if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i):
+                print('early stop by patient_len!')
+                return True
+            elif (std_ncc < 0.0001 and std_mse < 0.0001 and len(self.ncc_loss_list) > self.loss_min_i):
+                print('early stop by std!')
                 return True
             else:
                 return False
+
         else:
             return False
 
