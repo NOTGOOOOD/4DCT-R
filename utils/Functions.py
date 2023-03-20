@@ -335,7 +335,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
     transform = SpatialTransform_unit().cuda()
     transform.eval()
 
-    grid = generate_grid_unit(imgshape)
+    grid = generate_grid(imgshape)
     grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
     with torch.no_grad():
@@ -350,15 +350,15 @@ def validation_vm(args, model, imgshape, loss_similarity):
             mse_loss = MSE(warped_image, input_fixed)
             ncc_loss_ori = loss_similarity(warped_image, input_fixed)
 
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
+            # F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+            loss_Jacobian = neg_Jdet_loss(flow.permute(0, 2, 3, 4, 1), grid)
 
-            # reg2 - use velocity
-            _, _, z, y, x = flow.shape
-            flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
-            flow[:, 1, :, :, :] = flow[:, 1, :, :, :] * (y - 1)
-            flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
+            # # reg2 - use velocity
+            # _, _, z, y, x = flow.shape
+            # flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
+            # flow[:, 1, :, :, :] = flow[:, 1, :, :, :] * (y - 1)
+            # flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
             # loss_regulation = smoothloss(flow)
 
             loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian
