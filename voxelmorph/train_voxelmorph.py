@@ -8,7 +8,7 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.datagenerators import Dataset, DirLabDataset
+from utils.datagenerators import Dataset, PatientDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
@@ -36,8 +36,9 @@ def make_dirs():
 
 
 def train():
+    img_shape = [144, 192, 160]
     # set gpu
-    landmark_list = load_landmarks(args.landmark_dir)
+    # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device
     # load file
     fixed_folder = os.path.join(args.train_dir, 'fixed')
@@ -47,15 +48,15 @@ def train():
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
 
-    test_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    test_moving_folder = os.path.join(args.test_dir, 'moving')
+    # test_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    # test_moving_folder = os.path.join(args.test_dir, 'moving')
 
-    test_fixed_list = sorted(
-        [os.path.join(test_fixed_folder, file_name) for file_name in os.listdir(test_fixed_folder) if
-         file_name.lower().endswith('.gz')])
-    test_moving_list = sorted(
-        [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
-         file_name.lower().endswith('.gz')])
+    # test_fixed_list = sorted(
+    #     [os.path.join(test_fixed_folder, file_name) for file_name in os.listdir(test_fixed_folder) if
+    #      file_name.lower().endswith('.gz')])
+    # test_moving_list = sorted(
+    #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
+    #      file_name.lower().endswith('.gz')])
 
     enc_nf = [16, 32, 32, 32]
     dec_nf = [32, 32, 32, 32, 32, 16, 16]
@@ -63,7 +64,7 @@ def train():
         dim=3,
         nb_unet_features=[enc_nf, dec_nf],
         bidir=args.bidir,
-        int_steps=0,
+        int_steps=7,
         int_downsize=2
     )
     model = model.to(device)
@@ -97,11 +98,10 @@ def train():
 
     # load data
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    test_dataset = DirLabDataset(moving_files=test_moving_list, fixed_files=test_fixed_list,
-                                 landmark_files=landmark_list)
+    # test_dataset = PatientDataset(moving_files=test_moving_list, fixed_files=test_fixed_list)
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     best_tre = 99.
     # Training
@@ -149,7 +149,8 @@ def train():
                     i, i_step, loss.item(), loss_list[0], loss_list[1]))
 
             epoch_iterator.set_description(
-                "Training (%d / %d Steps) (loss=%2.5f, grad=%.5f)" % (i_step, len(train_loader), loss.item(), r_loss.item())
+                "Training (%d / %d Steps) (loss=%2.5f, grad=%.5f)" % (
+                i_step, len(train_loader), loss.item(), r_loss.item())
             )
             # Backwards and optimize
             optimizer.zero_grad()
@@ -170,7 +171,7 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, [144, 144, 144],
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, img_shape,
                                                                                  image_loss_func
                                                                                  )
         print("iter: %d, mean train loss:%2.5f, val total_loss:%.5f ncc:%.5f, test mse:%.5f test jac:%.5f test" % (
