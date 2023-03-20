@@ -11,13 +11,12 @@ from network import CubicBSplineNet
 from utils.losses import neg_Jdet_loss
 from utils.utilize import save_image
 from utils.config import get_args
-from utils.metric import MSE, SSIM
+from utils.metric import MSE, SSIM, NCC
 from utils.datagenerators import PatientDataset
 
 
 
 def test_patient(args, checkpoint, is_save=False):
-    loss_similarity = LNCCLoss(window_size=7)
 
     with torch.no_grad():
         losses = []
@@ -42,7 +41,7 @@ def test_patient(args, checkpoint, is_save=False):
             flow, disp = transformer(svf)
             wapred_x = warp(moving_img, disp)
 
-            loss_ncc = loss_similarity(wapred_x, fixed_img)
+            ncc = NCC(fixed_img.cpu().detach().numpy(), wapred_x.cpu().detach().numpy())
 
             grid = generate_grid(img_shape)
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
@@ -54,9 +53,9 @@ def test_patient(args, checkpoint, is_save=False):
             # SSIM
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], wapred_x.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mse.item(), loss_Jacobian.item(), _ssim.item(), loss_ncc.item()])
+            losses.append([_mse.item(), loss_Jacobian.item(), _ssim.item(), ncc.item()])
             print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
-                batch + 1, _mse.item(), loss_Jacobian.item(), _ssim.item(), loss_ncc.item()))
+                batch + 1, _mse.item(), loss_Jacobian.item(), _ssim.item(), ncc.item()))
 
             if is_save:
                 # Save DVF
@@ -90,8 +89,8 @@ if __name__ == '__main__':
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
 
-    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    pa_moving_folder = r'D:\xxf\test_patient\moving'
+    pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    pa_moving_folder = r'E:\datasets\registration\patient\moving'
 
     f_patient_file_list = sorted(
         [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
@@ -105,7 +104,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-15-20-13-08'
+    prefix = '2023-03-18-16-26-12'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
