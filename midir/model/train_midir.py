@@ -44,7 +44,10 @@ def train():
                             img_size=img_shape,
                             cps=cps).to(device)
 
-    # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
+    model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
+    if len(model_path) > 1:
+        print("load model: ", model_path)
+        model.load_state_dict(torch.load(model_path))
 
     loss_similarity = LNCCLoss(window_size=7)
     transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
