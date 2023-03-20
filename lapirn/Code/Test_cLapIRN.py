@@ -7,15 +7,14 @@ from utils.Functions import transform_unit_flow_to_flow, Grid, generate_grid
 from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1, \
     Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2, Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3
 
-from utils.losses import neg_Jdet_loss, NCC
+from utils.losses import neg_Jdet_loss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM
+from utils.metric import MSE, landmark_loss, SSIM, NCC
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
 def test_patient(args, checkpoint, is_save=False):
-    loss_similarity = NCC(win=7)
     reg_input = 0.4
     with torch.no_grad():
         losses = []
@@ -59,7 +58,7 @@ def test_patient(args, checkpoint, is_save=False):
             Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
 
             # NCC
-            _ncc = loss_similarity(X_Y, fixed_img)
+            _ncc = NCC(X_Y.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())
 
             # MSE
             _mse = MSE(fixed_img, X_Y)

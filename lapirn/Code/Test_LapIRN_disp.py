@@ -7,10 +7,10 @@ from utils.Functions import transform_unit_flow_to_flow, Grid
 from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
-from utils.losses import neg_Jdet_loss, NCC
+from utils.losses import neg_Jdet_loss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM
+from utils.metric import MSE, landmark_loss, SSIM, NCC
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -186,8 +186,6 @@ def test_dirlab(args, checkpoint, is_save=False):
 
 
 def test_patient(args, checkpoint, is_save=False):
-    loss_similarity = NCC(win=7)
-
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
@@ -222,7 +220,7 @@ def test_patient(args, checkpoint, is_save=False):
             Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
 
             # NCC
-            _ncc = loss_similarity(lv3_out, fixed_img)
+            _ncc = NCC(lv3_out.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())
 
             # MSE
             _mse = MSE(fixed_img, lv3_out)
