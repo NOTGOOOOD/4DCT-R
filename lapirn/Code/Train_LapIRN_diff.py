@@ -7,7 +7,7 @@ import logging
 import time
 
 from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda
-from CRegNet import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
+from LapIRN import Miccai2020_LDR_laplacian_unit_add_lvl1, Miccai2020_LDR_laplacian_unit_add_lvl2, \
     Miccai2020_LDR_laplacian_unit_add_lvl3, SpatialTransform_unit, smoothloss, \
     neg_Jdet_loss, multi_resolution_NCC
 from utils.datagenerators import Dataset
