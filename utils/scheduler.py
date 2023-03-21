@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, patient_len=30, min_epoch=10):
+    def __init__(self, patient_len=60, min_epoch=10):
         """
         Parameters
         ----------
