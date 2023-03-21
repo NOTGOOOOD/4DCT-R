@@ -89,8 +89,10 @@ if __name__ == '__main__':
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
 
-    pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    pa_moving_folder = r'E:\datasets\registration\patient\moving'
+    # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # pa_moving_folder = r'E:\datasets\registration\patient\moving'
+    pa_moving_folder = r'D:\xxf\test_patient\moving'
 
     f_patient_file_list = sorted(
         [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
@@ -104,7 +106,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-18-16-26-12'
+    prefix = '2023-03-19-23-54-14'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
