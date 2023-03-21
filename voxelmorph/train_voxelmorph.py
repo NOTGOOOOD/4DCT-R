@@ -70,8 +70,8 @@ def train():
     model = model.to(device)
 
     # Set optimizer and losses
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
     # prepare image loss
     if args.sim_loss == 'ncc':
         # image_loss_func = NCC([args.win_size]*3).loss
@@ -105,7 +105,6 @@ def train():
 
     best_tre = 99.
     # Training
-    # fold-validation
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     for i in range(1, args.n_iter + 1):
         model.train()
@@ -125,7 +124,7 @@ def train():
             y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
 
             loss_list = []
-            r_loss = args.alpha * regular_loss(None, y_pred[1])
+            r_loss = args.alpha * regular_loss(None, y_pred[2])
             sim_loss = image_loss_func(y_true[0], y_pred[0])
 
             # _, _, z, y, x = flow.shape
