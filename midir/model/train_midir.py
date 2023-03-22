@@ -17,6 +17,7 @@ from network import CubicBSplineNet
 from loss import LNCCLoss, l2reg_loss
 from utils.datagenerators import Dataset
 from utils.Functions import validation_midir, generate_grid
+from utils.losses import NCC
 from transformation import CubicBSplineFFDTransform, warp
 
 
@@ -43,19 +44,20 @@ def train():
     model = CubicBSplineNet(ndim=3,
                             img_size=img_shape,
                             cps=cps).to(device)
-
-    model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
+    model_path=''
+    # model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
     if len(model_path) > 1:
         print("load model: ", model_path)
         model.load_state_dict(torch.load(model_path))
 
-    loss_similarity = LNCCLoss(window_size=7)
+    # loss_similarity = LNCCLoss(window_size=7)
+    loss_similarity = NCC(win=7)
     transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
                                            , svf_steps=7
                                            , svf_scale=1)
 
     # weight for l2 reg
-    reg_weight = 0.1
+    reg_weight = 0.08
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
@@ -124,7 +126,6 @@ def train():
                                                                                     loss_similarity)
         scheduler.step()
 
-        # with lr 1e-3 + with bias
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
