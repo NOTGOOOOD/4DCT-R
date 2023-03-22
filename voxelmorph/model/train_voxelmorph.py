@@ -13,7 +13,7 @@ from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks
-from utils.scheduler import WarmupCosineSchedule
+from utils.scheduler import StopCriterion
 from utils.metric import get_test_photo_loss
 from utils.Functions import validation_vm
 
@@ -75,7 +75,7 @@ def train():
     # prepare image loss
     if args.sim_loss == 'ncc':
         # image_loss_func = NCC([args.win_size]*3).loss
-        image_loss_func = NCC_new(3, args.win_size)
+        image_loss_func = NCC_new(win=args.win_size)
     elif args.sim_loss == 'mse':
         image_loss_func = MSE().loss
     else:
@@ -102,8 +102,8 @@ def train():
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-    best_tre = 99.
+    stop_criterion = StopCriterion()
+    best_loss = 99.
     # Training
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     for i in range(1, args.n_iter + 1):
@@ -136,6 +136,7 @@ def train():
             loss = r_loss + sim_loss
             loss_list.append(r_loss.item())
             loss_list.append(sim_loss.item())
+
             loss_total.append(loss.item())
 
             moving_name = moving_file[1][0]
@@ -173,22 +174,27 @@ def train():
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, img_shape,
                                                                                  image_loss_func
                                                                                  )
-        print("iter: %d, mean train loss:%2.5f, val total_loss:%.5f ncc:%.5f, test mse:%.5f test jac:%.5f test" % (
-            i, np.mean(loss_total), val_total_loss.item(), val_ncc_loss.item(), val_mse_loss.item(),
-            val_jac_loss.item()))
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            torch.save(model.state_dict(), modelname)
+        else:
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            torch.save(model.state_dict(), modelname)
 
-        # test_loss = get_test_photo_loss(args, logging, model, test_loader)
-        # mean_tre = torch.mean(torch.tensor(test_loss), 0)[0]
-        # mean_std = torch.mean(torch.tensor(test_loss), 0)[1]
-        # mean_mse = torch.mean(torch.tensor(test_loss), 0)[2]
+        mean_loss = np.mean(np.array(loss_total), 0)
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        # if mean_tre < best_tre and best_tre - mean_tre > 0.01:
-        #     best_tre = mean_tre
-        #     save_model(args, model, optimizer, None, train_time)
-        #     logging.info("best tre{}".format(test_loss))
-
-        # print("iter: %d, mean train loss:%2.5f, test tre:%2.5f+-%2.5f, test mse:%2.5f" % (
-        #     i, np.mean(loss_total), mean_tre.item(), mean_std.item(), mean_mse.item()))
+        stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
+        if stop_criterion.stop():
+            break
 
 
 if __name__ == "__main__":
@@ -196,6 +202,11 @@ if __name__ == "__main__":
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     set_seed(42)
+    model_dir = '../model'
+    train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
+    model_name = "{}_vm_".format(train_time)
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
     make_dirs()
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
