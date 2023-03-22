@@ -45,6 +45,7 @@ def train():
                             cps=cps).to(device)
 
     model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
+    model_path = ''
     if len(model_path) > 1:
         print("load model: ", model_path)
         model.load_state_dict(torch.load(model_path))
