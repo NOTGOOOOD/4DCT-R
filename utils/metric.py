@@ -3,7 +3,9 @@ import numpy as np
 import os
 from scipy import interpolate
 from skimage.metrics import structural_similarity
+from torch.nn import functional as F
 
+from utils.losses import JacboianDet
 from utils.utilize import get_project_path
 from matplotlib import pyplot as plt
 
@@ -103,8 +105,10 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_sa
         dist = ori_point - m_landmarks[i]
 
         if is_save:
-            ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10, color='red')
-            ax.scatter([ori_point[0].cpu().detach().int().item()], [ori_point[1].cpu().detach().int().item()], 10, color='green')
+            ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10,
+                       color='red')
+            ax.scatter([ori_point[0].cpu().detach().int().item()], [ori_point[1].cpu().detach().int().item()], 10,
+                       color='green')
             ax.set_title('landmark')
 
         all_dist.append(dist * spec)
@@ -162,3 +166,31 @@ def get_test_photo_loss(args, logger, model, test_loader):
         return losses
 
 
+def neg_Jdet_loss(y_pred, sample_grid):
+    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
+    selected_neg_Jdet = F.relu(neg_Jdet)
+
+    return torch.mean(selected_neg_Jdet)
+
+
+def Get_Ja(flow):
+    '''
+    Calculate the Jacobian value at each point of the displacement map having
+    size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
+
+    the expected input: displacement of shape(batch, H, W, D, channel)
+    but the input dim: (batch, channel, D, H, W)
+    '''
+
+    shape = flow.shape[2:]
+    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b, c, D, H, W -> b, H, W, D, c
+    D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
+    D1 = (D_x[..., 0] + 1) * ((D_y[..., 1] + 1) * (D_z[..., 2] + 1) - D_z[..., 1] * D_y[..., 2])
+    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_z[..., 0])
+    D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
+
+    JacDet = D1 - D2 + D3
+
+    return 1 - (np.count_nonzero(JacDet) / np.float(shape[0]*shape[1]*shape[2]))

@@ -13,7 +13,8 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import generate_grid, transform_unit_flow_to_flow_cuda, \
-    generate_grid_unit, Grid, validation_lapirn_ori, neg_Jdet_loss, smoothloss,SpatialTransform_unit
+    generate_grid_unit, Grid, validation_lapirn_ori, smoothloss,SpatialTransform_unit
+from utils.metric import neg_Jdet_loss
 from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1, \
     Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2, Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3
 

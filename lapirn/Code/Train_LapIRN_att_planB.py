@@ -11,7 +11,8 @@ from lapirn_corr_att_planB import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC,smoothloss, neg_Jdet_loss, multi_resolution_NCC
+from utils.losses import NCC,smoothloss, multi_resolution_NCC
+from utils.metric import neg_Jdet_loss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed
 from utils.Functions import SpatialTransform_unit

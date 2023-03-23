@@ -7,7 +7,7 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.losses import neg_Jdet_loss
+from utils.metric import neg_Jdet_loss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed
 

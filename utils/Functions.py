@@ -8,8 +8,8 @@ from torch.utils import data as Data
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset
-from utils.losses import neg_Jdet_loss, smoothloss
-from utils.metric import MSE
+from utils.losses import smoothloss
+from utils.metric import MSE, neg_Jdet_loss
 
 
 def generate_grid(imgshape):

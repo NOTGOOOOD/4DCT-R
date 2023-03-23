@@ -8,10 +8,9 @@ from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.Functions import transform_unit_flow_to_flow, generate_grid
 from voxelmorph.vmmodel import vmnetwork
 
-from utils.losses import neg_Jdet_loss
 from utils.utilize import save_image
 from utils.config import get_args
-from utils.metric import MSE, SSIM, NCC
+from utils.metric import MSE, SSIM, NCC, neg_Jdet_loss
 from utils.datagenerators import PatientDataset
 
 

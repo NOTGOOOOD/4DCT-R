@@ -14,7 +14,8 @@ from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC, smoothloss, neg_Jdet_loss, multi_resolution_NCC
+from utils.losses import NCC, smoothloss, multi_resolution_NCC
+from utils.metric import neg_Jdet_loss
 from utils.scheduler import StopCriterion
 from utils.Functions import validation_ccregnet, Grid, get_loss
 

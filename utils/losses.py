@@ -120,8 +120,8 @@ class NCC(torch.nn.Module):
         u_J = J_sum / win_size
 
         cross = torch.clamp(IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size, min=self.num_stab_const)
-        I_var = torch.clamp(I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size,min=self.num_stab_const)
-        J_var = torch.clamp(J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size,min=self.num_stab_const)
+        I_var = torch.clamp(I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size, min=self.num_stab_const)
+        J_var = torch.clamp(J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size, min=self.num_stab_const)
 
         cc = cross * cross / (I_var * J_var + self.eps)
 
@@ -213,24 +213,6 @@ def cc_loss(x, y):
     return -torch.mean((x - mean_x) * (y - mean_y) / (stddev_x * stddev_y))
 
 
-def Get_Ja(flow):
-    '''
-    Calculate the Jacobian value at each point of the displacement map having
-    size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
-
-    the expected input: displacement of shape(batch, H, W, D, channel)
-    but the input dim: (batch, channel, D, H, W)
-    '''
-    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b, c, D, H, W -> b, H, W, D, c
-    D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
-    D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
-    D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
-    D1 = (D_x[..., 0] + 1) * ((D_y[..., 1] + 1) * (D_z[..., 2] + 1) - D_z[..., 1] * D_y[..., 2])
-    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_z[..., 0])
-    D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
-    return D1 - D2 + D3
-
-
 # def jacobian_determinant(disp):
 #     """
 #     jacobian determinant of a displacement field.
@@ -276,13 +258,22 @@ def Get_Ja(flow):
 #
 #         return dfdx[..., 0] * dfdy[..., 1] - dfdy[..., 0] * dfdx[..., 1]
 
+def Get_Ja(flow):
+    '''
+    Calculate the Jacobian value at each point of the displacement map having
+    size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
 
-def NJ_loss(ypred):
+    the expected input: displacement of shape(batch, H, W, D, channel)
+    but the input dim: (batch, channel, D, H, W)
     '''
-    Penalizing locations where Jacobian has negative determinants
-    '''
-    Neg_Jac = 0.5 * (torch.abs(Get_Ja(ypred)) - Get_Ja(ypred))
-    return torch.sum(Neg_Jac)
+    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b, c, D, H, W -> b, H, W, D, c
+    D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
+    D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
+    D1 = (D_x[..., 0] + 1) * ((D_y[..., 1] + 1) * (D_z[..., 2] + 1) - D_z[..., 1] * D_y[..., 2])
+    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_z[..., 0])
+    D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
+    return D1 - D2 + D3
 
 
 def JacboianDet(y_pred, sample_grid):
@@ -305,13 +296,6 @@ def smoothloss(y_pred):
     dx = torch.abs(y_pred[:, :, :, 1:, :] - y_pred[:, :, :, :-1, :])
     dz = torch.abs(y_pred[:, :, :, :, 1:] - y_pred[:, :, :, :, :-1])
     return (torch.mean(dx * dx) + torch.mean(dy * dy) + torch.mean(dz * dz)) / 3.0
-
-
-def neg_Jdet_loss(y_pred, sample_grid):
-    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
-    selected_neg_Jdet = F.relu(neg_Jdet)
-
-    return torch.mean(selected_neg_Jdet)
 
 
 class multi_resolution_NCC(torch.nn.Module):

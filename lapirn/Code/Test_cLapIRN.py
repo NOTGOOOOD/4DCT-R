@@ -7,10 +7,9 @@ from utils.Functions import transform_unit_flow_to_flow, Grid, generate_grid
 from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1, \
     Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2, Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3
 
-from utils.losses import neg_Jdet_loss
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC
+from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
