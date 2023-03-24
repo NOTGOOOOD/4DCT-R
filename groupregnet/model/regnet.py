@@ -76,10 +76,11 @@ class RegNet_single(nn.Module):
             disp_t2i = scaled_disp_t2i
 
         warped_input_image = self.spatial_transform(input_image, disp_t2i)  # (n, 1, h, w) or (n, 1, d, h, w)
-        template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
+        # template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
+        template = input_image[5:6, ...]
 
-        res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
-               'template': template}
+        # res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
+        #        'template': template}
 
         if self.scale < 1:
             scaled_template = torch.nn.functional.interpolate(template, size=scaled_image_shape,
@@ -87,6 +88,7 @@ class RegNet_single(nn.Module):
                                                               align_corners=True)
         else:
             scaled_template = template
+
         res = {'disp_t2i': disp_t2i, 'scaled_disp_t2i': scaled_disp_t2i, 'warped_input_image': warped_input_image,
                'template': template, 'scaled_template': scaled_template}
         return res
@@ -166,7 +168,7 @@ class RegNet_pairwise(nn.Module):
 class SpatialTransformer(nn.Module):
     # 2D or 3d spatial transformer network to calculate the warped moving image
 
-    def __init__(self, dim):
+    def __init__(self, dim=3):
         super().__init__()
         self.dim = dim
         self.grid_dict = {}

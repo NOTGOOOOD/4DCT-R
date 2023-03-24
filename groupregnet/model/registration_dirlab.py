@@ -12,59 +12,9 @@ from scipy import interpolate
 from utils.utilize import make_dir
 from utils.utilize import show_slice
 from utils.metric import NCC, MSE, SSIM, neg_Jdet_loss, Get_Ja
-from utils.Functions import generate_grid
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# case = 1
-# crop_range = [slice(0, 83), slice(43, 200), slice(10, 250)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 2
-# crop_range = [slice(5, 98), slice(30, 195), slice(8, 243)]
-# pixel_spacing = np.array([1.16, 1.16, 2.5], dtype = np.float32)
-
-
-# case = 3
-# crop_range = [slice(0, 95), slice(42, 209), slice(10, 248)]
-# pixel_spacing = np.array([1.15, 1.15, 2.5], dtype = np.float32)
-
-
-# case = 4
-# crop_range = [slice(0, 90), slice(45, 209), slice(11, 242)]
-# pixel_spacing = np.array([1.13, 1.13, 2.5], dtype = np.float32)
-
-
-# case = 5
-# crop_range = [slice(0, 90), slice(60, 222), slice(16, 237)]
-# pixel_spacing = np.array([1.10, 1.10, 2.5], dtype = np.float32)
-
-
-# case = 6
-# crop_range = [slice(10, 107), slice(144, 328), slice(132, 426)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 7
-# crop_range = [slice(13, 108), slice(141, 331), slice(114, 423)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 8
-# crop_range = [slice(18, 118), slice(84, 299), slice(113, 390)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 9
-# crop_range = [slice(0, 70), slice(126, 334), slice(128, 390)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
-
-
-# case = 10
-# crop_range = [slice(0, 90), slice(119, 333), slice(140, 382)]
-# pixel_spacing = np.array([0.97, 0.97, 2.5], dtype = np.float32)
 
 
 # landmark_file = f'/data/dirlab/Case1Pack/ExtremePhases/case{case}_00_50.pt'
@@ -85,7 +35,7 @@ config = dict(
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
     ncc_window_size=5,
-    load='reg_patient_007_000.pth',
+    load='reg_patient_007_001.pth',
     load_optimizer=False,
     group_index_list=None,
     pair_disp_indexes=[0, 5],
@@ -108,6 +58,9 @@ num_image = input_image.shape[0]  # number of image in the group
 regnet = regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
                               initial_channels=config.initial_channels, normalization=config.normalization)
 
+# regnet = regnet.(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
+#                               initial_channels=config.initial_channels, normalization=config.normalization)
+
 ncc_loss = loss.NCC(config.dim, config.ncc_window_size)
 regnet = regnet.to(device)
 input_image = input_image.to(device)
@@ -126,9 +79,12 @@ if config.load:
         else:
             print(f'load model state {config.load}.pth')
 
+
 grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
 
-stop_criterion = util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
+# stop_criterion = util.StopCriterion(stop_std=config.stop_std, query_len=config.stop_query_len)
+from utils.scheduler import StopCriterion
+stop_criterion = StopCriterion(patient_len=100, min_epoch=10)
 
 import tqdm
 
@@ -172,13 +128,12 @@ for i in pbar:
     total_loss.backward()
     optimizer.step()
 
-    stop_criterion.add(simi_loss.item())
+    stop_criterion.add(ncc_loss=simi_loss.item(), total_loss=total_loss.item())
     if stop_criterion.stop():
         break
 
     pbar.set_description(
-        f'{i}, simi. loss {simi_loss.item():.4f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
-
+        f'{i}, total loss {total_loss.item():.4f}, simi. loss {simi_loss.item():.4f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
 template = res['template']
 # show_slice(template.cpu().detach().numpy())
@@ -187,12 +142,7 @@ wapred_moving = res['warped_input_image'][0:1, ...]
 disp = res['disp_t2i'][0:1, ...]
 img_shape = wapred_moving.shape[2:]
 
-
 ncc = NCC(template.cpu().detach().numpy(), wapred_moving.cpu().detach().numpy())
-
-grid = generate_grid(img_shape)
-grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
 
 ja = Get_Ja(disp.cpu().detach().numpy())
 # MSE
@@ -201,10 +151,10 @@ mse = MSE(wapred_moving, template)
 ssim = SSIM(template.cpu().detach().numpy()[0, 0], wapred_moving.cpu().detach().numpy()[0, 0])
 
 print('MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
-              mse.item(), ja.item(), ssim.item(), ncc.item()))
+    mse.item(), ja, ssim.item(), ncc.item()))
 
 states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
-          'registration_result': res, 'loss_list': stop_criterion.loss_list}
+          'registration_result': res, 'loss_list': stop_criterion.total_loss_list}
 index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
 states_file = f'reg_patient_007_{index:03d}.pth'
 torch.save(states, os.path.join(states_folder, states_file))
@@ -212,5 +162,3 @@ torch.save(states, os.path.join(states_folder, states_file))
 # plt.figure(dpi = plot_dpi)
 # plt.plot(stop_criterion.loss_list, label = 'simi')
 # plt.title('similarity loss vs iteration')
-
-
