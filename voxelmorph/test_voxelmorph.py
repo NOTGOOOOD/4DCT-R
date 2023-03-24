@@ -10,7 +10,7 @@ from voxelmorph.vmmodel import vmnetwork
 
 from utils.utilize import save_image
 from utils.config import get_args
-from utils.metric import MSE, SSIM, NCC, neg_Jdet_loss, Get_Ja
+from utils.metric import MSE, SSIM, NCC, neg_Jdet_loss, jacobian_determinant_vxm
 from utils.datagenerators import PatientDataset
 
 
@@ -35,7 +35,7 @@ def test_patient(args, checkpoint, is_save=False):
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
             loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
-            jac = Get_Ja(y_pred[1].cpu().detach().numpy())
+            jac = jacobian_determinant_vxm(y_pred[1][0].cpu().detach().numpy())
 
             # MSE
             _mse = MSE(fixed_img, y_pred[0])

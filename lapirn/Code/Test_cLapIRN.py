@@ -9,7 +9,7 @@ from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss
+from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant_vxm
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -54,7 +54,9 @@ def test_patient(args, checkpoint, is_save=False):
             grid = generate_grid(imgshape)
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
-            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
+            # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
+            Jac = jacobian_determinant_vxm(F_X_Y_cpu.cpu().detach().numpy())
+            # Jac = Get_Ja(F_X_Y.cpu().detach().numpy())
 
             # NCC
             _ncc = NCC(X_Y.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())
@@ -64,9 +66,9 @@ def test_patient(args, checkpoint, is_save=False):
             # SSIM
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], X_Y.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mse.item(), Jac.item(), _ssim.item(), _ncc.item()])
+            losses.append([_mse.item(), Jac, _ssim.item(), _ncc.item()])
             print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
-                batch + 1, _mse.item(), Jac.item(), _ssim.item(), _ncc.item()))
+                batch + 1, _mse.item(), Jac, _ssim.item(), _ncc.item()))
 
             if is_save:
                 # Save DVF

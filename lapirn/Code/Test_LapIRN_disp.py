@@ -4,12 +4,12 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss
+from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss, jacobian_determinant_vxm
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -28,14 +28,14 @@ def test_dirlab(args, checkpoint, is_save=False):
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
             model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     range_flow=range_flow,grid=grid_class).cuda()
+                                                                     range_flow=range_flow, grid=grid_class).cuda()
             model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1, grid=grid_class).cuda()
 
             model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).cuda()
-
+                                                                range_flow=range_flow, model_lvl2=model_lvl2,
+                                                                grid=grid_class).cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()
@@ -204,7 +204,8 @@ def test_patient(args, checkpoint, is_save=False):
                                                                      model_lvl1=model_lvl1, grid=grid_class).cuda()
 
             model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).cuda()
+                                                                range_flow=range_flow, model_lvl2=model_lvl2,
+                                                                grid=grid_class).cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()
@@ -216,7 +217,9 @@ def test_patient(args, checkpoint, is_save=False):
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
-            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
+            # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
+            # J = jacobian_determinant_vxm(F_X_Y_cpu)
+            Jac = jacobian_determinant_vxm(F_X_Y_cpu.cpu().detach().numpy())
 
             # NCC
             _ncc = NCC(lv3_out.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())
@@ -226,9 +229,9 @@ def test_patient(args, checkpoint, is_save=False):
             # SSIM
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mse.item(), Jac.item(), _ssim.item(), _ncc.item()])
+            losses.append([_mse.item(), Jac, _ssim.item(), _ncc.item()])
             print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
-                batch + 1, _mse.item(), Jac.item(), _ssim.item(), _ncc.item()))
+                batch + 1, _mse.item(), Jac, _ssim.item(), _ncc.item()))
 
             if is_save:
                 # Save DVF

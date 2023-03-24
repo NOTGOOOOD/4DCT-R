@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from utils.losses import JacboianDet
 from utils.utilize import get_project_path
 from matplotlib import pyplot as plt
+import pystrum.pynd.ndutils as nd
 
 
 def SSIM(real, predict, data_range=1):
@@ -173,24 +174,49 @@ def neg_Jdet_loss(y_pred, sample_grid):
     return torch.mean(selected_neg_Jdet)
 
 
-def Get_Ja(flow):
-    '''
-    Calculate the Jacobian value at each point of the displacement map having
-    size of b*h*w*d*3 and in the cubic volumn of [-1, 1]^3
+def dice(y_pred, y_true, ):
+    intersection = y_pred * y_true
+    intersection = np.sum(intersection)
+    union = np.sum(y_pred) + np.sum(y_true)
+    dsc = (2. * intersection) / (union + 1e-5)
+    return dsc
 
-    the expected input: displacement of shape(batch, H, W, D, channel)
-    but the input dim: (batch, channel, D, H, W)
-    '''
 
-    shape = flow.shape[2:]
-    displacement = np.transpose(flow, (0, 3, 4, 2, 1))  # b, c, D, H, W -> b, H, W, D, c
-    D_y = (displacement[:, 1:, :-1, :-1, :] - displacement[:, :-1, :-1, :-1, :])
-    D_x = (displacement[:, :-1, 1:, :-1, :] - displacement[:, :-1, :-1, :-1, :])
-    D_z = (displacement[:, :-1, :-1, 1:, :] - displacement[:, :-1, :-1, :-1, :])
-    D1 = (D_x[..., 0] + 1) * ((D_y[..., 1] + 1) * (D_z[..., 2] + 1) - D_z[..., 1] * D_y[..., 2])
-    D2 = (D_x[..., 1]) * (D_y[..., 0] * (D_z[..., 2] + 1) - D_y[..., 2] * D_z[..., 0])
-    D3 = (D_x[..., 2]) * (D_y[..., 0] * D_z[..., 1] - (D_y[..., 1] + 1) * D_z[..., 0])
+def jacobian_determinant_vxm(disp):
+    """
+    jacobian determinant of a displacement field.
+    NB: to compute the spatial gradients, we use np.gradient.
+    Parameters:
+        disp: 2D or 3D displacement field of size [*vol_shape, nb_dims],
+              where vol_shape is of len nb_dims
+    Returns:
+        jacobian determinant (scalar)
+    """
 
-    JacDet = D1 - D2 + D3
+    # check inputs
+    disp = disp.transpose(1, 2, 3, 0)
+    volshape = disp.shape[:-1]
+    nb_dims = len(volshape)
+    assert len(volshape) in (2, 3), 'flow has to be 2D or 3D'
 
-    return 1 - (np.count_nonzero(JacDet) / np.float(shape[0]*shape[1]*shape[2]))
+    # compute grid
+    grid_lst = nd.volsize2ndgrid(volshape)
+    grid = np.stack(grid_lst, len(volshape))
+
+    # compute gradients
+    J = np.gradient(disp + grid)
+
+    # 3D glow
+    if nb_dims == 3:
+        dx = J[0]
+        dy = J[1]
+        dz = J[2]
+
+        # compute jacobian components
+        Jdet0 = dx[..., 0] * (dy[..., 1] * dz[..., 2] - dy[..., 2] * dz[..., 1])
+        Jdet1 = dx[..., 1] * (dy[..., 0] * dz[..., 2] - dy[..., 2] * dz[..., 0])
+        Jdet2 = dx[..., 2] * (dy[..., 0] * dz[..., 1] - dy[..., 1] * dz[..., 0])
+
+        JacDet = Jdet0 - Jdet1 + Jdet2
+
+        return 1 - (np.count_nonzero(JacDet) / np.float(disp.shape[0] * disp.shape[1] * disp.shape[2]))
