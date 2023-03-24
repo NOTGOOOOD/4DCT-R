@@ -287,6 +287,10 @@ class VxmDense(LoadableModel):
                 pos_flow = self.fullsize(pos_flow)
                 neg_flow = self.fullsize(neg_flow) if self.bidir else None
 
+        if source.shape != pos_flow.shape:
+            pos_flow = F.interpolate(pos_flow, source.shape[2:], mode='trilinear',
+                                    align_corners=True)
+            
         # warp image with flow field
         y_source = self.transformer(source, pos_flow)
         y_target = self.transformer(target, neg_flow) if self.bidir else None
