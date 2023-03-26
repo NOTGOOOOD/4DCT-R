@@ -46,9 +46,9 @@ class StopCriterion(object):
             if (self.patient_len <= 0 and len(self.ncc_loss_list) > self.loss_min_i):
                 print('early stop by patient_len!')
                 return True
-            elif (std_ncc < 0.0001 and std_mse < 0.0001 and len(self.ncc_loss_list) > self.loss_min_i):
-                print('early stop by std!')
-                return True
+            # elif (std_ncc < 0.0001 and std_mse < 0.0001 and len(self.ncc_loss_list) > self.loss_min_i):
+            #     print('early stop by std!')
+            #     return True
             else:
                 return False
 
