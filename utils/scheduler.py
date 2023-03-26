@@ -35,11 +35,11 @@ class StopCriterion(object):
 
     def stop(self):
         # return True if the stop creteria are met
-        query_ncc_list = self.ncc_loss_list[-7:]
-        query_mse_lisst = self.mse_loss_list[-7:]
+        # query_ncc_list = self.ncc_loss_list[-7:]
+        # query_mse_lisst = self.mse_loss_list[-7:]
         # query_total_lisst = self.total_loss_list[-7:]
-        std_ncc = np.std(query_ncc_list)
-        std_mse = np.std(query_mse_lisst)
+        # std_ncc = np.std(query_ncc_list)
+        # std_mse = np.std(query_mse_lisst)
         # std_total = np.std(query_total_lisst)
         # length of patient <=0,and current epoch have no improve
         if len(self.total_loss_list) > self.min_epoch:
