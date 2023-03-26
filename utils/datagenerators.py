@@ -18,10 +18,11 @@ class Dataset(Data.Dataset):
     def __getitem__(self, index):
         m_img = sitk.GetArrayFromImage(sitk.ReadImage(self.moving_files[index]))[np.newaxis, ...]
         m_img = data_standardization_0_n(1, m_img)
+        # m_img = np.array(F.softsign(torch.from_numpy(m_img)))
 
         f_img = sitk.GetArrayFromImage(sitk.ReadImage(self.fixed_files[index]))[np.newaxis, ...]
         f_img = data_standardization_0_n(1, f_img)
-
+        # f_img = np.array(F.softsign(torch.from_numpy(f_img)))
         m_name = self.moving_files[index].split('moving\\')[1] if platform.system().lower() == 'windows' else \
             self.moving_files[index].split('moving/')[1]
         f_name = self.fixed_files[index].split('fixed\\')[1] if platform.system().lower() == 'windows' else \
