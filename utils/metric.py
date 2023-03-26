@@ -219,4 +219,12 @@ def jacobian_determinant_vxm(disp):
 
         JacDet = Jdet0 - Jdet1 + Jdet2
 
-        return 1 - (np.count_nonzero(JacDet) / np.float(disp.shape[0] * disp.shape[1] * disp.shape[2]))
+        d, h, w = JacDet.shape
+        sum = 0
+        for i in range(0, d):
+            for j in range(0, h):
+                for k in range(0, w):
+                    if JacDet[i][j][k] < 0:
+                        sum = sum + 1
+
+        return sum / np.float(d * h * w)
