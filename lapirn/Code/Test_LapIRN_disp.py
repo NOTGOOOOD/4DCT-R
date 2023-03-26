@@ -4,7 +4,7 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.utilize import load_landmarks, save_image
@@ -230,7 +230,7 @@ def test_patient(args, checkpoint, is_save=False):
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
 
             losses.append([_mse.item(), Jac, _ssim.item(), _ncc.item()])
-            print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
+            print('case=%d after warped,MSE=%.5f Jac=%.8f, SSIM=%.5f, NCC=%.5f' % (
                 batch + 1, _mse.item(), Jac, _ssim.item(), _ncc.item()))
 
             if is_save:
@@ -259,7 +259,7 @@ def test_patient(args, checkpoint, is_save=False):
     mean_ssim = mean_total[2]
     mean_ncc = mean_total[3]
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
-    print('mean SSIM=%.5f Jac=%.6f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
+    print('mean SSIM=%.5f Jac=%.8f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
     # # respectively
     # losses = []
     # for i in range(len(f_img_file_list)):
