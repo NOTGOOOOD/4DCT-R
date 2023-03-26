@@ -20,7 +20,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # landmark_file = f'/data/dirlab/Case1Pack/ExtremePhases/case{case}_00_50.pt'
 states_folder = '../result/general_reg/'
 make_dir(states_folder)
-data_folder = r'E:\datasets\registration\patient\007'
+data_folder = r'D:\xxf\patient\008'
 config = dict(
     dim=3,  # dimension of the input image
     intensity_scale_const=1000.,  # (image - intensity_shift_const)/intensity_scale_const
@@ -35,7 +35,7 @@ config = dict(
     smooth_reg=1e-3,
     cyclic_reg=1e-2,
     ncc_window_size=5,
-    load='reg_patient_007_001.pth',
+    load=False,
     load_optimizer=False,
     group_index_list=None,
     pair_disp_indexes=[0, 5],
@@ -156,7 +156,7 @@ print('MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
 states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
           'registration_result': res, 'loss_list': stop_criterion.total_loss_list}
 index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
-states_file = f'reg_patient_007_{index:03d}.pth'
+states_file = f'reg_patient_008_{index:03d}.pth'
 torch.save(states, os.path.join(states_folder, states_file))
 
 # plt.figure(dpi = plot_dpi)

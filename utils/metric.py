@@ -174,7 +174,7 @@ def neg_Jdet_loss(y_pred, sample_grid):
     return torch.mean(selected_neg_Jdet)
 
 
-def dice(y_pred, y_true, ):
+def dice(y_pred, y_true):
     intersection = y_pred * y_true
     intersection = np.sum(intersection)
     union = np.sum(y_pred) + np.sum(y_true)

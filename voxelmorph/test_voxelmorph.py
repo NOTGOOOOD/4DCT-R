@@ -49,7 +49,7 @@ def test_patient(args, checkpoint, is_save=False):
             if is_save:
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-                m2f_name = img_name[0][:13] + '_warpped_flow_midir.nii.gz'
+                m2f_name = img_name[0][:13] + '_warpped_flow_vm.nii.gz'
                 save_image(torch.permute(y_pred[1][0], (1, 2, 3, 0)), fixed_img[0], args.output_dir,
                            m2f_name)
 
@@ -57,7 +57,7 @@ def test_patient(args, checkpoint, is_save=False):
                 # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
                 # save_image(X_Y, fixed_img, args.output_dir, m_name)
 
-                m_name = "{}_warped_midir.nii.gz".format(img_name[0][:13])
+                m_name = "{}_warped_vm.nii.gz".format(img_name[0][:13])
                 save_image(y_pred[0], fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)

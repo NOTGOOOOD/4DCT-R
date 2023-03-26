@@ -1,4 +1,7 @@
 import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import sys
 import numpy as np
 import torch
@@ -44,7 +47,7 @@ def train():
     model = CubicBSplineNet(ndim=3,
                             img_size=img_shape,
                             cps=cps).to(device)
-    model_path=''
+    model_path = ''
     # model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
     if len(model_path) > 1:
         print("load model: ", model_path)
@@ -60,10 +63,10 @@ def train():
     reg_weight = 0.08
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                step_size=100,
-                                                gamma=0.1,
-                                                last_epoch=-1)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+    #                                             step_size=100,
+    #                                             gamma=0.1,
+    #                                             last_epoch=-1)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     model_dir = '../Model'
@@ -124,7 +127,7 @@ def train():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_midir(args, model, img_shape,
                                                                                     loss_similarity)
-        scheduler.step()
+        # scheduler.step()
 
         if val_total_loss <= best_loss:
             best_loss = val_total_loss

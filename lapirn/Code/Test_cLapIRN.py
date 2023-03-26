@@ -73,7 +73,7 @@ def test_patient(args, checkpoint, is_save=False):
             if is_save:
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-                m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
+                m2f_name = img_name[0][:13] + '_clapirn_warpped_flow.nii.gz'
                 save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
                            m2f_name)
 
@@ -81,13 +81,13 @@ def test_patient(args, checkpoint, is_save=False):
                 # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
                 # save_image(X_Y, fixed_img, args.output_dir, m_name)
 
-                m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
+                m_name = "{}_clapirn_warped_lv1.nii.gz".format(img_name[0][:13])
                 save_image(F_xy_lvl1, fixed_img, args.output_dir, m_name)
 
-                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+                m_name = "{}_clapirn_warped_lv2.nii.gz".format(img_name[0][:13])
                 save_image(F_xy_lvl2, fixed_img, args.output_dir, m_name)
 
-                m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
+                m_name = "{}_clapirn_warped_lv3.nii.gz".format(img_name[0][:13])
                 save_image(X_Y, fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
