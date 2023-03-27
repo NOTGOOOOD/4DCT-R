@@ -97,7 +97,7 @@ class CCRegNet_planB_lv1(nn.Module):
 
         bias_opt = False
 
-        self.dialation_conv0 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=1,
+        self.dialation_conv0 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=1,
                                          dilation=1)
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
