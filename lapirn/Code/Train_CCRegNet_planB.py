@@ -152,13 +152,13 @@ def train_lvl2():
     model_lvl1 = CCRegNet_planB_lv1(2, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
 
-    model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-15-44-56_lapirn_corr_att_planB_stagelvl1_112_-0.3230.pth'
-    # model_list = []
-    # for f in os.listdir('../Model/Stage'):
-    #     if model_name + "stagelvl1" in f:
-    #         model_list.append(os.path.join('../Model/Stage', f))
-    #
-    # model_path = sorted(model_list)[-1]
+    # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-15-44-56_lapirn_corr_att_planB_stagelvl1_112_-0.3230.pth'
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl1" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+
+    model_path = sorted(model_list)[-1]
 
     model_lvl1.load_state_dict(torch.load(model_path))
     print("Loading weight for model_lvl1...", model_path)
@@ -264,13 +264,13 @@ def train_lvl3():
                                     range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
-    model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-20-40-00_lapirn_corr_att_planB_stagelvl2_000_-0.6411.pth'
-    # model_list = []
-    # for f in os.listdir('../Model/Stage'):
-    #     if model_name + "stagelvl2" in f:
-    #         model_list.append(os.path.join('../Model/Stage', f))
-    #
-    # model_path = sorted(model_list)[-1]
+    # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-20-40-00_lapirn_corr_att_planB_stagelvl2_000_-0.6411.pth'
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl2" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+
+    model_path = sorted(model_list)[-1]
     model_lvl2.load_state_dict(torch.load(model_path))
     print("Loading weight for model_lvl2...", model_path)
 
@@ -403,5 +403,5 @@ if __name__ == "__main__":
     grid_class = Grid()
     range_flow = 0.4
     train_lvl1()
-    # train_lvl2()
-    # train_lvl3()
+    train_lvl2()
+    train_lvl3()

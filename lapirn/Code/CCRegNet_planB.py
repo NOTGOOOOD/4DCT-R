@@ -110,7 +110,7 @@ class CCRegNet_planB_lv1(nn.Module):
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
 
-        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 6, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 9, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
@@ -120,7 +120,7 @@ class CCRegNet_planB_lv1(nn.Module):
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 10, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 13, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
