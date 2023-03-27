@@ -132,7 +132,7 @@ class CCRegNet_lv1(nn.Module):
         decoder = x1 + x2
 
         output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
-        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -210,7 +210,7 @@ class CCRegNet_lv2(nn.Module):
                                      mode='trilinear',
                                      align_corners=True)
 
-        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
@@ -238,7 +238,7 @@ class CCRegNet_lv2(nn.Module):
         disp_lv2 = self.output_lvl2(decoder)
         output_disp_e0_v = disp_lv2 * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -258,6 +258,10 @@ class CCRegNet_lv3(nn.Module):
         self.is_train = is_train
 
         self.model_lvl2 = model_lvl2
+
+        self.grid_1 = grid
+
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
@@ -304,7 +308,7 @@ class CCRegNet_lv3(nn.Module):
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
                                      align_corners=True)
-        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
@@ -336,7 +340,7 @@ class CCRegNet_lv3(nn.Module):
 
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
