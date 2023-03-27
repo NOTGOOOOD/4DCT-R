@@ -25,7 +25,7 @@ class StopCriterion(object):
         if mse_loss is not None:
             self.mse_loss_list.append(mse_loss)
 
-        if total_loss < self.loss_min:
+        if total_loss <= self.loss_min:
             self.loss_min = total_loss
             self.loss_min_i = len(self.total_loss_list)
             self.patient_len = self.ori_len
