@@ -55,9 +55,10 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
     return layer
 
 
-class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
+class CCRegNet_planB_lv1(nn.Module):
+
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
-        super(Miccai2020_LDR_laplacian_unit_disp_add_lvl1, self).__init__()
+        super(CCRegNet_planB_lv1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
@@ -74,14 +75,22 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
+        self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=2,
+                                         dilation=2)
+        self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=4,
+                                         dilation=4)
+        self.dialation_conv3 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=6,
+                                         dilation=6)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
+        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 6, self.start_channel * 6,
+                                                             bias=bias_opt)
+
+        self.down_conv = nn.Conv3d(self.start_channel * 6, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
 
-        self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 9, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
@@ -91,9 +100,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 15, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -102,6 +111,20 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         self.output_lvl1 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
+
+    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
+                              bias=False, batchnorm=False):
+        if batchnorm:
+            layer = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+                nn.BatchNorm3d(out_channels),
+                nn.ReLU())
+        else:
+            layer = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+                nn.LeakyReLU(0.2),
+                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
+        return layer
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w
@@ -112,8 +135,11 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
-        # two 3^3 3D conv layer with stride 1
-        fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
+        dialation_out1 = self.dialation_conv1(cat_input_lvl1)
+        dialation_out2 = self.dialation_conv2(cat_input_lvl1)
+        dialation_out3 = self.dialation_conv3(cat_input_lvl1)
+
+        fea_e0 = self.input_encoder_lvl1(torch.cat((dialation_out1, dialation_out2, dialation_out3), dim=1))
         # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
         # one 3^3 3D conv layer with stride 2
         e0 = self.down_conv(fea_e0)
@@ -121,17 +147,17 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
 
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
 
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        # att = self.ca_module(e0, fea_e0)
+        # embeding = torch.cat([e0, fea_e0], dim=1) + att
         # embeding = att
         # show_slice(att.detach().cpu().numpy(), embeding.detach().cpu().numpy())
-        # embeding = torch.cat([e0, fea_e0], dim=1)
+        embeding = torch.cat([e0, fea_e0], dim=1)
 
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
@@ -151,10 +177,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
             return output_disp_e0_v, warpped_inputx_lvl1_out
 
 
-class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
+class CCRegNet_planB_lv2(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
                  model_lvl1=None):
-        super(Miccai2020_LDR_laplacian_unit_disp_add_lvl2, self).__init__()
+        super(CCRegNet_planB_lv2, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
@@ -236,7 +262,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         e0 = self.up(e0)
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
@@ -266,10 +292,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
 
 
-class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
+class CCRegNet_planB_lvl3(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
                  model_lvl2=None):
-        super(Miccai2020_LDR_laplacian_unit_disp_add_lvl3, self).__init__()
+        super(CCRegNet_planB_lvl3, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
@@ -347,7 +373,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',

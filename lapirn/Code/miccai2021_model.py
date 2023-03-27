@@ -117,7 +117,7 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(nn.Module):
 
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
@@ -258,7 +258,7 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(nn.Module):
 
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow
@@ -395,7 +395,7 @@ class Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(nn.Module):
 
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         output_disp_e0_v = self.output_lvl1(torch.cat([e0, fea_e0], dim=1)) * self.range_flow

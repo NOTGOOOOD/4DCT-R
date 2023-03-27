@@ -115,7 +115,7 @@ class CCRegNet_lv1(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
@@ -221,7 +221,7 @@ class CCRegNet_lv2(nn.Module):
         e0 = self.up(e0)
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
@@ -315,7 +315,7 @@ class CCRegNet_lv3(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)

@@ -112,7 +112,7 @@ class CRegNet_lv1(nn.Module):
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
@@ -210,7 +210,7 @@ class CRegNet_lv2(nn.Module):
         e0 = e0 + lvl1_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
@@ -306,7 +306,7 @@ class CRegNet_lv3(nn.Module):
         e0 = e0 + lvl2_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
-        if e0.shape != fea_e0.shape:
+        if e0.shape[2:] != fea_e0.shape[2:]:
             e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
 
         decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
