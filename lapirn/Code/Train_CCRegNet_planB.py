@@ -402,6 +402,6 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    # train_lvl1()
+    train_lvl1()
     # train_lvl2()
     # train_lvl3()
