@@ -9,8 +9,8 @@ from utils.utilize import set_seed
 
 set_seed(20)
 
-from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
@@ -39,8 +39,8 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
-                                                        range_flow=range_flow, grid=grid_class).to(device)
+    model = CRegNet_lv1(2, 3, start_channel, is_train=True,
+                        range_flow=range_flow, grid=grid_class).to(device)
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
@@ -129,8 +129,8 @@ def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                                                             grid=grid_class).to(device)
+    model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                             grid=grid_class).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
@@ -147,8 +147,8 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                                                        model_lvl1=model_lvl1, grid=grid_class).to(device)
+    model = CRegNet_lv2(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                        model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     loss_smooth = smoothloss
@@ -237,11 +237,11 @@ def train_lvl3():
     print("Training lvl3...")
     device = args.device
 
-    model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
-                                                             range_flow=range_flow, grid=grid_class).to(device)
-    model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
-                                                             range_flow=range_flow, model_lvl1=model_lvl1,
-                                                             grid=grid_class).to(device)
+    model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True,
+                             range_flow=range_flow, grid=grid_class).to(device)
+    model_lvl2 = CRegNet_lv2(2, 3, start_channel, is_train=True,
+                             range_flow=range_flow, model_lvl1=model_lvl1,
+                             grid=grid_class).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-17-21-50-40_NCC_reg_disp_stagelvl2_073_-0.8829.pth'
     model_list = []
@@ -257,8 +257,8 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,
-                                                        range_flow=range_flow, model_lvl2=model_lvl2,grid=grid_class).to(device)
+    model = CRegNet_lv3(2, 3, start_channel, is_train=True,
+                        range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss

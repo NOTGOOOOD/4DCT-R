@@ -10,7 +10,7 @@ from network import CubicBSplineNet
 
 from utils.utilize import save_image
 from utils.config import get_args
-from utils.metric import MSE, SSIM, NCC, neg_Jdet_loss
+from utils.metric import MSE, SSIM, NCC, neg_Jdet_loss, jacobian_determinant_vxm
 from utils.datagenerators import PatientDataset
 
 
@@ -45,16 +45,17 @@ def test_patient(args, checkpoint, is_save=False):
             grid = generate_grid(img_shape)
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
-            loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
+            # loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
+            jac = jacobian_determinant_vxm(disp[0].cpu().detach().numpy())
 
             # MSE
             _mse = MSE(fixed_img, wapred_x)
             # SSIM
             _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], wapred_x.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mse.item(), loss_Jacobian.item(), _ssim.item(), ncc.item()])
-            print('case=%d after warped,MSE=%.5f Jac=%.6f, SSIM=%.5f, NCC=%.5f' % (
-                batch + 1, _mse.item(), loss_Jacobian.item(), _ssim.item(), ncc.item()))
+            losses.append([_mse.item(), jac, _ssim.item(), ncc.item()])
+            print('case=%d after warped,MSE=%.5f Jac=%.8f, SSIM=%.5f, NCC=%.5f' % (
+                batch + 1, _mse.item(), jac, _ssim.item(), ncc.item()))
 
             if is_save:
                 # Save DVF
@@ -76,7 +77,7 @@ def test_patient(args, checkpoint, is_save=False):
     mean_ssim = mean_total[2]
     mean_ncc = mean_total[3]
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
-    print('mean SSIM=%.5f Jac=%.6f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
+    print('mean SSIM=%.5f Jac=%.8f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
 
 
 if __name__ == '__main__':

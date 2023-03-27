@@ -4,8 +4,8 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
@@ -27,15 +27,15 @@ def test_dirlab(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     range_flow=range_flow, grid=grid_class).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
-                                                                     range_flow=range_flow,
-                                                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
+            model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
+                                     range_flow=range_flow, grid=grid_class).cuda()
+            model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
+                                     range_flow=range_flow,
+                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2,
-                                                                grid=grid_class).cuda()
+            model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
+                                range_flow=range_flow, model_lvl2=model_lvl2,
+                                grid=grid_class).cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()
@@ -196,16 +196,16 @@ def test_patient(args, checkpoint, is_save=False):
             imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
             imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     grid=grid_class,
-                                                                     range_flow=range_flow).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
-                                                                     range_flow=range_flow,
-                                                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
+            model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
+                                     grid=grid_class,
+                                     range_flow=range_flow).cuda()
+            model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
+                                     range_flow=range_flow,
+                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
-                                                                range_flow=range_flow, model_lvl2=model_lvl2,
-                                                                grid=grid_class).cuda()
+            model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
+                                range_flow=range_flow, model_lvl2=model_lvl2,
+                                grid=grid_class).cuda()
 
             model.load_state_dict(torch.load(checkpoint))
             model.eval()

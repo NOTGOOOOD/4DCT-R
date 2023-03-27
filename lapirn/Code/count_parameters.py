@@ -1,8 +1,8 @@
 import os
 from argparse import ArgumentParser
 
-from CRegNet import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3
 
 parser = ArgumentParser()
 parser.add_argument("--modelpath", type=str,
@@ -35,13 +35,13 @@ range_flow = 0.4
 
 start_channel = opt.start_channel
 
-model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                         range_flow=range_flow).cuda()
-model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                         range_flow=range_flow, model_lvl1=model_lvl1).cuda()
+model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
+                         range_flow=range_flow).cuda()
+model_lvl2 = CRegNet_lv2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
+                         range_flow=range_flow, model_lvl1=model_lvl1).cuda()
 
-model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=False, imgshape=imgshape,
-                                                    range_flow=range_flow, model_lvl2=model_lvl2).cuda()
+model = CRegNet_lv3(2, 3, start_channel, is_train=False, imgshape=imgshape,
+                    range_flow=range_flow, model_lvl2=model_lvl2).cuda()
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
