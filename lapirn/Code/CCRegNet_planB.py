@@ -3,9 +3,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit, SpatialTransform_unit
+from utils.Functions import generate_grid_unit, SpatialTransform_unit, AdaptiveSpatialTransformer
 from utils.losses import NCC
 from utils.Attention import Cross_attention
+
+
+class CorrTorch(nn.Module):
+    def __init__(self, pad_size=4, max_displacement=4, stride1=1, stride2=1):
+        assert pad_size == max_displacement
+        assert stride1 == stride2 == 1
+        super().__init__()
+        self.max_hdisp = max_displacement
+        self.padlayer = nn.ConstantPad3d(pad_size, 0)
+
+    def forward(self, in1, in2):
+        in2_pad = self.padlayer(in2)
+        offsetz, offsety, offsetx = torch.meshgrid([torch.arange(0, 2 * self.max_hdisp + 1),
+                                                    torch.arange(0, 2 * self.max_hdisp + 1),
+                                                    torch.arange(0, 2 * self.max_hdisp + 1)])
+
+        depth, hei, wid = in1.shape[2], in1.shape[3], in1.shape[4]
+
+        output = torch.cat([
+            torch.mean(in1 * in2_pad[:, :, dz:dz + depth, dy:dy + hei, dx:dx + wid], 1, keepdim=True)
+            for dz, dx, dy in zip(offsetz.reshape(-1), offsetx.reshape(-1), offsety.reshape(-1))
+        ], 1)
+
+        return output
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -57,7 +81,7 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
 
 class CCRegNet_planB_lv1(nn.Module):
 
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
         super(CCRegNet_planB_lv1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -66,23 +90,19 @@ class CCRegNet_planB_lv1(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
+        self.grid_1 = grid
+        self.transform = AdaptiveSpatialTransformer()
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
-
-        self.transform = SpatialTransform_unit().cuda()
+        self.correlation_layer = CorrTorch()
 
         bias_opt = False
 
+        self.dialation_conv0 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=1,
+                                         dilation=1)
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
-        self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=4,
-                                         dilation=4)
-        self.dialation_conv3 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=6,
-                                         dilation=6)
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 6, self.start_channel * 6,
+        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 4, self.start_channel * 6,
                                                              bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 6, self.start_channel * 9, 3, stride=2, padding=1,
@@ -135,11 +155,10 @@ class CCRegNet_planB_lv1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
+        dialation_out0 = self.dialation_conv0(cat_input_lvl1)
         dialation_out1 = self.dialation_conv1(cat_input_lvl1)
-        dialation_out2 = self.dialation_conv2(cat_input_lvl1)
-        dialation_out3 = self.dialation_conv3(cat_input_lvl1)
 
-        fea_e0 = self.input_encoder_lvl1(torch.cat((dialation_out1, dialation_out2, dialation_out3), dim=1))
+        fea_e0 = self.input_encoder_lvl1(torch.cat((dialation_out0, dialation_out1), dim=1))
         # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
         # one 3^3 3D conv layer with stride 2
         e0 = self.down_conv(fea_e0)
@@ -169,7 +188,8 @@ class CCRegNet_planB_lv1(nn.Module):
         # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0],-1,decoder.shape[2],decoder.shape[3],decoder.shape[4])
 
         output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
-        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
             return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -178,8 +198,8 @@ class CCRegNet_planB_lv1(nn.Module):
 
 
 class CCRegNet_planB_lv2(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl1=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl1=None, grid=None):
         super(CCRegNet_planB_lv2, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -188,26 +208,30 @@ class CCRegNet_planB_lv2(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl1 = model_lvl1
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
+        self.grid_1 = grid
 
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.dialation_conv0 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=1,
+                                         dilation=1)
+        self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=2,
+                                         dilation=2)
+        self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=4,
+                                         dilation=4)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 6 + 3, self.start_channel * 9, bias=bias_opt)
+
+        self.down_conv = nn.Conv3d(self.start_channel * 9, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
-        self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 9, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
@@ -217,9 +241,9 @@ class CCRegNet_planB_lv2(nn.Module):
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 18, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -250,9 +274,14 @@ class CCRegNet_planB_lv2(nn.Module):
                                      mode='trilinear',
                                      align_corners=True)
 
-        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1),
+                                   self.grid_1.get_grid(x_down.shape[2:], True))
 
-        cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
+        dl_1 = self.dialation_conv0(torch.cat((warpped_x, y_down), 1))
+        dl_2 = self.dialation_conv1(torch.cat((warpped_x, y_down), 1))
+        dl_3 = self.dialation_conv2(torch.cat((warpped_x, y_down), 1))
+
+        cat_input_lvl2 = torch.cat((dl_1, dl_2, dl_3, lvl1_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
 
@@ -268,10 +297,10 @@ class CCRegNet_planB_lv2(nn.Module):
                                mode='trilinear',
                                align_corners=True)
 
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        # att = self.ca_module(e0, fea_e0)
+        # embeding = torch.cat([e0, fea_e0], dim=1) + att
 
-        # embeding = torch.cat([e0, fea_e0], dim=1)
+        embeding = torch.cat([e0, fea_e0], dim=1)
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
@@ -284,7 +313,8 @@ class CCRegNet_planB_lv2(nn.Module):
         disp_lv2 = self.output_lvl2(decoder)
         output_disp_e0_v = disp_lv2 * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
-        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
@@ -293,8 +323,8 @@ class CCRegNet_planB_lv2(nn.Module):
 
 
 class CCRegNet_planB_lvl3(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, imgshape=(160, 192, 144), range_flow=0.4,
-                 model_lvl2=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
+                 model_lvl2=None, grid=None):
         super(CCRegNet_planB_lvl3, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
@@ -303,26 +333,31 @@ class CCRegNet_planB_lvl3(nn.Module):
         self.range_flow = range_flow
         self.is_train = is_train
 
-        self.imgshape = imgshape
-
         self.model_lvl2 = model_lvl2
 
-        self.grid_1 = generate_grid_unit(self.imgshape)
-        self.grid_1 = torch.from_numpy(np.reshape(self.grid_1, (1,) + self.grid_1.shape)).cuda().float()
+        self.grid_1 = grid
 
-        self.transform = SpatialTransform_unit().cuda()
+        self.transform = AdaptiveSpatialTransformer()
 
         bias_opt = False
+        self.dialation_conv0 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=1,
+                                         dilation=1)
+        self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=2,
+                                         dilation=2)
+        self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=4,
+                                         dilation=4)
+        self.dialation_conv3 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=6,
+                                         dilation=6)
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 4 + 3, self.start_channel * 9, bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 9, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
-        self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 9, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
@@ -332,9 +367,9 @@ class CCRegNet_planB_lvl3(nn.Module):
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 18, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -361,9 +396,17 @@ class CCRegNet_planB_lvl3(nn.Module):
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
                                      align_corners=True)
-        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
-        cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+        dl_1 = self.dialation_conv0(torch.cat((warpped_x, y), 1))
+        dl_2 = self.dialation_conv1(torch.cat((warpped_x, y), 1))
+        dl_3 = self.dialation_conv2(torch.cat((warpped_x, y), 1))
+        dl_4 = self.dialation_conv3(torch.cat((warpped_x, y), 1))
+
+        cat_input = torch.cat((dl_1, dl_2, dl_3, dl_4, lvl2_disp_up), 1)
+
+        # cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input)
@@ -382,9 +425,10 @@ class CCRegNet_planB_lvl3(nn.Module):
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         # att = self.ca_module(e0, fea_e0)
         # embeding = torch.cat([e0, fea_e0], dim=1)
-        att = self.ca_module(e0, fea_e0)
-        embeding = torch.cat([e0, fea_e0], dim=1) + att
+        # att = self.ca_module(e0, fea_e0)
+        # embeding = torch.cat([e0, fea_e0], dim=1) + att
 
+        embeding = torch.cat([e0, fea_e0], dim=1)
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
@@ -398,7 +442,8 @@ class CCRegNet_planB_lvl3(nn.Module):
 
         compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
 
-        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1)
+        warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(x.shape[2:], True))
 
         if self.is_train is True:
             return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0

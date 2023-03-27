@@ -7,7 +7,7 @@ import logging
 import time
 from utils.utilize import set_seed
 
-set_seed(20)
+set_seed(1024)
 
 from CRegNet import CRegNet_lv1, \
     CRegNet_lv2, CRegNet_lv3
