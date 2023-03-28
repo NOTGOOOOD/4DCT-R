@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 
 class StopCriterion(object):
-    def __init__(self, patient_len=60, min_epoch=10):
+    def __init__(self, patient_len=80, min_epoch=20):
         """
         Parameters
         ----------
@@ -15,15 +15,15 @@ class StopCriterion(object):
         self.ori_len = patient_len
         self.min_epoch = min_epoch
         self.ncc_loss_list = []
-        self.mse_loss_list = []
+        self.jac_loss_list = []
         self.total_loss_list = []
         self.loss_min = 30.
 
-    def add(self, ncc_loss, mse_loss=None, total_loss=None):
+    def add(self, ncc_loss, jac_loss=None, total_loss=None):
         self.ncc_loss_list.append(ncc_loss)
         self.total_loss_list.append(total_loss)
-        if mse_loss is not None:
-            self.mse_loss_list.append(mse_loss)
+        if jac_loss is not None:
+            self.jac_loss_list.append(jac_loss)
 
         if total_loss <= self.loss_min:
             self.loss_min = total_loss

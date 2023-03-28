@@ -51,7 +51,7 @@ def train():
     # model_path = r'D:\xxf\4DCT-R\midir\model\2023-03-19-23-54-14_midir__125_-0.3505.pth'
     if len(model_path) > 1:
         print("load model: ", model_path)
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path)['model'])
 
     # loss_similarity = LNCCLoss(window_size=7)
     loss_similarity = NCC(win=7)
@@ -135,19 +135,19 @@ def train():
             modelname = model_dir + '/' + model_name + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
         else:
             modelname = model_dir + '/' + model_name + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 

@@ -14,7 +14,7 @@ from utils.config import get_args
 from utils.losses import NCC, smoothloss, multi_resolution_NCC
 from utils.metric import neg_Jdet_loss
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed
+from utils.utilize import set_seed, save_model
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -83,7 +83,7 @@ def train_lvl1():
     #     model_path = "../Model/LDR_LPBA_NCC_lap_share_preact_1_05_3000.pth"
     #     print("Loading weight: ", model_path)
     #     step = 3000
-    #     model.load_state_dict(torch.load(model_path))
+    #     model.load_state_dict(torch.load(model_path)['model'])
     #     temp_lossall = np.load("../Model/loss_LDR_LPBA_NCC_lap_share_preact_1_05_3000.npy")
     #     lossall[:, 0:3000] = temp_lossall[:, 0:3000]
     best_loss = 99.
@@ -129,14 +129,14 @@ def train_lvl1():
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 
@@ -160,7 +160,7 @@ def train_lvl2():
 
     model_path = sorted(model_list)[-1]
 
-    model_lvl1.load_state_dict(torch.load(model_path))
+    model_lvl1.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl1...", model_path)
 
     # Freeze model_lvl1 weight
@@ -235,14 +235,14 @@ def train_lvl2():
             modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 
@@ -271,7 +271,7 @@ def train_lvl3():
             model_list.append(os.path.join('../Model/Stage', f))
 
     model_path = sorted(model_list)[-1]
-    model_lvl2.load_state_dict(torch.load(model_path))
+    model_lvl2.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl2...", model_path)
 
     # Freeze model_lvl1 weight
@@ -304,7 +304,7 @@ def train_lvl3():
     #     model_path = "../Model/LDR_LPBA_NCC_lap_share_preact_1_05_3000.pth"
     #     print("Loading weight: ", model_path)
     #     step = 3000
-    #     model.load_state_dict(torch.load(model_path))
+    #     model.load_state_dict(torch.load(model_path)['model'])
     #     temp_lossall = np.load("../Model/loss_LDR_LPBA_NCC_lap_share_preact_1_05_3000.npy")
     #     lossall[:, 0:3000] = temp_lossall[:, 0:3000]
     best_loss = 99.
@@ -359,19 +359,19 @@ def train_lvl3():
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
         else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            torch.save(model.state_dict(), modelname)
+            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_mse_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 

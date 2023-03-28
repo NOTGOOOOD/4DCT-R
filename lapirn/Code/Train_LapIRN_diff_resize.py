@@ -121,7 +121,7 @@ def train_lvl1():
         model_path = "../Model/LDR_LPBA_NCC_lap_share_preact_1_05_3000.pth"
         print("Loading weight: ", model_path)
         step = 3000
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path)['model'])
         temp_lossall = np.load("../Model/loss_LDR_LPBA_NCC_lap_share_preact_1_05_3000.npy")
         lossall[:, 0:3000] = temp_lossall[:, 0:3000]
 
@@ -169,7 +169,7 @@ def train_lvl1():
             # with lr 1e-3 + with bias
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl1_" + str(step) + '.pth'
-                torch.save(model.state_dict(), modelname)
+                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl1_" + str(step) + '.npy', lossall)
 
             step += 1
@@ -189,7 +189,7 @@ def train_lvl2():
 
     # model_path = "../Model/Stage/LDR_LPBA_NCC_1_1_stagelvl1_1500.pth"
     model_path = sorted(glob.glob("../Model/Stage/" + model_name + "stagelvl1_?????.pth"))[-1]
-    model_lvl1.load_state_dict(torch.load(model_path))
+    model_lvl1.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl1...", model_path)
 
     # Freeze model_lvl1 weight
@@ -231,7 +231,7 @@ def train_lvl2():
         model_path = "../Model/LDR_LPBA_NCC_lap_share_preact_1_05_3000.pth"
         print("Loading weight: ", model_path)
         step = 3000
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path)['model'])
         temp_lossall = np.load("../Model/loss_LDR_LPBA_NCC_lap_share_preact_1_05_3000.npy")
         lossall[:, 0:3000] = temp_lossall[:, 0:3000]
 
@@ -277,7 +277,7 @@ def train_lvl2():
             # with lr 1e-3 + with bias
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl2_" + str(step) + '.pth'
-                torch.save(model.state_dict(), modelname)
+                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl2_" + str(step) + '.npy', lossall)
 
             if step == freeze_step:
@@ -301,7 +301,7 @@ def train_lvl3():
                                           range_flow=range_flow, model_lvl1=model_lvl1).to(device)
 
     model_path = sorted(glob.glob("../Model/Stage/" + model_name + "stagelvl2_?????.pth"))[-1]
-    model_lvl2.load_state_dict(torch.load(model_path))
+    model_lvl2.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl2...", model_path)
 
     # Freeze model_lvl1 weight
@@ -349,7 +349,7 @@ def train_lvl3():
         model_path = "../Model/LDR_OASIS_NCC_unit_add_reg_3_anti_1_stagelvl3_10000.pth"
         print("Loading weight: ", model_path)
         step = 10000
-        model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path)['model'])
         temp_lossall = np.load("../Model/lossLDR_OASIS_NCC_unit_add_reg_3_anti_1_stagelvl3_10000.npy")
         lossall[:, 0:10000] = temp_lossall[:, 0:10000]
 
@@ -394,7 +394,7 @@ def train_lvl3():
 
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl3_" + str(step) + '.pth'
-                torch.save(model.state_dict(), modelname)
+                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl3_" + str(step) + '.npy', lossall)
 
                 # Validation

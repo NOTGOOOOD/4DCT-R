@@ -41,7 +41,7 @@ def test_patient(args, checkpoint, is_save=False):
                                                                             range_flow=range_flow,
                                                                             model_lvl2=model_lvl2).cuda()
 
-            model.load_state_dict(torch.load(checkpoint))
+            model.load_state_dict(torch.load(checkpoint)['model'])
             model.eval()
 
             F_X_Y, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(moving_img, fixed_img,reg_code)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-15-10-13-05'
+    prefix = '2023-03-26-13-22-56'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
@@ -143,7 +143,8 @@ if __name__ == '__main__':
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            # test_dirlab(args, checkpoint)
-            test_patient(args, checkpoint)
+            if os.path.getsize(checkpoint) > 0:
+                # test_dirlab(args, checkpoint)
+                test_patient(args, checkpoint)
 
     # validation(args)
