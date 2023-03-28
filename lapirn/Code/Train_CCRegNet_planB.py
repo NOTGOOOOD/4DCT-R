@@ -144,6 +144,7 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
+        break
 
 def train_lvl2():
     print("Training lvl2...")
@@ -253,14 +254,15 @@ def train_lvl2():
         if step > iteration_lvl2:
             break
 
+        break
 
 def train_lvl3():
     print("Training lvl3...")
     device = args.device
 
-    model_lvl1 = CCRegNet_planB_lv1(2, 3, start_channel, is_train=True,
+    model_lvl1 = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
-    model_lvl2 = CCRegNet_planB_lv2(2, 3, start_channel, is_train=True,
+    model_lvl2 = CCRegNet_planB_lv2(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
@@ -278,7 +280,7 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = CCRegNet_planB_lvl3(2, 3, start_channel, is_train=True,
+    model = CCRegNet_planB_lvl3(1, 3, start_channel, is_train=True,
                                 range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
