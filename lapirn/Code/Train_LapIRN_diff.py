@@ -15,7 +15,7 @@ from utils.config import get_args
 from utils.losses import NCC
 from utils.utilize import save_image,save_model
 from utils.scheduler import StopCriterion
-from Test_LapIRN_disp import validation
+from Test_CRegNet import validation
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
