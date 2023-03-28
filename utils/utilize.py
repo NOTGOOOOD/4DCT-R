@@ -60,7 +60,7 @@ def save_model(save_path, model, total_loss,simi_loss,reg_loss, optimizer=None, 
         'reg_loss': reg_loss,
     }
     torch.save(checkpoint, model_checkpoint)
-    print("Saved model checkpoint to [DIR: %s]", model_checkpoint)
+    print("Saved model checkpoint to [DIR: {}]".format(model_checkpoint))
 
 
 def save_image(img, ref_img, save_path, save_name):
