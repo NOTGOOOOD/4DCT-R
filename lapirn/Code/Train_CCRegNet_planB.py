@@ -149,7 +149,7 @@ def train_lvl2():
     print("Training lvl2...")
     device = args.device
 
-    model_lvl1 = CCRegNet_planB_lv1(2, 3, start_channel, is_train=True,
+    model_lvl1 = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
 
     # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-15-44-56_lapirn_corr_att_planB_stagelvl1_112_-0.3230.pth'
@@ -167,7 +167,7 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = CCRegNet_planB_lv2(2, 3, start_channel, is_train=True,
+    model = CCRegNet_planB_lv2(1, 3, start_channel, is_train=True,
                                range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
