@@ -1,4 +1,5 @@
 import os
+import shutil
 import SimpleITK as sitk
 import numpy as np
 from matplotlib import pyplot as plt
@@ -118,10 +119,11 @@ def gaussian_noise(x):
 
     """
     # 均值为0，标准差为1，上下限为±0.2
-    x = data_standardization_0_n(1,x)
+    x = data_standardization_0_n(1, x)
     noise = np.array(torch.clamp(torch.randn_like(torch.from_numpy(x)) * 0.1, -0.05, 0.05))
     y = x + noise
     return x, y
+
 
 def read_mhd(mhd_dir):
     for file_name in os.listdir(mhd_dir):
@@ -547,15 +549,40 @@ def aug(img_path, save_path):
     #     sitk.WriteImage(img_new, os.path.join(img_path, img_new_name))
 
     # add noise
+    # for img_name in os.listdir(img_path):
+    #     itk_img = sitk.ReadImage(os.path.join(img_path, img_name))
+    #     img_arr = sitk.GetArrayFromImage(itk_img)
+    #     x, noise_x = gaussian_noise(img_arr)
+    #
+    #     img_new_name = 'noise_' + img_name
+    #
+    #     sitk.WriteImage(sitk.GetImageFromArray(x), os.path.join(save_path, img_name))
+    #     sitk.WriteImage(sitk.GetImageFromArray(noise_x), os.path.join(save_path, img_new_name))
+
+    # copy
     for img_name in os.listdir(img_path):
-        itk_img = sitk.ReadImage(os.path.join(img_path, img_name))
-        img_arr = sitk.GetArrayFromImage(itk_img)
-        x, noise_x = gaussian_noise(img_arr)
-
-        img_new_name = 'noise_' + img_name
-
-        sitk.WriteImage(sitk.GetImageFromArray(x), os.path.join(save_path, img_name))
-        sitk.WriteImage(sitk.GetImageFromArray(noise_x), os.path.join(save_path, img_new_name))
+        if img_name.endswith('gz'):
+            if 'NLST' in img_name:
+                continue
+            if 'popi' in img_name:
+                # 46 copy 1 time to 98
+                img_new_name = img_name.split('.nii')[0] + '_copy_1' + '.nii.gz'
+                shutil.copyfile(os.path.join(save_path, img_name), os.path.join(save_path, img_new_name))
+                print("copy {} to {}".format(os.path.join(save_path, img_name), os.path.join(save_path, img_new_name)))
+            elif 'dirlab' in img_name or 'copd' in img_name:
+                # 7  copy 14 times to 98
+                for i in range(1, 14):
+                    img_new_name = img_name.split('.nii')[0] + f'_copy_{i}' + '.nii.gz'
+                    shutil.copyfile(os.path.join(save_path, img_name), os.path.join(save_path, img_new_name))
+                    print("copy {} to {}".format(os.path.join(save_path, img_name),
+                                                 os.path.join(save_path, img_new_name)))
+            else:
+                # 21 copy 5 to 105
+                for i in range(1, 5):
+                    img_new_name = img_name.split('.nii')[0] + f'_copy_{i}' + '.nii.gz'
+                    shutil.copyfile(os.path.join(save_path, img_name), os.path.join(save_path, img_new_name))
+                    print("copy {} to {}".format(os.path.join(save_path, img_name),
+                                                 os.path.join(save_path, img_new_name)))
 
     print('done !')
 
@@ -594,7 +621,7 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 if __name__ == '__main__':
     project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
-    resize = [144, 192, 160]   # z y x
+    resize = [144, 192, 160]  # z y x
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
 
@@ -610,15 +637,17 @@ if __name__ == '__main__':
 
     args = get_args()
 
-    #================Augment=================
+    # ================Augment=================
     # aug_moving_path = '/home/cqut/project/xxf/val_144/moving'
     # aug_fixed_path = '/home/cqut/project/xxf/val_144/fixed'
-    aug_moving_path = r'D:\xxf\val_144_192_160/moving'
-    aug_fixed_path = r'D:\xxf\val_144_192_160/fixed'
-    save_path = r'D:\xxf\val_144_192_160_norm/fixed'
+    aug_fixed_path = r'D:\xxf\val_144_192_160_large\fixed'
+    aug_moving_path = r'D:\xxf\val_144_192_160_large\moving'
+
+    save_path = r'D:\xxf\val_144_192_160_large/fixed'
     make_dir(save_path)
     aug(aug_fixed_path, save_path)
-    save_path = r'D:\xxf\val_144_192_160_norm/moving'
+
+    save_path = r'D:\xxf\val_144_192_160_large/moving'
     make_dir(save_path)
     aug(aug_moving_path, save_path)
 
