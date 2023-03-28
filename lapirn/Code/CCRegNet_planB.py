@@ -3,18 +3,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.Functions import generate_grid_unit, SpatialTransform_unit, AdaptiveSpatialTransformer
-from utils.losses import NCC
+from utils.Functions import AdaptiveSpatialTransformer
 from utils.Attention import Cross_attention
 
 
 class CorrTorch(nn.Module):
-    def __init__(self, pad_size=4, max_displacement=4, stride1=1, stride2=1):
+    def __init__(self, pad_size=1, max_displacement=1, stride1=1, stride2=1):
         assert pad_size == max_displacement
         assert stride1 == stride2 == 1
         super().__init__()
         self.max_hdisp = max_displacement
         self.padlayer = nn.ConstantPad3d(pad_size, 0)
+        self.activate = nn.LeakyReLU(0.2)
 
     def forward(self, in1, in2):
         in2_pad = self.padlayer(in2)
@@ -24,12 +24,13 @@ class CorrTorch(nn.Module):
 
         depth, hei, wid = in1.shape[2], in1.shape[3], in1.shape[4]
 
-        output = torch.cat([
-            torch.mean(in1 * in2_pad[:, :, dz:dz + depth, dy:dy + hei, dx:dx + wid], 1, keepdim=True)
-            for dz, dx, dy in zip(offsetz.reshape(-1), offsetx.reshape(-1), offsety.reshape(-1))
-        ], 1)
+        sum = []
+        for dz, dx, dy in zip(offsetz.reshape(-1), offsetx.reshape(-1), offsety.reshape(-1)):
+            sum.append(torch.mean(in1 * in2_pad[:, :, dz:dz + depth, dy:dy + hei, dx:dx + wid], 1, keepdim=True))
 
-        return output
+        output = torch.cat(sum, 1)
+
+        return self.activate(output)
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -102,10 +103,10 @@ class CCRegNet_planB_lv1(nn.Module):
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 2, self.start_channel * 4,
+        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 2, self.start_channel * 2,
                                                              bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 9, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 4 + 27, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
@@ -155,13 +156,21 @@ class CCRegNet_planB_lv1(nn.Module):
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
-        dialation_out0 = self.dialation_conv0(cat_input_lvl1)
-        dialation_out1 = self.dialation_conv1(cat_input_lvl1)
+        dialation_outx0 = self.dialation_conv0(down_x)
+        dialation_outx1 = self.dialation_conv1(down_x)
 
-        fea_e0 = self.input_encoder_lvl1(torch.cat((dialation_out0, dialation_out1), dim=1))
+        dialation_outy0 = self.dialation_conv0(down_y)
+        dialation_outy1 = self.dialation_conv1(down_y)
+
+        fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1), dim=1))
+        fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1), dim=1))
+
+        fea_e0 = torch.cat((fea_e0_x,fea_e0_y),1)
+
+        correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
         # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
         # one 3^3 3D conv layer with stride 2
-        e0 = self.down_conv(fea_e0)
+        e0 = self.down_conv(torch.cat((fea_e0, correlation_layer), 1))
         e0 = self.resblock_group_lvl1(e0)
 
         e0 = self.up(e0)
@@ -223,7 +232,8 @@ class CCRegNet_planB_lv2(nn.Module):
         self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel * 2, kernel_size=3, stride=1, padding=4,
                                          dilation=4)
 
-        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 6 + 3, self.start_channel * 9, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 6 + 3, self.start_channel * 9,
+                                                        bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 9, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)
@@ -349,7 +359,8 @@ class CCRegNet_planB_lvl3(nn.Module):
         self.dialation_conv3 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=6,
                                          dilation=6)
 
-        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 4 + 3, self.start_channel * 9, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 4 + 3, self.start_channel * 9,
+                                                        bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 9, self.start_channel * 9, 3, stride=2, padding=1,
                                    bias=bias_opt)

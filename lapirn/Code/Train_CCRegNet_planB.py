@@ -56,7 +56,7 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = CCRegNet_planB_lv1(2, 3, start_channel, is_train=True,
+    model = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                range_flow=range_flow, grid=grid_class).to(device)
 
     loss_similarity = NCC(win=3)
