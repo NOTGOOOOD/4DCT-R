@@ -6,7 +6,7 @@ import torch.utils.data as Data
 import logging
 import time
 
-from utils.Functions import generate_grid, get_loss, validation_ccregnet, Grid
+from utils.Functions import get_loss, validation_ccregnet, Grid
 from CCRegNet_planB import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
 from utils.datagenerators import Dataset
@@ -144,8 +144,6 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
-        break
-
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
@@ -253,8 +251,6 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
-
-        break
 
 def train_lvl3():
     print("Training lvl3...")
