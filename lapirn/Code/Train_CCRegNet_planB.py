@@ -129,7 +129,8 @@ def train_lvl1():
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
@@ -143,6 +144,9 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
+
+        break
+
 
 def train_lvl2():
     print("Training lvl2...")
@@ -234,7 +238,8 @@ def train_lvl2():
             modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
@@ -251,6 +256,7 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
+
 
 def train_lvl3():
     print("Training lvl3...")
@@ -357,12 +363,14 @@ def train_lvl3():
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, optimizer)
         else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(

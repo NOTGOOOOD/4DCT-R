@@ -14,7 +14,6 @@ class CorrTorch(nn.Module):
         super().__init__()
         self.max_hdisp = max_displacement
         self.padlayer = nn.ConstantPad3d(pad_size, 0)
-        self.activate = nn.LeakyReLU(0.2)
 
     def forward(self, in1, in2):
         in2_pad = self.padlayer(in2)
@@ -30,7 +29,7 @@ class CorrTorch(nn.Module):
 
         output = torch.cat(sum, 1)
 
-        return self.activate(output)
+        return output
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -111,17 +110,17 @@ class CCRegNet_planB_lv1(nn.Module):
 
         self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
 
-        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 6, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 7, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 10 + 27, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 11 + 27, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
@@ -162,10 +161,14 @@ class CCRegNet_planB_lv1(nn.Module):
         dialation_outy0 = self.dialation_conv0(down_y)
         dialation_outy1 = self.dialation_conv1(down_y)
 
+        # fea_e0_x = self.input_encoder_lvl1(down_x) + dialation_outx0 + dialation_outx1
+        # fea_e0_y = self.input_encoder_lvl1(down_y) + dialation_outy0 + dialation_outy1
+
         fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1), dim=1))
         fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1), dim=1))
 
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
+
         fea_e0 = torch.cat((fea_e0_x, fea_e0_y, correlation_layer), 1)
         # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
         # one 3^3 3D conv layer with stride 2
@@ -231,28 +234,28 @@ class CCRegNet_planB_lv2(nn.Module):
         self.dialation_conv2 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=4,
                                          dilation=4)
 
-        self.input_encoder_lvl1 = input_feature_extract(self.start_channel * 3, self.start_channel * 3,
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel, self.start_channel,
                                                         bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 6 + 31, self.start_channel * 12, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 2 + 31, self.start_channel * 7, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 18, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 7, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
-        self.up = nn.ConvTranspose3d(self.start_channel * 18, self.start_channel * 9, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 7, self.start_channel * 4, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 15 + 31, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 6 + 31, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -294,15 +297,18 @@ class CCRegNet_planB_lv2(nn.Module):
         dialation_outy1 = self.dialation_conv1(y_down)
         dialation_outy2 = self.dialation_conv2(y_down)
 
-        fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1, dialation_outx2), dim=1))
-        fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1, dialation_outy2), dim=1))
+        fea_e0_x = self.input_encoder_lvl1(dialation_outx0 + dialation_outx1 + dialation_outx2)
+        fea_e0_y = self.input_encoder_lvl1(dialation_outy0 + dialation_outy1 + dialation_outy2)
+
+        # fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1, dialation_outx2), dim=1))
+        # fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1, dialation_outy2), dim=1))
 
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
 
         fea_e0 = torch.cat((warpped_x, lvl1_disp_up, fea_e0_x, fea_e0_y, correlation_layer), 1)
 
         e0 = self.down_conv(fea_e0)
-        e0 = torch.cat((e0 , lvl1_embedding),1)
+        e0 = e0 + lvl1_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
@@ -380,7 +386,7 @@ class CCRegNet_planB_lvl3(nn.Module):
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
 
-        self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
         self.activate_att = nn.LeakyReLU(0.2)
 
@@ -436,7 +442,7 @@ class CCRegNet_planB_lvl3(nn.Module):
         fea_e0 = torch.cat((warpped_x, lvl2_disp_up, fea_e0_x, fea_e0_y, correlation_layer), 1)
 
         e0 = self.down_conv(fea_e0)
-        e0 = torch.cat((e0, lvl2_embedding),1)
+        e0 = torch.cat((e0, lvl2_embedding), 1)
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
