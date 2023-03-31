@@ -14,6 +14,7 @@ class CorrTorch(nn.Module):
         super().__init__()
         self.max_hdisp = max_displacement
         self.padlayer = nn.ConstantPad3d(pad_size, 0)
+        self.activate = nn.LeakyReLU(0.2)
 
     def forward(self, in1, in2):
         in2_pad = self.padlayer(in2)
@@ -29,7 +30,7 @@ class CorrTorch(nn.Module):
 
         output = torch.cat(sum, 1)
 
-        return output
+        return self.activate(output)
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -102,15 +103,15 @@ class CCRegNet_planB_lv1(nn.Module):
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel * 2, self.start_channel * 2,
+        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel, self.start_channel * 2,
                                                              bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4 + 27, self.start_channel * 9, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel * 4 + 27, self.start_channel * 12, kernel_size=3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 9, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 12, bias_opt=bias_opt)
 
-        self.up = nn.ConvTranspose3d(self.start_channel * 9, self.start_channel * 7, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 12, self.start_channel * 12, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
@@ -120,9 +121,9 @@ class CCRegNet_planB_lv1(nn.Module):
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 11 + 27, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 16 + 27, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -164,8 +165,10 @@ class CCRegNet_planB_lv1(nn.Module):
         # fea_e0_x = self.input_encoder_lvl1(down_x) + dialation_outx0 + dialation_outx1
         # fea_e0_y = self.input_encoder_lvl1(down_y) + dialation_outy0 + dialation_outy1
 
-        fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1), dim=1))
-        fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1), dim=1))
+        fea_e0_x = self.input_encoder_lvl1(dialation_outx0 + dialation_outx1)
+        fea_e0_y = self.input_encoder_lvl1(dialation_outy0 + dialation_outy1)
+        # fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1), dim=1))
+        # fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1), dim=1))
 
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
 
@@ -237,13 +240,13 @@ class CCRegNet_planB_lv2(nn.Module):
         self.input_encoder_lvl1 = input_feature_extract(self.start_channel, self.start_channel,
                                                         bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 2 + 31, self.start_channel * 7, 3, stride=2, padding=1,
+        self.down_conv = nn.Conv3d(self.start_channel*2 + 28, self.start_channel * 12, 3, stride=2, padding=1,
                                    bias=bias_opt)
 
-        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 7, bias_opt=bias_opt)
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 12, bias_opt=bias_opt)
 
         self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
-        self.up = nn.ConvTranspose3d(self.start_channel * 7, self.start_channel * 4, 2, stride=2,
+        self.up = nn.ConvTranspose3d(self.start_channel * 12, self.start_channel * 12, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
@@ -253,9 +256,9 @@ class CCRegNet_planB_lv2(nn.Module):
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 6 + 31, self.start_channel * 6, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 14 + 28, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
-            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+            nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
         self.conv_block = nn.Sequential(
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -305,7 +308,7 @@ class CCRegNet_planB_lv2(nn.Module):
 
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
 
-        fea_e0 = torch.cat((warpped_x, lvl1_disp_up, fea_e0_x, fea_e0_y, correlation_layer), 1)
+        fea_e0 = torch.cat((warpped_x, fea_e0_x, fea_e0_y, correlation_layer), 1)
 
         e0 = self.down_conv(fea_e0)
         e0 = e0 + lvl1_embedding

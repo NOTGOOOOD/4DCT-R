@@ -130,19 +130,21 @@ def train_lvl1():
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model, imgshape_4,loss_similarity,
                                                                                        imgshape)
 
-        # with lr 1e-3 + with bias
-        if val_total_loss <= best_loss:
-            best_loss = val_total_loss
-            modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
-                best_loss)
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
-
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
+                best_loss)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+
         if stop_criterion.stop():
             break
 
@@ -243,20 +245,22 @@ def train_lvl2():
                                                                                          loss_similarity,
                                                                                          imgshape)
 
-        # with lr 1e-3 + with bias
-        if val_total_loss <= best_loss:
-            best_loss = val_total_loss
-            modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
-                best_loss)
-
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
-
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
+                best_loss)
+
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+
         if stop_criterion.stop():
             break
 
@@ -368,7 +372,14 @@ def train_lvl3():
                                                                                          loss_similarity,
                                                                                          imgshape)
 
-        # with lr 1e-3 + with bias
+        mean_loss = np.mean(np.array(lossall), 0)[0]
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
@@ -376,19 +387,15 @@ def train_lvl3():
                 step) + '{:.4f}best.pth'.format(
                 val_total_loss)
 
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
         else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 val_total_loss)
 
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        mean_loss = np.mean(np.array(lossall), 0)[0]
-        print(
-            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
-
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 

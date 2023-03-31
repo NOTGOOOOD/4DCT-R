@@ -74,7 +74,7 @@ def train_lvl1():
     #                                      shuffle=True, num_workers=2)
 
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -123,21 +123,22 @@ def train_lvl1():
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 4)
 
-        # with lr 1e-3 + with bias
+        mean_loss = np.mean(np.array(lossall), 0)[0]
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, optimizer)
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 
@@ -186,7 +187,7 @@ def train_lvl2():
         os.mkdir(model_dir)
 
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     step = 0
     best_loss = 99.
@@ -231,22 +232,22 @@ def train_lvl2():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 2)
+        mean_loss = np.mean(np.array(lossall), 0)[0]
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
 
-        # with lr 1e-3 + with bias
+        # save model
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, optimizer)
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 
@@ -299,7 +300,7 @@ def train_lvl3():
     # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
     #                                      shuffle=True, num_workers=2)
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -356,7 +357,10 @@ def train_lvl3():
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 1)
 
-        # with lr 1e-3 + with bias
+        mean_loss = np.mean(np.array(lossall), 0)[0]
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
@@ -364,20 +368,19 @@ def train_lvl3():
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, optimizer)
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
         else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 val_total_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, optimizer)
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        mean_loss = np.mean(np.array(lossall), 0)[0]
+
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss)
         if stop_criterion.stop():
             break
 
@@ -410,4 +413,4 @@ if __name__ == "__main__":
     range_flow = 0.4
     train_lvl1()
     train_lvl2()
-    train_lvl3()
+    # train_lvl3()

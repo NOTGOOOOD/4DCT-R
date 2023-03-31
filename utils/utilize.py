@@ -49,7 +49,7 @@ def save_png(imgs_numpy, save_path, save_name):
     cv2.imwrite(os.path.join(save_path, save_name + ".png"), imgs_numpy)
 
 
-def save_model(save_path, model, total_loss,simi_loss,reg_loss, optimizer=None, scheduler=None):
+def save_model(save_path, model, total_loss, simi_loss, reg_loss, train_loss, optimizer=None, scheduler=None):
     model_checkpoint = save_path
     checkpoint = {
         'model': model.state_dict(),
@@ -58,6 +58,7 @@ def save_model(save_path, model, total_loss,simi_loss,reg_loss, optimizer=None, 
         'total_loss': total_loss,
         'simi_loss': simi_loss,
         'reg_loss': reg_loss,
+        'train_loss': train_loss
     }
     torch.save(checkpoint, model_checkpoint)
     print("Saved model checkpoint to [DIR: {}]".format(model_checkpoint))

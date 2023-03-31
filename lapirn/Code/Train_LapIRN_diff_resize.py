@@ -166,10 +166,10 @@ def train_lvl1():
                     step, loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()))
             sys.stdout.flush()
 
-            # with lr 1e-3 + with bias
+            # save model
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl1_" + str(step) + '.pth'
-                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+                save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl1_" + str(step) + '.npy', lossall)
 
             step += 1
@@ -274,10 +274,10 @@ def train_lvl2():
                     step, loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()))
             sys.stdout.flush()
 
-            # with lr 1e-3 + with bias
+            # save model
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl2_" + str(step) + '.pth'
-                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+                save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl2_" + str(step) + '.npy', lossall)
 
             if step == freeze_step:
@@ -394,7 +394,7 @@ def train_lvl3():
 
             if (step % n_checkpoint == 0):
                 modelname = model_dir + '/' + model_name + "stagelvl3_" + str(step) + '.pth'
-                save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+                save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
                 np.save(model_dir + '/loss' + model_name + "stagelvl3_" + str(step) + '.npy', lossall)
 
                 # Validation

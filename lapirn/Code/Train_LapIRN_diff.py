@@ -159,12 +159,12 @@ def train_lvl1():
         # validation
         val_ncc_loss, val_mse_loss = validation(args, model, imgshape_4, loss_similarity, step)
 
-        # with lr 1e-3 + with bias
+        # save model
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f" % (
@@ -288,12 +288,12 @@ def train_lvl2():
         # validation
         val_ncc_loss, val_mse_loss = validation(args, model, imgshape_2, loss_similarity, step)
 
-        # with lr 1e-3 + with bias
+        # save model
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             modelname = model_dir + '/' + model_name + "stagelvl2" + '_{:03d}_'.format(
                 step) + '{:.4f}.pth'.format(best_loss)
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f" % (
@@ -428,14 +428,14 @@ def train_lvl3():
         # validation
         val_ncc_loss, val_mse_loss = validation(args, model, imgshape, loss_similarity, step)
 
-        # with lr 1e-3 + with bias
+        # save model
         if val_ncc_loss <= best_loss:
             best_loss = val_ncc_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(
                 step) + '{:.4f}.pth'.format(
                 best_loss)
-            save_model(modelname,model,stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list,optimizer)
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print("\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f" % (
