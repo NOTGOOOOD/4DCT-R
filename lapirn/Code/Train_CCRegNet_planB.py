@@ -258,6 +258,7 @@ def train_lvl2():
         if step > iteration_lvl2:
             break
 
+        break
 
 def train_lvl3():
     print("Training lvl3...")
@@ -413,4 +414,4 @@ if __name__ == "__main__":
     range_flow = 0.4
     train_lvl1()
     train_lvl2()
-    # train_lvl3()
+    train_lvl3()
