@@ -4,33 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils.Functions import AdaptiveSpatialTransformer
-from utils.Attention import Cross_attention
-
-
-class CorrTorch(nn.Module):
-    def __init__(self, pad_size=1, max_displacement=1, stride1=1, stride2=1):
-        assert pad_size == max_displacement
-        assert stride1 == stride2 == 1
-        super().__init__()
-        self.max_hdisp = max_displacement
-        self.padlayer = nn.ConstantPad3d(pad_size, 0)
-        self.activate = nn.LeakyReLU(0.2)
-
-    def forward(self, in1, in2):
-        in2_pad = self.padlayer(in2)
-        offsetz, offsety, offsetx = torch.meshgrid([torch.arange(0, 2 * self.max_hdisp + 1),
-                                                    torch.arange(0, 2 * self.max_hdisp + 1),
-                                                    torch.arange(0, 2 * self.max_hdisp + 1)])
-
-        depth, hei, wid = in1.shape[2], in1.shape[3], in1.shape[4]
-
-        sum = []
-        for dz, dx, dy in zip(offsetz.reshape(-1), offsetx.reshape(-1), offsety.reshape(-1)):
-            sum.append(torch.mean(in1 * in2_pad[:, :, dz:dz + depth, dy:dy + hei, dx:dx + wid], 1, keepdim=True))
-
-        output = torch.cat(sum, 1)
-
-        return self.activate(output)
+from utils.correlation_layer import CorrTorch
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -103,10 +77,10 @@ class CCRegNet_planB_lv1(nn.Module):
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel, self.start_channel * 2,
+        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel, self.start_channel,
                                                              bias=bias_opt)
 
-        self.down_conv = nn.Conv3d(self.start_channel * 4 + 27, self.start_channel * 12, kernel_size=3, stride=2,
+        self.down_conv = nn.Conv3d(self.start_channel * 2 + 27, self.start_channel * 12, kernel_size=3, stride=2,
                                    padding=1,
                                    bias=bias_opt)
 
@@ -122,7 +96,7 @@ class CCRegNet_planB_lv1(nn.Module):
         # self.cross_att = Cross_head(self.start_channel * 4, 3)
 
         self.decoder = nn.Sequential(
-            nn.Conv3d(self.start_channel * 16 + 27, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 14 + 27, self.start_channel * 9, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
             nn.Conv3d(self.start_channel * 9, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
 
@@ -170,8 +144,8 @@ class CCRegNet_planB_lv1(nn.Module):
         fea_e0_y = self.input_encoder_lvl1(dialation_outy0 + dialation_outy1)
         # fea_e0_x = self.input_encoder_lvl1(torch.cat((dialation_outx0, dialation_outx1), dim=1))
         # fea_e0_y = self.input_encoder_lvl1(torch.cat((dialation_outy0, dialation_outy1), dim=1))
-
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
+        # correlation_layer2(fea_e0_x, fea_e0_y)
 
         fea_e0 = torch.cat((fea_e0_x, fea_e0_y, correlation_layer), 1)
         # fea_e0 = self.ca_module(cat_input_lvl1, fea_e0)
@@ -182,7 +156,6 @@ class CCRegNet_planB_lv1(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -197,7 +170,7 @@ class CCRegNet_planB_lv1(nn.Module):
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
 
-        decoder = x1 + x2  # B, C, D, H, W
+        decoder = decoder + x1 + x2  # B, C, D, H, W
 
         # att = self.ca_module(e0, fea_e0)  # B,C, DHW/d, DHW/d
         # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0],-1,decoder.shape[2],decoder.shape[3],decoder.shape[4])
@@ -310,6 +283,7 @@ class CCRegNet_planB_lv2(nn.Module):
         correlation_layer = self.correlation_layer(fea_e0_x, fea_e0_y)
 
         fea_e0 = torch.cat((warpped_x, lvl1_disp_up, fea_e0_x, fea_e0_y, correlation_layer), 1)
+        # fea_e0 = torch.cat((warpped_x, lvl1_disp_up, fea_e0_x, fea_e0_y), 1)
 
         e0 = self.down_conv(fea_e0)
         e0 = e0 + lvl1_embedding
@@ -318,7 +292,6 @@ class CCRegNet_planB_lv2(nn.Module):
 
         # decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -330,7 +303,7 @@ class CCRegNet_planB_lv2(nn.Module):
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
-        decoder = x1 + x2
+        decoder = decoder + x1 + x2
 
         # att = self.ca_module(e0, fea_e0)
         # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0], -1, decoder.shape[2],
@@ -453,7 +426,6 @@ class CCRegNet_planB_lvl3(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)

@@ -100,7 +100,7 @@ class Miccai2020_LDR_laplacian_unit_add_lvl1(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -338,7 +338,7 @@ class Miccai2020_LDR_laplacian_unit_add_lvl3(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -451,7 +451,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -581,7 +581,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         e0 = self.up(e0)
 
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
@@ -708,7 +708,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         # correlation_layer = self.cor_conv(torch.cat((warpped_x, y), 1))
         if e0.shape[2:] != fea_e0.shape[2:]:
-            print("e0 shape:[{}]. fea_eo shape:[{}]".format(e0.shape[2:], fea_e0.shape[2:]))
+
             e0 = F.interpolate(e0, size=fea_e0.shape[2:],
                                mode='trilinear',
                                align_corners=True)
