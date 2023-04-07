@@ -4,12 +4,15 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from CRegNet import CRegNet_lv1, \
-    CRegNet_lv2, CRegNet_lv3
+# from CRegNet import CRegNet_lv1, \
+#     CRegNet_lv2, CRegNet_lv3
+from CCRegNet_planB import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
+    CCRegNet_planB_lvl3 as CRegNet_lv3
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss, jacobian_determinant_vxm
+from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
+from utils.losses import neg_Jdet_loss
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -22,13 +25,13 @@ def test_dirlab(args, checkpoint, is_save=False):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
+            model_lvl1 = CRegNet_lv1(1, 3, args.initial_channels, is_train=True,
                                      range_flow=range_flow, grid=grid_class).cuda()
-            model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
+            model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=True,
                                      range_flow=range_flow,
                                      model_lvl1=model_lvl1, grid=grid_class).cuda()
 
-            model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
+            model = CRegNet_lv3(1, 3, args.initial_channels, is_train=False,
                                 range_flow=range_flow, model_lvl2=model_lvl2,
                                 grid=grid_class).cuda()
 
@@ -182,39 +185,39 @@ def test_dirlab(args, checkpoint, is_save=False):
 def test_patient(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
+        model_lvl1 = CRegNet_lv1(1, 3, args.initial_channels, is_train=True,
+                                 grid=grid_class,
+                                 range_flow=range_flow).cuda()
+        model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=False,
+                                 range_flow=range_flow,
+                                 model_lvl1=model_lvl1, grid=grid_class).cuda()
+
+        model = CRegNet_lv3(1, 3, args.initial_channels, is_train=False,
+                            range_flow=range_flow, model_lvl2=model_lvl2,
+                            grid=grid_class).cuda()
+        model = model_lvl2
+        model.load_state_dict(torch.load(checkpoint)['model'])
+        model.eval()
+
         for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
-            imgshape = fixed_img.shape[2:]
-
-            imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
-            imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
-
-            model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
-                                     grid=grid_class,
-                                     range_flow=range_flow).cuda()
-            model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
-                                     range_flow=range_flow,
-                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
-
-            model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
-                                range_flow=range_flow, model_lvl2=model_lvl2,
-                                grid=grid_class).cuda()
-
-            model.load_state_dict(torch.load(checkpoint)['model'])
-            model.eval()
-
-            F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            F_X_Y, lv1_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
 
             # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
-
+            F_X_Y = torch.nn.functional.interpolate(F_X_Y, size=moving_img.shape[2:],
+                                            mode='trilinear',
+                                            align_corners=True)
+            lv3_out = torch.nn.functional.interpolate(lv3_out, size=moving_img.shape[2:],
+                                            mode='trilinear',
+                                            align_corners=True)
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
             # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
             # J = jacobian_determinant_vxm(F_X_Y_cpu)
-            Jac = jacobian_determinant_vxm(F_X_Y_cpu.cpu().detach().numpy())
+            Jac = jacobian_determinant(F_X_Y_cpu.cpu().detach().numpy())
 
             # NCC
             _ncc = NCC(lv3_out.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())
@@ -242,8 +245,8 @@ def test_patient(args, checkpoint, is_save=False):
                 m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
                 save_image(lv1_out, fixed_img, args.output_dir, m_name)
 
-                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-                save_image(lv2_out, fixed_img, args.output_dir, m_name)
+                # m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+                # save_image(lv2_out, fixed_img, args.output_dir, m_name)
 
                 m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
                 save_image(lv3_out, fixed_img, args.output_dir, m_name)
@@ -266,16 +269,19 @@ if __name__ == '__main__':
         os.mkdir(args.output_dir)
 
     landmark_list = load_landmarks(args.landmark_dir)
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    pa_moving_folder = r'D:\xxf\test_patient\moving'
+    # dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    # dir_moving_folder = os.path.join(args.test_dir, 'moving')
+    # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # pa_moving_folder = r'D:\xxf\test_patient\moving'
 
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
+    pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    pa_moving_folder = r'E:\datasets\registration\patient\moving'
+
+    # f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+    #                           file_name.lower().endswith('.gz')])
+    # m_dir_file_list = sorted(
+    #     [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+    #      file_name.lower().endswith('.gz')])
 
     f_patient_file_list = sorted(
         [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
@@ -283,15 +289,15 @@ if __name__ == '__main__':
     m_patient_file_list = sorted(
         [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
          file_name.lower().endswith('.gz')])
-
-    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
+    #
+    # test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+    #                                     landmark_files=landmark_list)
     test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    # test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-27-13-04-54'
+    prefix = '2023-04-04-17-55-54'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:

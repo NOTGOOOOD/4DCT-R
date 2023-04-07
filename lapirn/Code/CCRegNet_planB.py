@@ -223,6 +223,10 @@ class CCRegNet_planB_lv2(nn.Module):
         self.up = nn.ConvTranspose3d(self.start_channel * 12, self.start_channel * 12, 2, stride=2,
                                      padding=0, output_padding=0, bias=bias_opt)
 
+        # self.conv_sq = nn.Conv3d(self.start_channel * 12, self.start_channel * 2 + 31, kernel_size=1, stride=1,
+        #                          bias=bias_opt)
+        # self.conv_sq.requires_grad_(False)
+
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
@@ -286,6 +290,9 @@ class CCRegNet_planB_lv2(nn.Module):
         # fea_e0 = torch.cat((warpped_x, lvl1_disp_up, fea_e0_x, fea_e0_y), 1)
 
         e0 = self.down_conv(fea_e0)
+
+        # attention = self.correlation_layer(e0, lvl1_embedding)
+
         e0 = e0 + lvl1_embedding
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
@@ -299,7 +306,11 @@ class CCRegNet_planB_lv2(nn.Module):
         # att = self.ca_module(e0, fea_e0)
         # embeding = torch.cat([e0, fea_e0], dim=1) + att
 
-        embeding = torch.cat([e0, fea_e0], dim=1)
+
+        # e0 = self.conv_sq(e0)
+
+        # embeding = torch.cat([e0, fea_e0, self.correlation_layer(e0, fea_e0)], dim=1)
+        embeding = torch.cat((e0,fea_e0),1)
         decoder = self.decoder(embeding)
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
