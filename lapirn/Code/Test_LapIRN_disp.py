@@ -10,7 +10,8 @@ from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, Miccai2020_LDR_l
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC, neg_Jdet_loss, jacobian_determinant_vxm
+from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
+from utils.losses import neg_Jdet_loss
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -133,7 +134,7 @@ def test_patient(args, checkpoint, is_save=False):
 
             # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
             # J = jacobian_determinant_vxm(F_X_Y_cpu)
-            Jac = jacobian_determinant_vxm(F_X_Y_cpu.cpu().detach().numpy())
+            Jac = jacobian_determinant(F_X_Y_cpu.cpu().detach().numpy())
 
             # NCC
             _ncc = NCC(lv3_out.cpu().detach().numpy(), fixed_img.cpu().detach().numpy())

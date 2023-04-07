@@ -11,7 +11,8 @@ import numpy as np
 from scipy import interpolate
 from utils.utilize import make_dir
 from utils.utilize import show_slice
-from utils.metric import NCC, MSE, SSIM, neg_Jdet_loss, jacobian_determinant_vxm
+from utils.metric import NCC, MSE, SSIM, jacobian_determinant
+from utils.losses import neg_Jdet_loss
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -144,7 +145,7 @@ img_shape = wapred_moving.shape[2:]
 
 ncc = NCC(template.cpu().detach().numpy(), wapred_moving.cpu().detach().numpy())
 
-ja = jacobian_determinant_vxm(disp.cpu().detach().numpy())
+ja = jacobian_determinant(disp.cpu().detach().numpy())
 # MSE
 mse = MSE(wapred_moving, template)
 # SSIM

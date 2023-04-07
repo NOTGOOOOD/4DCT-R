@@ -3,9 +3,7 @@ import numpy as np
 import os
 from scipy import interpolate
 from skimage.metrics import structural_similarity
-from torch.nn import functional as F
 
-from utils.losses import JacboianDet
 from utils.utilize import get_project_path
 from matplotlib import pyplot as plt
 import pystrum.pynd.ndutils as nd
@@ -98,7 +96,6 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_sa
         # point before warped
         f_point = f_landmarks[i].int()
         # m_point = m_landmarks[i].int()
-
         # point at flow
         move = flow[:, f_point[2], f_point[1], f_point[0]]
         # point after warped
@@ -167,13 +164,6 @@ def get_test_photo_loss(args, logger, model, test_loader):
         return losses
 
 
-def neg_Jdet_loss(y_pred, sample_grid):
-    neg_Jdet = -1.0 * JacboianDet(y_pred, sample_grid)
-    selected_neg_Jdet = F.relu(neg_Jdet)
-
-    return torch.mean(selected_neg_Jdet)
-
-
 def dice(y_pred, y_true):
     intersection = y_pred * y_true
     intersection = np.sum(intersection)
@@ -182,7 +172,7 @@ def dice(y_pred, y_true):
     return dsc
 
 
-def jacobian_determinant_vxm(disp):
+def jacobian_determinant(disp):
     """
     jacobian determinant of a displacement field.
     NB: to compute the spatial gradients, we use np.gradient.

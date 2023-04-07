@@ -9,7 +9,7 @@ from miccai2021_model import Miccai2021_LDR_conditional_laplacian_unit_disp_add_
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
-from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant_vxm
+from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
 from utils.datagenerators import DirLabDataset, PatientDataset
 
 
@@ -55,7 +55,7 @@ def test_patient(args, checkpoint, is_save=False):
             grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
             # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
-            Jac = jacobian_determinant_vxm(F_X_Y_cpu.cpu().detach().numpy())
+            Jac = jacobian_determinant(F_X_Y_cpu.cpu().detach().numpy())
             # Jac = Get_Ja(F_X_Y.cpu().detach().numpy())
 
             # NCC

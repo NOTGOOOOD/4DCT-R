@@ -8,8 +8,8 @@ from torch.utils import data as Data
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset
-from utils.losses import smoothloss
-from utils.metric import MSE, neg_Jdet_loss
+from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss
+from utils.metric import MSE, jacobian_determinant
 
 
 def generate_grid(imgshape):
@@ -191,14 +191,15 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
             loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+            # loss_Jacobian = jacobian_determinant(F_X_Y[0].cpu().detach().numpy())
 
             # reg2 - use velocity
             _, _, z, y, x = F_X_Y.shape
             F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
             F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
             F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = smoothloss(F_X_Y)
-
+            # loss_regulation = smoothloss(F_X_Y)
+            loss_regulation = bending_energy_loss(F_X_Y)
             loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
 
             losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])

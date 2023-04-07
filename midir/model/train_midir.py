@@ -10,7 +10,6 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.metric import neg_Jdet_loss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
 
@@ -20,7 +19,7 @@ from network import CubicBSplineNet
 from loss import LNCCLoss, l2reg_loss
 from utils.datagenerators import Dataset
 from utils.Functions import validation_midir, generate_grid
-from utils.losses import NCC
+from utils.losses import NCC, neg_Jdet_loss
 from transformation import CubicBSplineFFDTransform, warp
 
 

@@ -14,8 +14,7 @@ from CRegNet import CRegNet_lv1, \
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC, smoothloss, multi_resolution_NCC
-from utils.metric import neg_Jdet_loss
+from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss
 from utils.scheduler import StopCriterion
 from utils.Functions import validation_ccregnet, Grid, get_loss
 
