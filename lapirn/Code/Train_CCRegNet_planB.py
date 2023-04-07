@@ -11,8 +11,7 @@ from CCRegNet_planB import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC, smoothloss, multi_resolution_NCC
-from utils.metric import neg_Jdet_loss
+from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss,bending_energy_loss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
 
@@ -24,6 +23,7 @@ args = get_args()
 lr = args.lr
 start_channel = args.initial_channels
 antifold = args.antifold
+# antifold = 0
 # n_checkpoint = args.n_save_iter
 smooth = args.smooth
 # datapath = opt.datapath
@@ -148,6 +148,7 @@ def train_lvl1():
 
         break
 
+
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
@@ -174,7 +175,7 @@ def train_lvl2():
                                range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
-    loss_smooth = smoothloss
+    loss_smooth = bending_energy_loss
     loss_Jdet = neg_Jdet_loss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -375,7 +376,6 @@ def train_lvl3():
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
@@ -412,4 +412,4 @@ if __name__ == "__main__":
     range_flow = 0.4
     train_lvl1()
     train_lvl2()
-    train_lvl3()
+    # train_lvl3()
