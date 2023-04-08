@@ -17,6 +17,10 @@ def show_slice(img_mov):
         img_mov = img_mov[0, 0]
     elif len(img_mov.shape) == 4:
         img_mov = img_mov[0]
+    elif len(img_mov.shape) == 3:
+        img_mov = img_mov
+    else:
+        raise ValueError("illegal input")
 
     img_shape = int(img_mov.shape[0] / 2)
     ax.imshow(img_mov[img_shape, :, :], cmap='gray')

@@ -12,7 +12,7 @@ from utils.datagenerators import Dataset, PatientDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
-from utils.utilize import set_seed, load_landmarks
+from utils.utilize import set_seed, load_landmarks, save_model
 from utils.scheduler import StopCriterion
 from utils.metric import get_test_photo_loss
 from utils.Functions import validation_vm
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     set_seed(42)
-    model_dir = '../model'
+    model_dir = 'model'
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_vm_".format(train_time)
     if not os.path.isdir(model_dir):
