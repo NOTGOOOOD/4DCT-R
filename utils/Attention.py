@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.utilize import show_slice
 
 
 class Mish(nn.Module):
@@ -108,13 +109,13 @@ class Self_Attn(nn.Module):
 class Cross_attention(nn.Module):
     """ Self attention Layer"""
 
-    def __init__(self, in_dim, out_dim, kernel_size=1, stride=1,padding=0):
+    def __init__(self, in_dim, out_dim, kernel_size=1, stride=1, padding=0):
         super(Cross_attention, self).__init__()
 
         self.in_dim = in_dim
         self.out_dim = out_dim
 
-        self.query_conv = BasicConv3D(in_dim, out_dim, kernel_size=kernel_size,stride=stride,padding=padding)
+        self.query_conv = BasicConv3D(in_dim, out_dim, kernel_size=kernel_size, stride=stride, padding=padding)
 
         self.beta = nn.Parameter(torch.zeros(1))
         self.activate = nn.LeakyReLU(0.2)
@@ -163,7 +164,7 @@ class Cross_attention_2(nn.Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
 
-        self.query_conv = BasicConv3D(in_dim, out_dim, kernel_size=3,padding=1)
+        self.query_conv = BasicConv3D(in_dim, out_dim, kernel_size=3, padding=1)
 
         self.beta = nn.Parameter(torch.zeros(1))
         self.activate = nn.LeakyReLU(0.2)
@@ -208,22 +209,24 @@ class Cross_attention_2(nn.Module):
 class Cross_attention_multi(nn.Module):
     """ Self attention Layer"""
 
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim1, in_dim2, out_dim):
         super().__init__()
 
-        self.in_dim = in_dim
+        self.in_dim1 = in_dim1
+        self.in_dim2 = in_dim2
         self.out_dim = out_dim
+
         self.activate = nn.LeakyReLU(0.2)
 
         # self.patch_size=10
         self.patch_size = 9
 
         self.conv_img = nn.Sequential(
-            nn.Conv3d(self.in_dim, self.out_dim, kernel_size=(3, 3, 3), stride=1, padding=1)
+            nn.Conv3d(self.in_dim1, self.out_dim, kernel_size=(1, 1, 1), stride=1, padding=0)
         )
 
         self.conv_feamap = nn.Sequential(
-            nn.Conv3d(self.in_dim, self.out_dim, kernel_size=(3, 3, 3), stride=1, padding=1)
+            nn.Conv3d(self.in_dim2, self.out_dim, kernel_size=(1, 1, 1), stride=1, padding=0)
         )
 
         self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
@@ -235,176 +238,104 @@ class Cross_attention_multi(nn.Module):
             nn.LeakyReLU(0.2)
         )
 
-    def forward(self, x, y):  # B, C, D, H, W
+        self.header = Cross_head()
+
+    def forward(self, x, y, z):  # B, C, D, H, W
         """
             inputs :
-                x : current level feature maps ( B, C, D, H, W )
-                y : i-1 level feature maps
+                x : current level feature maps ( B, C, D1, H1, W1 )
+                y : i-1 level feature maps( B, C, D2, H2, W2 )
+                z : current level feature mamps of decoder ( B, 3, D2, H2, W2 )
             returns :
                 out : B, C, D, H, W
         """
         attentions = []
-
         # step 1. adjust the channel of x, y
         x = self.conv_img(x)
         y = self.conv_feamap(y)
 
         C = x.shape[1]
-        D = x.shape[2]
-        H = x.shape[3]
-        W = x.shape[4]
+        D1 = x.shape[2]
+        D2 = y.shape[2]
 
         # step 2. let x, y reshape (B, C, D, HW)
-        x_reshape = x.reshape(1, C, D, H * W)
-        y_reshape = y.reshape(1, C, D, H * W)
+        x_reshape = x.reshape(1, C, D1, -1)
+        y_reshape = y.reshape(1, C, D2, -1)
+        # z_reshape = z.reshape(1, C, D2, -1)
 
         for i in range(C):
-            unfold_img = self.unfold(x_reshape[:, i: i + 1, :, :]).transpose(-1, -2)  # B, DHW/d/d, d*d
+            unfold_img = self.unfold(x_reshape[:, i: i + 1, :, :]).transpose(-1, -2)  # B, D1H1W1/d/d, d*d
             unfold_img = self.resolution_trans(unfold_img)
 
-            unfold_feamap = self.unfold(y_reshape[:, i: i + 1, :, :])  # B, d*d, DHW/d/d
+            # plan1: mulit directly
+            unfold_feamap = self.unfold(y_reshape[:, i: i + 1, :, :])  # B, d*d, D2H2W2/d/d
             unfold_feamap = self.resolution_trans(unfold_feamap.transpose(-1, -2)).transpose(-1, -2)
 
-            att = torch.matmul(unfold_img, unfold_feamap) / (self.patch_size * self.patch_size)  # B, DHW/d/d, DHW/d/d
+            # plan2: avg. pooling to 1,
+
+            # unfold_decoder_out = self.unfold(z_reshape[:, i: i + 1, :, :]).transpose(-1, -2)
+            # unfold_decoder_out = self.resolution_trans(unfold_decoder_out)  # B, D2H2W2/d/d, d*d
+
+            att = torch.matmul(unfold_img, unfold_feamap) / (
+                    self.patch_size * self.patch_size)  # B, D1H1W1/d/d, D2H2W2/d/d
             # att = torch.matmul(unfold_img, unfold_feamap)  # B, DHW/d/d, DHW/d/d
 
             att = torch.unsqueeze(att, 1)
+            # unfold_decoder_out = torch.unsqueeze(unfold_decoder_out, 1)
 
             attentions.append(att)
+            # decoder_out.append(unfold_decoder_out)  # B, D2H2W2/d/d, d*d
 
-        attentions = torch.cat((attentions), dim=1)
+        attentions = torch.cat((attentions), dim=1)  # B,C, D1H1W1/d/d, D2H2W2/d/d
+        # decoder_out = torch.cat((decoder_out), 1)  # B,C, D2H2W2/d/d, d*d
 
-        return attentions
+        # attention_map_unfold = torch.matmul(attentions, decoder_out)
+        # torch.matmul()
 
-
-class Cross_attention_3(nn.Module):
-    """ Self attention Layer"""
-
-    def __init__(self, in_dim, out_dim):
-        super(Cross_attention_3, self).__init__()
-
-        self.in_dim = in_dim
-        self.out_dim = out_dim
-        self.activate = nn.LeakyReLU(0.2)
-
-        # self.patch_size=10
-        self.patch_size = 9
-
-        self.pool = nn.AdaptiveAvgPool1d(self.patch_size * self.patch_size)
-
-        self.conv_img = nn.Sequential(
-            nn.Conv3d(self.in_dim, self.out_dim, kernel_size=(1, 1, 1), stride=1)
-        )
-
-        self.conv_feamap = nn.Sequential(
-            nn.Conv3d(self.in_dim, self.out_dim, kernel_size=(1, 1, 1), stride=1)
-        )
-
-        self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
-                                stride=(self.patch_size, self.patch_size))
-
-        self.resolution_trans = nn.Sequential(
-            nn.Linear(self.patch_size * self.patch_size, 2 * self.patch_size * self.patch_size, bias=False),
-            nn.Linear(2 * self.patch_size * self.patch_size, self.patch_size * self.patch_size, bias=False),
-            nn.LeakyReLU(0.2)
-        )
-
-    def forward(self, x, y):  # B, C, D, H, W
-        """
-            inputs :
-                x : current level feature maps ( B, C, D, H, W )
-                y : i-1 level feature maps
-            returns :
-                out : B, C, D, H, W
-        """
-        attentions = []
-        # step 1. adjust the channel of x, y
-        x = self.conv_img(x)
-        y = self.conv_feamap(y)
-
-        C = x.shape[1]
-        D = x.shape[2]
-        H = x.shape[3]
-        W = x.shape[4]
-
-        # step 2. let x, y reshape (B, C, D, HW)
-        x_reshape = x.reshape(1, C, D, H * W)
-        y_reshape = y.reshape(1, C, D, H * W)
-
-        fold_layer = torch.nn.Fold(output_size=(x.size()[-3], x.size()[-1] * x.size()[-2]),
-                                   kernel_size=(self.patch_size, self.patch_size),
-                                   stride=(self.patch_size, self.patch_size))
-
-        for i in range(C):
-            unfold_img = self.unfold(x_reshape[:, i: i + 1, :, :]).transpose(-1, -2)  # B, DHW/d/d, d*d
-            unfold_img = self.resolution_trans(unfold_img)
-
-            unfold_feamap = self.unfold(y_reshape[:, i: i + 1, :, :])
-            unfold_feamap = self.resolution_trans(unfold_feamap.transpose(-1, -2)).transpose(-1, -2)  # B, d*d, DHW/d/d
-
-            # AdaptivePooling
-            unfold_feamap = self.pool(unfold_feamap)  # B, d*d, d*d
-
-            att = torch.matmul(unfold_img, unfold_feamap)  # B, DHW/d/d, d*d
-            # att = torch.matmul(unfold_img, unfold_feamap)  # B, DHW/d/d, DHW/d/d
-
-            att = fold_layer(att.transpose(-1, -2))
-
-            # att = torch.unsqueeze(att, 1)
-
-            attentions.append(att)
-
-        attentions = torch.cat((attentions), dim=1)  # B, C, DHW/d/d, d*d
-
-        attentions = attentions.reshape(1, C, D, H, W)
-
-        return attentions
+        return self.header(z, attentions)
 
 
 class Cross_head(nn.Module):
-    def __init__(self, in_dim, out_dim, patch_size=9):
+    def __init__(self, patch_size=9):
         super().__init__()
         self.patch_size = patch_size
 
         self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
                                 stride=(self.patch_size, self.patch_size))
-
+        self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
         self.activation = nn.LeakyReLU(0.2)
 
-        self.conv_img = nn.Sequential(
-            nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
-        )
+        # self.conv_img = nn.Sequential(
+        #     nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
+        # )
+        #
+        # self.conv_feamap = nn.Sequential(
+        #     nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
+        # )
 
-        self.conv_feamap = nn.Sequential(
-            nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
-        )
+    def forward(self, decoder, attentions):
+        # attention:  B,C, D1H1W1/d/d, D2H2W2/d/d
+        # x from decoder needs B,C, D2H2W2/d/d, d*d
 
-    def forward(self, x, attentions):
-        # attention: [B, C, DHW/d/d, DHW/d/d]
-        # x needs [B,C DHW/d/d, d*d]
-
-        # step 1. adjust the channel of x
-        x = self.conv_img(x)
+        # # step 1. adjust the channel of x
+        # x = self.conv_img(x)
+        decoder_reshape = decoder.reshape(1, decoder.size()[1], decoder.size()[2], decoder.size()[3] * decoder.size()[4])
+        x = self.down_avg(decoder)
 
         # reshape x to [B, C, D, HW]
-        x = x.reshape(1, x.size()[1], x.size()[2], x.size()[3] * x.size()[4])
+        x_resize = x.reshape(1, x.size()[1], x.size()[2], x.size()[3] * x.size()[4])
 
-        fold_layer = torch.nn.Fold(output_size=(x.size()[-2], x.size()[-1]),
+        fold_layer = torch.nn.Fold(output_size=(decoder.size()[-3], decoder.size()[-1] * decoder.size()[-2]),
                                    kernel_size=(self.patch_size, self.patch_size),
                                    stride=(self.patch_size, self.patch_size))
 
         correction = []
 
-        for i in range(x.size()[1]):
+        for i in range(x_resize.size()[1]):
             non_zeros = torch.unsqueeze(torch.count_nonzero(attentions[:, i:i + 1, :, :], dim=-1) + 0.00001, dim=-1)
 
-            decoder_fea = torch.unsqueeze(self.unfold(x[:, i:i + 1, :, :]), dim=1).transpose(-1, -2)  # B, d*d, DHW/d/d
-
-            # [B,C, d*d, DHW/d/d] multi [B, C, DHW/d/d, d*d]
-
-            # att = torch.matmul(attentions[:, i:i + 1, :, :] / non_zeros, decoder_fea)
-
-            att = decoder_fea + attentions[:, i:i + 1, :, :] / non_zeros
+            att = torch.matmul(attentions[:, i:i + 1, :, :] / non_zeros,
+                               torch.unsqueeze(self.unfold(x_resize[:, i:i + 1, :, :]), dim=1).transpose(-1, -2))
 
             att = torch.squeeze(att, dim=1)
 
@@ -412,13 +343,14 @@ class Cross_head(nn.Module):
 
             correction.append(att)
 
-        correction = torch.cat(correction, dim=1)
+        correction = torch.cat(correction, dim=1)   # B C D HW = decoder.shape
 
-        x = correction * x + x
+        x = correction * decoder_reshape + decoder_reshape
 
         x = self.activation(x)
 
-        return x
+
+        return x.reshape(decoder.shape[0],decoder.shape[1],decoder.shape[2],decoder.shape[3],decoder.shape[4])
 
 
 class Cross_head_bak(nn.Module):
