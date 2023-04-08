@@ -140,9 +140,10 @@ class RegNet_pairwise(nn.Module):
         scaled_disp
         '''
 
-        original_image_shape = fixed_image.shape
-        input_image = torch.unsqueeze(torch.stack((fixed_image, moving_image), dim=0),
-                                      0)  # (1, 2, h, w) or (1, 2, d, h, w)
+        original_image_shape = fixed_image.shape[2:]
+        # input_image = torch.unsqueeze(torch.stack((fixed_image, moving_image), dim=0),
+        #                               0)  # (1, 2, h, w) or (1, 2, d, h, w)
+        input_image = torch.cat((fixed_image, moving_image), 1)
 
         if self.scale < 1:
             scaled_image = F.interpolate(input_image, scale_factor=self.scale, align_corners=True,
@@ -161,9 +162,9 @@ class RegNet_pairwise(nn.Module):
         else:
             disp = torch.unsqueeze(scaled_disp, 0)
 
-        warped_moving_image = self.spatial_transform(input_image[:, 1:], disp).squeeze()  # (h, w) or (d, h, w)
+        warped_moving_image = self.spatial_transform(moving_image, disp)  # (h, w) or (d, h, w)
 
-        res = {'disp': disp.squeeze(0), 'scaled_disp': scaled_disp.squeeze(0),
+        res = {'disp': disp, 'scaled_disp': scaled_disp,
                'warped_moving_image': warped_moving_image}
         return res
 
