@@ -8,7 +8,6 @@ import math
 import torch
 import torch.nn as nn
 import numpy as np
-from torch.nn import functional as F
 
 from utils.config import get_args
 import torch.nn.functional as F
@@ -137,7 +136,7 @@ def gradient_loss(s, penalty='l2'):
 
     Parameters
     ----------
-    s size of b*c*h*w*d 传对了吗
+    s size of b c d h w
     penalty
 
     Returns
