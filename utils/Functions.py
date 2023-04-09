@@ -198,8 +198,8 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
             F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
             F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            # loss_regulation = smoothloss(F_X_Y)
-            loss_regulation = bending_energy_loss(F_X_Y)
+            loss_regulation = smoothloss(F_X_Y)
+            # loss_regulation = bending_energy_loss(F_X_Y)
             loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
 
             losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])

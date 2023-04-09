@@ -319,7 +319,8 @@ class Cross_head(nn.Module):
 
         # # step 1. adjust the channel of x
         # x = self.conv_img(x)
-        decoder_reshape = decoder.reshape(1, decoder.size()[1], decoder.size()[2], decoder.size()[3] * decoder.size()[4])
+        decoder_reshape = decoder.reshape(1, decoder.size()[1], decoder.size()[2],
+                                          decoder.size()[3] * decoder.size()[4])
         x = self.down_avg(decoder)
 
         # reshape x to [B, C, D, HW]
@@ -343,14 +344,13 @@ class Cross_head(nn.Module):
 
             correction.append(att)
 
-        correction = torch.cat(correction, dim=1)   # B C D HW = decoder.shape
+        correction = torch.cat(correction, dim=1)  # B C D HW = decoder.shape
 
         x = correction * decoder_reshape + decoder_reshape
 
         x = self.activation(x)
 
-
-        return x.reshape(decoder.shape[0],decoder.shape[1],decoder.shape[2],decoder.shape[3],decoder.shape[4])
+        return x.reshape(decoder.shape[0], decoder.shape[1], decoder.shape[2], decoder.shape[3], decoder.shape[4])
 
 
 class Cross_head_bak(nn.Module):
