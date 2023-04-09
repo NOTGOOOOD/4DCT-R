@@ -77,7 +77,7 @@ def get_args():
     parser.add_argument("--lr", type=float, help="learning rate",
                         dest="lr", default=4e-4)
     parser.add_argument("--n_iter", type=int, help="number of iterations",
-                        dest="n_iter", default=500)
+                        dest="n_iter", default=5000)
     parser.add_argument("--warmup_steps", type=int, dest="warmup_steps", default=50)
     parser.add_argument("--sim_loss", type=str, help="image similarity loss: mse or ncc",
                         dest="sim_loss", default='ncc')
