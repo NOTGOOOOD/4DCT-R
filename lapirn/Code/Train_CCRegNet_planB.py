@@ -11,7 +11,7 @@ from CCRegNet_planB import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss,bending_energy_loss
+from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, smoothloss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
 
@@ -146,8 +146,6 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
-        break
-
 
 def train_lvl2():
     print("Training lvl2...")
@@ -156,13 +154,13 @@ def train_lvl2():
     model_lvl1 = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
 
-    # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-15-44-56_lapirn_corr_att_planB_stagelvl1_112_-0.3230.pth'
-    model_list = []
-    for f in os.listdir('../Model/Stage'):
-        if model_name + "stagelvl1" in f:
-            model_list.append(os.path.join('../Model/Stage', f))
-
-    model_path = sorted(model_list)[-1]
+    model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-04-08-21-0-27_CCENet_planB_stagelvl1_243_-0.3347.pth'
+    # model_list = []
+    # for f in os.listdir('../Model/Stage'):
+    #     if model_name + "stagelvl1" in f:
+    #         model_list.append(os.path.join('../Model/Stage', f))
+    #
+    # model_path = sorted(model_list)[-1]
 
     model_lvl1.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl1...", model_path)
@@ -175,7 +173,8 @@ def train_lvl2():
                                range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
-    loss_smooth = bending_energy_loss
+    # loss_smooth = bending_energy_loss
+    loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -397,7 +396,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_lapirn_corr_att_planB_".format(train_time)
+    model_name = "{}_CCENet_planB_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
@@ -410,6 +409,6 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    train_lvl1()
+    # train_lvl1()
     train_lvl2()
     # train_lvl3()

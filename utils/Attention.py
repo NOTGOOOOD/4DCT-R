@@ -265,20 +265,23 @@ class Cross_attention_multi(nn.Module):
 
         for i in range(C):
             unfold_img = self.unfold(x_reshape[:, i: i + 1, :, :]).transpose(-1, -2)  # B, D1H1W1/d/d, d*d
-            unfold_img = self.resolution_trans(unfold_img)
+            # unfold_img = self.resolution_trans(unfold_img)
 
             # plan1: mulit directly
             unfold_feamap = self.unfold(y_reshape[:, i: i + 1, :, :])  # B, d*d, D2H2W2/d/d
-            unfold_feamap = self.resolution_trans(unfold_feamap.transpose(-1, -2)).transpose(-1, -2)
+            # unfold_feamap = self.resolution_trans(unfold_feamap.transpose(-1, -2)).transpose(-1, -2)
 
             # plan2: avg. pooling to 1,
 
             # unfold_decoder_out = self.unfold(z_reshape[:, i: i + 1, :, :]).transpose(-1, -2)
             # unfold_decoder_out = self.resolution_trans(unfold_decoder_out)  # B, D2H2W2/d/d, d*d
 
-            att = torch.matmul(unfold_img, unfold_feamap) / (
-                    self.patch_size * self.patch_size)  # B, D1H1W1/d/d, D2H2W2/d/d
-            # att = torch.matmul(unfold_img, unfold_feamap)  # B, DHW/d/d, DHW/d/d
+            # att = torch.matmul(unfold_img, unfold_feamap) / (
+            #         self.patch_size * self.patch_size)  # B, D1H1W1/d/d, D2H2W2/d/d
+
+            att = torch.matmul(unfold_img, unfold_feamap)
+
+
 
             att = torch.unsqueeze(att, 1)
             # unfold_decoder_out = torch.unsqueeze(unfold_decoder_out, 1)
@@ -303,8 +306,8 @@ class Cross_head(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
                                 stride=(self.patch_size, self.patch_size))
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
-        self.activation = nn.LeakyReLU(0.2)
-
+        # self.activation = nn.LeakyReLU(0.2)
+        self.activation = nn.Softmax(1)
         # self.conv_img = nn.Sequential(
         #     nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
         # )
@@ -346,9 +349,9 @@ class Cross_head(nn.Module):
 
         correction = torch.cat(correction, dim=1)  # B C D HW = decoder.shape
 
-        x = correction * decoder_reshape + decoder_reshape
-
-        x = self.activation(x)
+        # x = correction * decoder_reshape + decoder_reshape
+        # x = self.activation(x)
+        x = self.activation(correction) * decoder_reshape + decoder_reshape
 
         return x.reshape(decoder.shape[0], decoder.shape[1], decoder.shape[2], decoder.shape[3], decoder.shape[4])
 

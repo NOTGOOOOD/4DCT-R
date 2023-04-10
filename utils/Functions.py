@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils import data as Data
+import torch.nn.functional as F
 
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
@@ -182,7 +183,8 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             grid = grid_class.get_grid(input_moving.shape[2:], True)
 
             if scale_factor > 1:
-                F_X_Y = upsample(pred[0])
+                F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
+                              align_corners=True, recompute_scale_factor=False)
 
             X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
             mse_loss = MSE(X_Y_up, input_fixed)

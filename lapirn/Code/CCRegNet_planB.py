@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from utils.Functions import AdaptiveSpatialTransformer
 from utils.correlation_layer import CorrTorch
+from utils.Attention import Cross_attention_multi
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -180,7 +181,7 @@ class CCRegNet_planB_lv1(nn.Module):
                                                  self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0, torch.cat((fea_e0_x,fea_e0_y),1)
         else:
             return output_disp_e0_v, warpped_inputx_lvl1_out
 
@@ -230,7 +231,8 @@ class CCRegNet_planB_lv2(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
-
+        # self.ca_module = Cross_attention_multi(self.start_channel * 2 + 31, self.start_channel * 12, 3)
+        self.ca_module = Cross_attention_multi(self.start_channel * 2, self.start_channel * 2, 3)
         self.activate_att = nn.LeakyReLU(0.2)
 
         self.decoder = nn.Sequential(
@@ -257,7 +259,7 @@ class CCRegNet_planB_lv2(nn.Module):
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding, lv1_fea = self.model_lvl1(x, y)
         # lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
@@ -303,25 +305,22 @@ class CCRegNet_planB_lv2(nn.Module):
                                mode='trilinear',
                                align_corners=True)
 
-        # att = self.ca_module(e0, fea_e0)
-        # embeding = torch.cat([e0, fea_e0], dim=1) + att
-
-
         # e0 = self.conv_sq(e0)
 
         # embeding = torch.cat([e0, fea_e0, self.correlation_layer(e0, fea_e0)], dim=1)
-        embeding = torch.cat((e0,fea_e0),1)
+        embeding = torch.cat((e0, fea_e0), 1)
         decoder = self.decoder(embeding)
+
         x1 = self.conv_block(decoder)
         x2 = self.conv_block(x1 + decoder)
         decoder = decoder + x1 + x2
 
-        # att = self.ca_module(e0, fea_e0)
-        # decoder_plus = self.cross_att(decoder, att).reshape(decoder.shape[0], -1, decoder.shape[2],
-        #                                                     decoder.shape[3], decoder.shape[4])
-
         disp_lv2 = self.output_lvl2(decoder)
-        output_disp_e0_v = disp_lv2 * self.range_flow
+
+        # att = self.ca_module(fea_e0, lvl1_embedding, disp_lv2)
+        # att = self.ca_module(decoder, lvl1_embedding, disp_lv2)
+        att = self.ca_module(torch.cat((fea_e0_x, fea_e0_y),1), lv1_fea, disp_lv2)
+        output_disp_e0_v = att * self.range_flow
         compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x_down.shape[2:], True))
