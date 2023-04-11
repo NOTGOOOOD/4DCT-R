@@ -170,7 +170,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
 
     transform = AdaptiveSpatialTransformer()
 
-    upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
+    # upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
     with torch.no_grad():
         model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
         losses = []
@@ -180,19 +180,17 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             pred = model(input_moving, input_fixed)
             F_X_Y = pred[0]
 
-            grid = grid_class.get_grid(input_moving.shape[2:], True)
-
             if scale_factor > 1:
                 F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
                               align_corners=True, recompute_scale_factor=False)
 
-            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid_class.get_grid(input_moving.shape[2:], True))
             mse_loss = MSE(X_Y_up, input_fixed)
             ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid_class.get_grid(input_moving.shape[2:]))
             # loss_Jacobian = jacobian_determinant(F_X_Y[0].cpu().detach().numpy())
 
             # reg2 - use velocity
@@ -220,7 +218,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 
-def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
+def validation_lapirn_ori(args, model, loss_similarity, grid_class, scale_factor):
     max_smooth = 10.
     antifold = args.antifold
 
@@ -234,14 +232,7 @@ def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
     val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    transform = SpatialTransform_unit().cuda()
-    transform.eval()
-
-    grid = generate_grid_unit(ori_shape)
-    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-
-    scale_factor = ori_shape[0] / imgshape[0]
-    upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
+    transform = AdaptiveSpatialTransformer()
     with torch.no_grad():
         model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
         losses = []
@@ -254,16 +245,17 @@ def validation_lapirn_ori(args, model, imgshape, loss_similarity, ori_shape):
             pred = model(input_moving, input_fixed, reg_code)
             F_X_Y = pred[0]
             if scale_factor > 1:
-                F_X_Y = upsample(pred[0])
+                F_X_Y = F.interpolate(pred[0], input_moving.shape[2:], mode='trilinear',
+                                      align_corners=True, recompute_scale_factor=False)
 
             loss_multiNCC = loss_similarity(pred[1], pred[2])
 
-            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid)
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1), grid_class.get_grid(input_moving.shape[2:], True))
             mse_loss = MSE(X_Y_up, input_fixed)
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid)
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid_class.get_grid(input_moving.shape[2:]))
 
             _, _, x, y, z = F_X_Y.shape
             norm_vector = torch.zeros((1, 3, 1, 1, 1), dtype=F_X_Y.dtype, device=F_X_Y.device)
