@@ -69,7 +69,7 @@ def test_dirlab(args, checkpoint, is_save=False):
 
 
 def test_patient(args, checkpoint, is_save=False):
-    model.load_state_dict(torch.load(checkpoint))
+    model.load_state_dict(torch.load(checkpoint)['model'])
     with torch.no_grad():
         model.eval()
         losses = []
@@ -154,7 +154,7 @@ if __name__ == '__main__':
                                         landmark_files=landmark_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-03-22-14-50-34'
+    prefix = '2023-04-09-15-39-19'
     model_dir = args.checkpoint_path
 
     enc_nf = [16, 32, 32, 32]

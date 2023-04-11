@@ -34,7 +34,7 @@ def test_patient(args, checkpoint, is_save=False):
                                     img_size=img_shape,
                                     cps=cps).to(device)
 
-            model.load_state_dict(torch.load(checkpoint))
+            model.load_state_dict(torch.load(checkpoint)['model'])
             model.eval()
 
             svf = model(fixed_img, moving_img)  # b,c,d,h,w
@@ -43,10 +43,6 @@ def test_patient(args, checkpoint, is_save=False):
 
             ncc = NCC(fixed_img.cpu().detach().numpy(), wapred_x.cpu().detach().numpy())
 
-            grid = generate_grid(img_shape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-
-            # loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
             jac = jacobian_determinant(disp[0].cpu().detach().numpy())
 
             # MSE
@@ -90,10 +86,10 @@ if __name__ == '__main__':
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
 
-    pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    pa_moving_folder = r'E:\datasets\registration\patient\moving'
-    # pa_moving_folder = r'D:\xxf\test_patient\moving'
+    # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # pa_moving_folder = r'E:\datasets\registration\patient\moving'
+    pa_moving_folder = r'D:\xxf\test_patient\moving'
 
     f_patient_file_list = sorted(
         [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
@@ -107,7 +103,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-21-18-05-53'
+    prefix = '2023-04-09-15-13-25'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
