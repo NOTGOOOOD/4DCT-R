@@ -56,22 +56,11 @@ from utils.utilize import save_model
 
 def train_lvl1():
     print("Training lvl1...")
-    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, imgshape=imgshape_4,
-                                                                    range_flow=range_flow).cuda()
+    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True, range_flow=range_flow, grid=grid_class).cuda()
 
     loss_similarity = NCC(win=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
-
-    transform = SpatialTransform_unit().cuda()
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-    grid_4 = generate_grid(imgshape_4)
-    grid_4 = torch.from_numpy(np.reshape(grid_4, (1,) + grid_4.shape)).cuda().float()
-
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -103,7 +92,7 @@ def train_lvl1():
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_4)
+            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4]))
 
             _, _, x, y, z = F_X_Y.shape
             norm_vector = torch.zeros((1, 3, 1, 1, 1), dtype=F_X_Y.dtype, device=F_X_Y.device)
@@ -126,8 +115,8 @@ def train_lvl1():
             sys.stdout.flush()
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model, imgshape_4,loss_similarity,
-                                                                                       imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model,loss_similarity,
+                                                                                       grid_class, 4)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
@@ -156,8 +145,7 @@ def train_lvl1():
 def train_lvl2():
     print("Training lvl2...")
     model_lvl1 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
-                                                                         imgshape=imgshape_4,
-                                                                         range_flow=range_flow).cuda()
+                                                                         range_flow=range_flow, grid=grid_class).cuda()
 
     model_list = []
     for f in os.listdir('../Model/Stage'):
@@ -172,22 +160,11 @@ def train_lvl2():
     for param in model_lvl1.parameters():
         param.requires_grad = False
 
-    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, imgshape=imgshape_2,
-                                                                    range_flow=range_flow, model_lvl1=model_lvl1).cuda()
+    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True, range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).cuda()
 
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
-
-    transform = SpatialTransform_unit().cuda()
-
-    for param in transform.parameters():
-        param.requires_grad = False
-        param.volatile = True
-
-
-    grid_2 = generate_grid(imgshape_2)
-    grid_2 = torch.from_numpy(np.reshape(grid_2, (1,) + grid_2.shape)).cuda().float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     stop_criterion = StopCriterion()
@@ -217,7 +194,7 @@ def train_lvl2():
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_2)
+            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4]))
 
             _, _, x, y, z = F_X_Y.shape
             norm_vector = torch.zeros((1, 3, 1, 1, 1), dtype=F_X_Y.dtype, device=F_X_Y.device)
@@ -240,9 +217,8 @@ def train_lvl2():
             sys.stdout.flush()
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model, imgshape_2,
-                                                                                         loss_similarity,
-                                                                                         imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model, loss_similarity,
+                                                                                         grid_class, 2)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
@@ -275,11 +251,9 @@ def train_lvl2():
 def train_lvl3():
     print("Training lvl3...")
     model_lvl1 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(2, 3, start_channel, is_train=True,
-                                                                         imgshape=imgshape_4,
-                                                                         range_flow=range_flow).cuda()
+                                                                         range_flow=range_flow,grid=grid_class).cuda()
     model_lvl2 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
-                                                                         imgshape=imgshape_2,
-                                                                         range_flow=range_flow, model_lvl1=model_lvl1).cuda()
+                                                                         range_flow=range_flow, model_lvl1=model_lvl1,grid=grid_class).cuda()
 
     model_list = []
     for f in os.listdir('../Model/Stage'):
@@ -294,8 +268,7 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True, imgshape=imgshape,
-                                                                    range_flow=range_flow, model_lvl2=model_lvl2).cuda()
+    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,range_flow=range_flow, model_lvl2=None, grid=grid_class).cuda()
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
@@ -343,7 +316,7 @@ def train_lvl3():
 
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid)
+            loss_Jacobian = loss_Jdet(F_X_Y_norm, grid_class.get_grid(img_shape=F_X_Y_norm.shape[1:4]))
 
             _, _, x, y, z = F_X_Y.shape
             norm_vector = torch.zeros((1, 3, 1, 1, 1), dtype=F_X_Y.dtype, device=F_X_Y.device)
