@@ -232,11 +232,11 @@ class Cross_attention_multi(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
                                 stride=(self.patch_size, self.patch_size))
 
-        self.resolution_trans = nn.Sequential(
-            nn.Linear(self.patch_size * self.patch_size, 2 * self.patch_size * self.patch_size, bias=False),
-            nn.Linear(2 * self.patch_size * self.patch_size, self.patch_size * self.patch_size, bias=False),
-            nn.LeakyReLU(0.2)
-        )
+        # self.resolution_trans = nn.Sequential(
+        #     nn.Linear(self.patch_size * self.patch_size, 2 * self.patch_size * self.patch_size, bias=False),
+        #     nn.Linear(2 * self.patch_size * self.patch_size, self.patch_size * self.patch_size, bias=False),
+        #     nn.LeakyReLU(0.2)
+        # )
 
         self.header = Cross_head()
 
@@ -306,8 +306,8 @@ class Cross_head(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(self.patch_size, self.patch_size),
                                 stride=(self.patch_size, self.patch_size))
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
-        # self.activation = nn.LeakyReLU(0.2)
-        self.activation = nn.Softmax(1)
+        self.activation = nn.LeakyReLU(0.2)
+        # self.activation = nn.Softmax(1)
         # self.conv_img = nn.Sequential(
         #     nn.Conv3d(in_dim, out_dim, kernel_size=(1, 1, 1), stride=1)
         # )

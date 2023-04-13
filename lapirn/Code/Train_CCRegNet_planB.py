@@ -11,7 +11,7 @@ from CCRegNet_planB import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
 from utils.datagenerators import Dataset
 from utils.config import get_args
-from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, smoothloss
+from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
 
@@ -96,7 +96,7 @@ def train_lvl1():
             Y = fixed[0].to(device).float()
 
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-            F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
+            F_X_Y, X_Y, Y_4x, F_xy, _,_ = model(X, Y)
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
@@ -145,7 +145,7 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-
+        break
 
 def train_lvl2():
     print("Training lvl2...")
@@ -154,13 +154,13 @@ def train_lvl2():
     model_lvl1 = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
 
-    model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-04-08-21-0-27_CCENet_planB_stagelvl1_243_-0.3347.pth'
-    # model_list = []
-    # for f in os.listdir('../Model/Stage'):
-    #     if model_name + "stagelvl1" in f:
-    #         model_list.append(os.path.join('../Model/Stage', f))
-    #
-    # model_path = sorted(model_list)[-1]
+    # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-04-08-21-0-27_CCENet_planB_stagelvl1_243_-0.3347.pth'
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl1" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+
+    model_path = sorted(model_list)[-1]
 
     model_lvl1.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl1...", model_path)
@@ -257,6 +257,7 @@ def train_lvl2():
         if step > iteration_lvl2:
             break
 
+        break
 
 def train_lvl3():
     print("Training lvl3...")
@@ -409,6 +410,6 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    # train_lvl1()
+    train_lvl1()
     train_lvl2()
-    # train_lvl3()
+    train_lvl3()
