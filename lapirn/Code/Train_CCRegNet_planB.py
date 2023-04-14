@@ -96,7 +96,7 @@ def train_lvl1():
             Y = fixed[0].to(device).float()
 
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-            F_X_Y, X_Y, Y_4x, F_xy, _,_ = model(X, Y)
+            F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,

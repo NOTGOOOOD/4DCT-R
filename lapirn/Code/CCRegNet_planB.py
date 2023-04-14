@@ -181,8 +181,7 @@ class CCRegNet_planB_lv1(nn.Module):
                                                  self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0, torch.cat(
-                (fea_e0_x, fea_e0_y), 1)
+            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         else:
             return output_disp_e0_v, warpped_inputx_lvl1_out
 
@@ -260,7 +259,7 @@ class CCRegNet_planB_lv2(nn.Module):
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding, lv1_fea = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
         # lvl1_disp_up = self.up_tri(lvl1_disp)
 
         x_down = self.down_avg(x)
