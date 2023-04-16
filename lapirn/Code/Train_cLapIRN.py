@@ -255,12 +255,13 @@ def train_lvl3():
     model_lvl2 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
                                                                          range_flow=range_flow, model_lvl1=model_lvl1,grid=grid_class).cuda()
 
-    model_list = []
-    for f in os.listdir('../Model/Stage'):
-        if model_name + "stagelvl2" in f:
-            model_list.append(os.path.join('../Model/Stage', f))
-
-    model_path = sorted(model_list)[-1]
+    # model_list = []
+    # for f in os.listdir('../Model/Stage'):
+    #     if model_name + "stagelvl2" in f:
+    #         model_list.append(os.path.join('../Model/Stage', f))
+    #
+    # model_path = sorted(model_list)[-1]
+    model_path = '../Model/Stage/2023-04-15-21-59-56_cLapIRN_stagelvl2_004_-1.0529.pth'
     model_lvl2.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl2...", model_path)
 
@@ -268,7 +269,7 @@ def train_lvl3():
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,range_flow=range_flow, model_lvl2=None, grid=grid_class).cuda()
+    model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(2, 3, start_channel, is_train=True,range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).cuda()
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
@@ -427,6 +428,6 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    train_lvl1()
-    train_lvl2()
+    # train_lvl1()
+    # train_lvl2()
     train_lvl3()
