@@ -188,14 +188,18 @@ def test_patient(args, checkpoint, is_save=False):
         model_lvl1 = CRegNet_lv1(1, 3, args.initial_channels, is_train=True,
                                  grid=grid_class,
                                  range_flow=range_flow).cuda()
-        model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=False,
+
+        model_lvl1.eval()
+
+        model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=True,
                                  range_flow=range_flow,
                                  model_lvl1=model_lvl1, grid=grid_class).cuda()
+        model_lvl2.eval()
 
         model = CRegNet_lv3(1, 3, args.initial_channels, is_train=False,
                             range_flow=range_flow, model_lvl2=model_lvl2,
                             grid=grid_class).cuda()
-        model = model_lvl2
+        # model = model_lvl2
         model.load_state_dict(torch.load(checkpoint)['model'])
         model.eval()
 
@@ -203,7 +207,7 @@ def test_patient(args, checkpoint, is_save=False):
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
-            F_X_Y, lv1_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
 
             # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
             F_X_Y = torch.nn.functional.interpolate(F_X_Y, size=moving_img.shape[2:],
@@ -245,8 +249,8 @@ def test_patient(args, checkpoint, is_save=False):
                 m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
                 save_image(lv1_out, fixed_img, args.output_dir, m_name)
 
-                # m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-                # save_image(lv2_out, fixed_img, args.output_dir, m_name)
+                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+                save_image(lv2_out, fixed_img, args.output_dir, m_name)
 
                 m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
                 save_image(lv3_out, fixed_img, args.output_dir, m_name)
@@ -271,11 +275,11 @@ if __name__ == '__main__':
     landmark_list = load_landmarks(args.landmark_dir)
     # dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
     # dir_moving_folder = os.path.join(args.test_dir, 'moving')
-    # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    # pa_moving_folder = r'D:\xxf\test_patient\moving'
+    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    pa_moving_folder = r'D:\xxf\test_patient\moving'
 
-    pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    pa_moving_folder = r'E:\datasets\registration\patient\moving'
+    # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    # pa_moving_folder = r'E:\datasets\registration\patient\moving'
 
     # f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
     #                           file_name.lower().endswith('.gz')])
@@ -297,7 +301,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-04-10-14-19-43'
+    prefix = '2023-04-15-10-09-41'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
