@@ -40,14 +40,14 @@ def data_standardization_0_n(range, img):
         return range * (img - np.min(img)) / (np.max(img) - np.min(img))
 
 
-fixed_file = r'E:\datasets\registration\patient\fixed\009-4DCT_niii_T00.nii.gz'
+fixed_file = r'E:\datasets\registration\patient\fixed\008-4DCT_nii_T00.nii.gz'
 img1 = nib.load(fixed_file)
 width, height, queue = img1.dataobj.shape
 img1 = data_standardization_0_n(1, img1.dataobj)
 
 warped_folder = r'C:\Users\admin\Desktop\experiment\cal_dm\009'
 # example2_filename = r'C:\Users\admin\Desktop\experiment\cal_dm\4DCT_nii_T00_lapirn_warped_lv3.nii.gz'
-warped_file = [os.path.join(warped_folder, file) for file in os.listdir(warped_folder) if '009' in file]
+warped_file = [os.path.join(warped_folder, file) for file in os.listdir(warped_folder) if '008' in file]
 
 # 007
 # D = 21  # int D dims
@@ -59,27 +59,32 @@ warped_file = [os.path.join(warped_folder, file) for file in os.listdir(warped_f
 # H = 180
 # W = 130
 
-# 009
+# # 009
 D = 50  # int D dims
 H = 180
 W = 130
 num = 1
-plt.figure(figsize=(15, 10))
+plt.figure(figsize=(5, 10))
 for warped in warped_file:
     img2 = nib.load(warped)
 
     img_arr1 = img1[:, :, D]
     img_arr2 = img2.dataobj[:, :, D, 0, 0] if img2.dataobj.ndim > 3 else img2.dataobj[:, :, D]
-    img_arr_diff = img_arr1 - img_arr2
+    if 'Syn' in warped:
+        img_arr2 = data_standardization_0_n(1, img_arr2)
 
+    img_arr_diff = np.abs(img_arr1 - img_arr2)
+    # img_arr_diff = img_arr1 - img_arr2
     plt.subplot(6, 1, num)
     img_arr_diff = np.rot90(img_arr_diff, 1)
     plt.title(warped.split('\\')[-1])
-    plt.imshow(img_arr_diff, cmap='bwr', norm=MidpointNormalize(vmin=-0.4, vmax=0.4, midpoint=0))
+    # plt.imshow(img_arr_diff, cmap='coolwarm', norm=MidpointNormalize(vmin=0, vmax=1, midpoint=0.5))
+    plt.imshow(img_arr_diff, cmap='coolwarm', norm=MidpointNormalize(vmin=0, vmax=1, midpoint=0.5))
+    # plt.clim(0, 1)
     plt.xticks([])
     plt.yticks([])
-    plt.colorbar(fraction=0.046, pad=0.04)
-
+    # plt.colorbar(fraction=0.046, pad=0.04)
+    plt.colorbar()
     # plt.subplot(6, 1, num)
     # img_arr_diff = np.rot90(img_arr2, 1)
     # plt.title(warped.split('\\')[-1])
@@ -90,3 +95,28 @@ for warped in warped_file:
     num += 1
 
 plt.show()
+
+from utils.metric import SSIM, NCC, MSE, jacobian_determinant
+
+# load img
+fixed_file = r'C:\Users\admin\Desktop\experiment\cal_dm\007\fixed.nii.gz'
+warped_file = r'C:\Users\admin\Desktop\experiment\cal_dm\007\007-Elastix.nii.gz'
+img_fixed = np.array(nib.load(fixed_file).dataobj)
+img_wapred = np.array(nib.load(warped_file).dataobj)
+
+# norm
+img_fixed = data_standardization_0_n(1, img_fixed)
+img_wapred = data_standardization_0_n(1, img_wapred)
+
+# Jac
+dvf_file = r'C:\Users\admin\Desktop\experiment\cal_dm\007\007-Elastix-dvf.nii.gz'
+dvf = np.array(nib.load(dvf_file).dataobj).transpose(3, 4, 0, 1, 2)[0]
+Jac = jacobian_determinant(np.array(dvf))
+
+# NCC
+_ncc = NCC(img_fixed, img_wapred)
+
+# MSE
+_mse = MSE(img_fixed, img_wapred)
+# SSIM
+_ssim = SSIM(img_fixed, img_wapred)
