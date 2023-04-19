@@ -126,7 +126,7 @@ def train_unet():
     #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
     #      file_name.lower().endswith('.gz')])
 
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=True)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
     model = model.to(device)
 
     # Set optimizer and losses
@@ -249,7 +249,7 @@ if __name__ == "__main__":
                               file_name.lower().endswith('.gz')])
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
-    img_shape = [144, 192, 160]
+    # img_shape = [144, 192, 160]
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device
@@ -266,37 +266,37 @@ if __name__ == "__main__":
     val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     # =======================================
 
-    # train_unet()
+    train_unet()
 
-    # ==============test====================
+    # # ==============test====================
     # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
     # pa_moving_folder = r'E:\datasets\registration\patient\moving'
-    pa_moving_folder = r'D:\xxf\test_patient\moving'
-
-    f_patient_file_list = sorted(
-        [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
-         file_name.lower().endswith('.gz')])
-    m_patient_file_list = sorted(
-        [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
-         file_name.lower().endswith('.gz')])
-
-    test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
-                                          num_workers=0)
-
-    prefix = '2023-04-15-12-23-37'
-    model_dir = args.checkpoint_path
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
-    model = model.to(device)
-
-    if args.checkpoint_name is not None:
-        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
-        test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
-    else:
-        checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
-        for checkpoint in checkpoint_list:
-            print(checkpoint)
-            # test_dirlab(args, checkpoint)
-            test_patient(args, checkpoint)
-    # =======================================
+    # # pa_moving_folder = r'D:\xxf\test_patient\moving'
+    #
+    # f_patient_file_list = sorted(
+    #     [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
+    #      file_name.lower().endswith('.gz')])
+    # m_patient_file_list = sorted(
+    #     [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
+    #      file_name.lower().endswith('.gz')])
+    #
+    # test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
+    # test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
+    #                                       num_workers=0)
+    #
+    # prefix = '2023-04-15-12-23-37'
+    # model_dir = args.checkpoint_path
+    # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
+    # model = model.to(device)
+    #
+    # if args.checkpoint_name is not None:
+    #     # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+    #     test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+    # else:
+    #     checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+    #     for checkpoint in checkpoint_list:
+    #         print(checkpoint)
+    #         # test_dirlab(args, checkpoint)
+    #         test_patient(args, checkpoint)
+    # # =======================================
