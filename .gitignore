@@ -5,3 +5,16 @@
 *.jpg
 *.mhd
 *.raw
+*.pth
+*.gz
+*.txt
+/lapirn/Model/
+/Model/
+/midir/model/Log/
+/midir/model/output/
+/midir/model/Checkpoint/
+/lapirn/Code/Log/
+/lapirn/Code/output/
+/groupregnet/result/general_reg/
+/voxelmorph/Log/
+/.idea/
