@@ -120,8 +120,9 @@ class RegNet_pairwise(nn.Module):
         self.dim = dim
         self.scale = scale
 
-        self.unet = unet.UNet(in_channels=2, out_channels=dim, dim=dim, depth=depth, initial_channels=initial_channels,
-                              normalization=normalization)
+        # self.unet = unet.UNet(in_channels=2, out_channels=dim, dim=dim, depth=depth, initial_channels=initial_channels,
+        #                       normalization=normalization)
+        self.unet = unet.UNet3D(in_channel=2, n_classes=3)
         self.spatial_transform = SpatialTransformer(self.dim)
 
     def forward(self, fixed_image, moving_image):
