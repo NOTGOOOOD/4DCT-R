@@ -112,13 +112,13 @@ def get_args():
 
     # LapIRN
     parser.add_argument("--iteration_lvl1", type=int,
-                        dest="iteration_lvl1", default=1000,
+                        dest="iteration_lvl1", default=10000,
                         help="number of lvl1 iterations")
     parser.add_argument("--iteration_lvl2", type=int,
-                        dest="iteration_lvl2", default=1000,
+                        dest="iteration_lvl2", default=10000,
                         help="number of lvl2 iterations")
     parser.add_argument("--iteration_lvl3", type=int,
-                        dest="iteration_lvl3", default=1000,
+                        dest="iteration_lvl3", default=10000,
                         help="number of lvl3 iterations")
     parser.add_argument("--antifold", type=float,
                         dest="antifold", default=100,
