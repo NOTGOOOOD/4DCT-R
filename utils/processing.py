@@ -211,6 +211,47 @@ def resize_image(itkimage, newSize, resamplemethod=sitk.sitkLinear):
     return itkimgResampled
 
 
+def dirlab_train(file_folder, m_path, f_path):
+    # every case
+    for num_fixed, file_name_fixed in enumerate(os.listdir(file_folder)):
+        # for file_name_fixed in os.listdir(file_folder):
+        # every data as a fiexed [T00-T90]
+        # fixed_name = file_name_fixed.split('.nii')[0] + '_%02d' % num_fixed + '.nii.gz'
+        for num_moving, file_name_moving in enumerate(os.listdir(file_folder)):
+            if file_name_moving == file_name_fixed:
+                continue
+
+            new_name = file_name_fixed.split('.nii')[0] + '_T%02d' % num_moving + '.nii.gz'
+
+            fixed_file_path = os.path.join(f_path, new_name)
+            moving_file_path = os.path.join(m_path, new_name)
+
+            shutil.copyfile(os.path.join(file_folder, file_name_fixed), fixed_file_path)
+            shutil.copyfile(os.path.join(file_folder, file_name_moving), moving_file_path)
+
+
+def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resize):
+    for num, file_name in enumerate(os.listdir(file_folder)):
+
+        file_path = os.path.join(file_folder, file_name)
+        file = np.memmap(file_path, dtype=datatype, mode='r')
+        if shape:
+            file = file.reshape(shape)
+
+        img = sitk.GetImageFromArray(file)
+
+        img = crop_resampling_resize_clamp(img, resize,
+                                           args.dirlab_cfg[case]['crop_range'][::-1],
+                                           None,
+                                           [None, 900])
+
+        case_name = 'dirlab_case%02d_T%02d.nii.gz' % (case, num)
+        target_file_path = os.path.join(save_path,
+                                        case_name)
+
+        sitk.WriteImage(img, target_file_path)
+
+
 def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
     for file_name in os.listdir(file_folder):
         if 'T00' in file_name:
@@ -620,7 +661,7 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 
 if __name__ == '__main__':
-    project_folder = get_project_path("4DCT-R").split("4DCT-R")[0]
+    project_folder = get_project_path("4DCT").split("4DCT-R")[0]
     resize = [144, 192, 160]  # z y x
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
@@ -640,16 +681,16 @@ if __name__ == '__main__':
     # ================Augment=================
     # aug_moving_path = '/home/cqut/project/xxf/val_144/moving'
     # aug_fixed_path = '/home/cqut/project/xxf/val_144/fixed'
-    aug_fixed_path = r'D:\xxf\val_144_192_160_large\fixed'
-    aug_moving_path = r'D:\xxf\val_144_192_160_large\moving'
-
-    save_path = r'D:\xxf\val_144_192_160_large/fixed'
-    make_dir(save_path)
-    aug(aug_fixed_path, save_path)
-
-    save_path = r'D:\xxf\val_144_192_160_large/moving'
-    make_dir(save_path)
-    aug(aug_moving_path, save_path)
+    # aug_fixed_path = r'D:\xxf\val_144_192_160_large\fixed'
+    # aug_moving_path = r'D:\xxf\val_144_192_160_large\moving'
+    #
+    # save_path = r'D:\xxf\val_144_192_160_large/fixed'
+    # make_dir(save_path)
+    # aug(aug_fixed_path, save_path)
+    #
+    # save_path = r'D:\xxf\val_144_192_160_large/moving'
+    # make_dir(save_path)
+    # aug(aug_moving_path, save_path)
 
     #  test landmarks
     # # load image
@@ -756,12 +797,26 @@ if __name__ == '__main__':
     # make_dir(target_test_fixed_path)
     # make_dir(target_test_moving_path)
 
-    # # dirlab数据集img转mhd
-    # for item in dirlab_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     dirlab_processing(img_path, target_moving_path, target_fixed_path, np.int16, shape, case)
+    # dirlab数据集img转mhd
+    data_path = r'D:\xxf\dirlab'
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        save_path = os.path.join(data_path, 'case%02d' % case)
+        make_dir(save_path)
+        img_path = f'E:\datasets\dirlab\img\Case{case}Pack\Images'
+
+        # crop, resample,resize
+        # dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=[160, 160, 160])
+
+        # make a train set
+        m_path = r'D:\xxf\dirlab\moving'
+        f_path = r'D:\xxf\dirlab\fixed'
+        make_dir(m_path)
+        make_dir(f_path)
+        file_folder = os.path.join(r'D:\xxf\dirlab', 'case%02d' % case)
+        dirlab_train(file_folder, m_path, f_path)
+        print('case %02d done!' % case)
 
     # dirlab for test
     # print("dirlab: ")
