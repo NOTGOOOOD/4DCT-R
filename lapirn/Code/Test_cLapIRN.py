@@ -23,22 +23,19 @@ def test_patient(args, checkpoint, is_save=False):
 
             reg_code = torch.tensor([reg_input], dtype=fixed_img.dtype, device=fixed_img.device).unsqueeze(dim=0)
 
-            imgshape = fixed_img.shape[2:]
-
-            imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
-            imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
+            # imgshape = fixed_img.shape[2:]
+            #
+            # imgshape_4 = (imgshape[0] / 4, imgshape[1] / 4, imgshape[2] / 4)
+            # imgshape_2 = (imgshape[0] / 2, imgshape[1] / 2, imgshape[2] / 2)
 
             model_lvl1 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                                 imgshape=imgshape_4,
-                                                                                 range_flow=range_flow).cuda()
+                                                                                 range_flow=range_flow, grid=grid_class).cuda()
             model_lvl2 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
-                                                                                 imgshape=imgshape_2,
-                                                                                 range_flow=range_flow,
+                                                                                 range_flow=range_flow, grid=grid_class,
                                                                                  model_lvl1=model_lvl1).cuda()
 
             model = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=True,
-                                                                            imgshape=imgshape,
-                                                                            range_flow=range_flow,
+                                                                            range_flow=range_flow, grid=grid_class,
                                                                             model_lvl2=model_lvl2).cuda()
 
             model.load_state_dict(torch.load(checkpoint)['model'])
@@ -50,9 +47,6 @@ def test_patient(args, checkpoint, is_save=False):
 
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
-
-            grid = generate_grid(imgshape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
             # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid)
             Jac = jacobian_determinant(F_X_Y_cpu.cpu().detach().numpy())
@@ -133,7 +127,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-03-26-13-22-56'
+    prefix = '2023-05-01-09-44-11'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:

@@ -36,7 +36,7 @@ def make_dirs():
 
 
 def train():
-    img_shape = [144, 192, 160]
+    img_shape = [160, 160, 160]
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device

@@ -255,13 +255,13 @@ def train_lvl3():
     model_lvl2 = Miccai2021_LDR_conditional_laplacian_unit_disp_add_lvl2(2, 3, start_channel, is_train=True,
                                                                          range_flow=range_flow, model_lvl1=model_lvl1,grid=grid_class).cuda()
 
-    # model_list = []
-    # for f in os.listdir('../Model/Stage'):
-    #     if model_name + "stagelvl2" in f:
-    #         model_list.append(os.path.join('../Model/Stage', f))
-    #
-    # model_path = sorted(model_list)[-1]
-    model_path = '../Model/Stage/2023-04-15-21-59-56_cLapIRN_stagelvl2_004_-1.0529.pth'
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl2" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+
+    model_path = sorted(model_list)[-1]
+    # model_path = r'../Model/Stage\2023-04-27-20-18-02_cLapIRN_stagelvl2_348_-0.9802.pth'
     model_lvl2.load_state_dict(torch.load(model_path)['model'])
     print("Loading weight for model_lvl2...", model_path)
 
@@ -282,11 +282,11 @@ def train_lvl3():
         param.volatile = True
 
 
-    grid = generate_grid(imgshape)
-    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-
-    grid_unit = generate_grid_unit(imgshape)
-    grid_unit = torch.from_numpy(np.reshape(grid_unit, (1,) + grid_unit.shape)).cuda().float()
+    # grid = generate_grid(imgshape)
+    # grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
+    #
+    # grid_unit = generate_grid_unit(imgshape)
+    # grid_unit = torch.from_numpy(np.reshape(grid_unit, (1,) + grid_unit.shape)).cuda().float()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -341,9 +341,7 @@ def train_lvl3():
             sys.stdout.flush()
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model, imgshape,
-                                                                                         loss_similarity,
-                                                                                         imgshape)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_lapirn_ori(args, model,loss_similarity, grid_class,1)
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
@@ -428,6 +426,6 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    # train_lvl1()
-    # train_lvl2()
+    train_lvl1()
+    train_lvl2()
     train_lvl3()

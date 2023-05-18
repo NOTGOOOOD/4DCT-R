@@ -9,6 +9,9 @@ from utils.Functions import transform_unit_flow_to_flow, Grid
 from CCRegNet_planB import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
     CCRegNet_planB_lvl3 as CRegNet_lv3
 
+# from CCENet_single import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
+#     CCRegNet_planB_lvl3 as CRegNet_lv3
+
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
@@ -204,6 +207,7 @@ def test_patient(args, checkpoint, is_save=False):
         model.eval()
 
         for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
+            if batch ==6: break
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
@@ -273,19 +277,12 @@ if __name__ == '__main__':
         os.mkdir(args.output_dir)
 
     landmark_list = load_landmarks(args.landmark_dir)
-    # dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    # dir_moving_folder = os.path.join(args.test_dir, 'moving')
-    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    pa_moving_folder = r'D:\xxf\test_patient\moving'
+
+    pa_fixed_folder = r'D:\xxf\test_ori\fixed'
+    pa_moving_folder = r'D:\xxf\test_ori\moving'
 
     # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
     # pa_moving_folder = r'E:\datasets\registration\patient\moving'
-
-    # f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-    #                           file_name.lower().endswith('.gz')])
-    # m_dir_file_list = sorted(
-    #     [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-    #      file_name.lower().endswith('.gz')])
 
     f_patient_file_list = sorted(
         [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
@@ -293,15 +290,26 @@ if __name__ == '__main__':
     m_patient_file_list = sorted(
         [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
          file_name.lower().endswith('.gz')])
-    #
-    # test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-    #                                     landmark_files=landmark_list)
+
     test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    # test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-04-15-10-09-41'
+    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    dir_moving_folder = os.path.join(args.test_dir, 'moving')
+    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_dir_file_list = sorted(
+        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+         file_name.lower().endswith('.gz')])
+
+    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                        landmark_files=landmark_list)
+    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    prefix = '2023-04-26-13-17-59' # CCENet
+
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
