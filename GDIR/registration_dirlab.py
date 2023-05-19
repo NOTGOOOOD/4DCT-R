@@ -13,6 +13,7 @@ import numpy as np
 import logging, tqdm
 from scipy import interpolate
 from utils.utilize import save_image, get_project_path, make_dir, count_parameters
+from utils.config import get_args
 
 
 def calc_tre(calcdisp, disp_i2t, disp_t2i, grid_tuple, landmark_00_converted, landmark_disp, spacing):
@@ -121,58 +122,6 @@ def set_seed(seed=1024):
 #         "orign_size": (120, 512, 512)
 #         }]
 
-cfg = [{},
-       {"case": 1,
-        "crop_range": [slice(0, 84), slice(43, 199), slice(10, 250)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (94, 256, 256)
-        },
-       {"case": 2,
-        "crop_range": [slice(5, 101), slice(30, 194), slice(8, 244)],
-        "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
-        "orign_size": (112, 256, 256)
-        },
-       {"case": 3,
-        "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
-        "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
-        "orign_size": (104, 256, 256)
-        },
-       {"case": 4,
-        "crop_range": [slice(0, 92), slice(42, 210), slice(10, 250)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (99, 256, 256)
-        },
-       {"case": 5,
-        "crop_range": [slice(0, 92), slice(60, 220), slice(10, 250)],
-        "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
-        "orign_size": (106, 256, 256)
-        },
-       {"case": 6,
-        "crop_range": [slice(10, 102), slice(144, 328), slice(132, 424)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (128, 512, 512)
-        },
-       {"case": 7,
-        "crop_range": [slice(10, 102), slice(144, 328), slice(114, 422)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (136, 512, 512)
-        },
-       {"case": 8,
-        "crop_range": [slice(18, 118), slice(84, 300), slice(113, 389)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (128, 512, 512)
-        },
-       {"case": 9,
-        "crop_range": [slice(0, 72), slice(126, 334), slice(128, 388)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (128, 512, 512)
-        },
-       {"case": 10,
-        "crop_range": [slice(0, 92), slice(119, 335), slice(140, 384)],
-        "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-        "orign_size": (120, 512, 512)
-        }]
-
 config = dict(
     dim=3,  # dimension of the input image
     scale=0.5,
@@ -199,43 +148,43 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def train(case=1):
+    args = get_args()
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
     set_seed()
-    # file
-    data_folder = os.path.join(project_path.split("4DCT-R")[0], f'datasets/dirlab/mhd/case{case}/')
-    landmark_file = os.path.join(project_path, f'data/dirlab/Case0{case}_300_00_50.pt')
-    log_folder = os.path.join('log/', f'case{case}')
+
+    # log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径
-    warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
-    temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
-    make_dir(warp_case_path)
-    make_dir(temp_case_path)
-    make_dir(log_folder)
+    # warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
+    # temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
+    # make_dir(warp_case_path)
+    # make_dir(temp_case_path)
+    # make_dir(log_folder)
+
+    # d,h,w
+    crop_range0 = args.dirlab_cfg[case]["crop_range"][0]
+    crop_range1 = args.dirlab_cfg[case]["crop_range"][1]
+    crop_range2 = args.dirlab_cfg[case]["crop_range"][2]
+    crop_range0_start = crop_range0.start
+    crop_range1_start = crop_range1.start
+    crop_range2_start = crop_range2.start
 
     # landmark
+    landmark_file = os.path.join(project_path, f'data/dirlab/Case0{case}_300_00_50.pt')
     landmark_info = torch.load(landmark_file)
     landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
     landmark_00 = landmark_info['landmark_00']
     landmark_50 = landmark_info['landmark_50']
 
-    # d,h,w
-    crop_range0 = cfg[case]["crop_range"][0]
-    crop_range1 = cfg[case]["crop_range"][1]
-    crop_range2 = cfg[case]["crop_range"][2]
-    crop_range0_start = crop_range0.start
-    crop_range1_start = crop_range1.start
-    crop_range2_start = crop_range2.start
-
-    # z y x
     landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
     landmark_50_converted = np.flip(landmark_50, axis=1) - np.array(
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
-    # preprocess(project_path, cfg)
 
-    image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('mhd')])
+    # file
+    data_folder = 'D:/xxf/dirlabcase1-10/case%02d' % case
+    image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('.gz')])
     image_list = []
     for file_name in image_file_list:
         # xyz W H D
@@ -243,10 +192,6 @@ def train(case=1):
         # zyx D H W
         stkimg = sitk.GetArrayFromImage(img_sitk)
 
-        # norm units: HU
-        # stkimg -= 1000
-        # Threshold = [-1000, 500]  # [-1000, -200]
-        # stkimg = data_standardization_min_max(Threshold, stkimg)
         image_list.append(stkimg)
 
     input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
@@ -257,7 +202,7 @@ def train(case=1):
     input_image = data_standardization_0_n(1, input_image)
 
     # crop
-    input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
+    # input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
 
     image_shape = np.array(input_image.shape[2:])  # (d, h, w) z y x
     num_image = input_image.shape[0]  # number of image in the group
@@ -336,7 +281,7 @@ def train(case=1):
     # plt.show()
 
     # %%
-    diff_ori = (np.sum((landmark_disp * cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
+    diff_ori = (np.sum((landmark_disp * args.dirlab_cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
     print("\ncase{0}配准前 diff: {1}({2})".format(case, np.mean(diff_ori), np.std(diff_ori)))
 
     for i in pbar:
@@ -403,7 +348,7 @@ def train(case=1):
             f'{i}, totalloss {total_loss:.6f}, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
         # save logfile
-        log_index = len([file for file in os.listdir(log_folder) if file.endswith('.log')])
+        # log_index = len([file for file in os.listdir(log_folder) if file.endswith('.log')])
 
         if i % config.pair_disp_calc_interval == 0:
             # for name, param in regnet.named_parameters():
@@ -416,7 +361,7 @@ def train(case=1):
 
             mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
                                           grid_tuple, landmark_00_converted, landmark_disp,
-                                          cfg[case]['pixel_spacing'])
+                                          args.dirlab_cfg[case]['pixel_spacing'])
             diff_stats.append([i, mean, std])
             print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
         #
@@ -441,20 +386,20 @@ def train(case=1):
 
     mean, std, diff, composed_dis_np = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
                                                 grid_tuple, landmark_00_converted, landmark_disp,
-                                                cfg[case]['pixel_spacing'])
+                                                args.dirlab_cfg[case]['pixel_spacing'])
 
-    # diff_stats.append([i, mean, std])
-    # print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
-    # diff_stats = np.array(diff_stats)
+    diff_stats.append([i, mean, std])
+    print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+    diff_stats = np.array(diff_stats)
     #
     # # mse = MSE()
     #
     # res['composed_disp_np'] = composed_dis_np
-    # states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
-    #           'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
-    # index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
-    # states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
-    # torch.save(states, os.path.join(states_folder, states_file))
+    states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
+              'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
+    index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
+    states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
+    torch.save(states, os.path.join(states_folder, states_file))
 
     # logging.info(f'save model and optimizer state {states_file}')
     #
