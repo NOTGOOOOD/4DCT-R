@@ -156,12 +156,11 @@ def train_lvl2():
     model_lvl1 = CCRegNet_planB_lv1(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, grid=grid_class).to(device)
 
-    # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-04-08-21-0-27_CCENet_planB_stagelvl1_243_-0.3347.pth'
+    # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-05-19-15-37-02_CCENet_planB_stagelvl2_254_-0.9226.pth'
     model_list = []
     for f in os.listdir('../Model/Stage'):
         if model_name + "stagelvl1" in f:
             model_list.append(os.path.join('../Model/Stage', f))
-
     model_path = sorted(model_list)[-1]
 
     model_lvl1.load_state_dict(torch.load(model_path)['model'])

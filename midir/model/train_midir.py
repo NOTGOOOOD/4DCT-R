@@ -41,7 +41,7 @@ def make_dirs():
 def train():
     print("Training midir...")
     device = args.device
-    img_shape = [144, 192, 160]
+    img_shape = [160, 160, 160]
     cps = (4, 4, 4)
     model = CubicBSplineNet(ndim=3,
                             img_size=img_shape,
