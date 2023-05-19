@@ -9,49 +9,53 @@ dirlab_crop_range = [{},
                       "orign_size": (94, 256, 256)
                       },
                      {"case": 2,
-                      "crop_range": [slice(5, 101), slice(24, 200), slice(8, 248)],
+                      "crop_range": [slice(0, 96), slice(6, 206), slice(0, 256)],
                       "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
                       "orign_size": (112, 256, 256)
                       },
                      {"case": 3,
-                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(28, 212), slice(0, 256)],
                       "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
                       "orign_size": (104, 256, 256)
+                      # clam 0-1250
                       },
                      {"case": 4,
-                      "crop_range": [slice(0, 96), slice(42, 210), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(26, 210), slice(0, 256)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (99, 256, 256)
                       },
                      {"case": 5,
-                      "crop_range": [slice(0, 96), slice(60, 220), slice(10, 250)],
+                      # "crop_range": [slice(0, 96), slice(60, 220), slice(10, 250)],
+                      "crop_range": [slice(0, 96), slice(44, 220), slice(10, 250)],
                       "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
                       "orign_size": (106, 256, 256)
                       },
                      {"case": 6,
-                      "crop_range": [slice(8, 104), slice(144, 328), slice(130, 426)],
+                      # "crop_range": [slice(8, 104), slice(144, 328), slice(130, 426)],
+                      "crop_range": [slice(8, 104), slice(92, 332), slice(100, 444)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 7,
-                      "crop_range": [slice(8, 104), slice(144, 328), slice(112, 424)],
+                      "crop_range": [slice(8, 104), slice(116, 340), slice(108, 428)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (136, 512, 512)
                       },
                      {"case": 8,
-                      "crop_range": [slice(16, 120), slice(84, 300), slice(112, 424)],
+                      "crop_range": [slice(24, 120), slice(80, 304), slice(112, 400)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 9,
-                      "crop_range": [slice(0, 96), slice(126, 334), slice(126, 390)],
+                      "crop_range": [slice(0, 96), slice(120, 328), slice(112, 400)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (128, 512, 512)
                       },
                      {"case": 10,
-                      "crop_range": [slice(0, 96), slice(119, 335), slice(138, 386)],
+                      "crop_range": [slice(0, 96), slice(100, 328), slice(134, 390)],
                       "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
                       "orign_size": (120, 512, 512)
+                      # clam [none,1250]
                       }]
 
 
