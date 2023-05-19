@@ -14,7 +14,7 @@ from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
-from thop import profile
+# from thop import profile
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -146,7 +146,7 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-        break
+        # break
 
 
 def train_lvl2():
@@ -259,7 +259,7 @@ def train_lvl2():
         if step > iteration_lvl2:
             break
 
-        break
+        # break
 
 
 def train_lvl3():
@@ -289,9 +289,9 @@ def train_lvl3():
     model = CCRegNet_planB_lvl3(1, 3, start_channel, is_train=True,
                                 range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
 
-    dummy_input = torch.randn(1, 3, 16, 16, 16)
-
-    flops, params = profile(model, inputs=(dummy_input,dummy_input))
+    # dummy_input = torch.randn(1, 3, 16, 16, 16)
+    #
+    # flops, params = profile(model, inputs=(dummy_input,dummy_input))
 
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss

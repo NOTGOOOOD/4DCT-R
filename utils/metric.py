@@ -88,9 +88,9 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_sa
     # flow[2, :, :, :] = flow[2, :, :, :] * (zz - 1)/2
     # flow[1, :, :, :] = flow[1, :, :, :] * (yy - 1)/2
     # flow[0, :, :, :] = flow[0, :, :, :] * (xx - 1)/2
-    if is_save:
-        fig, ax = plt.subplots(1, 1)
-        ax.imshow(fixed_img[30], cmap='gray')
+    # if is_save:
+    #     fig, ax = plt.subplots(1, 1)
+    #     ax.imshow(fixed_img[30], cmap='gray')
 
     for i in range(300):
         # point before warped
@@ -102,17 +102,17 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_sa
         ori_point = torch.round(f_point + move)
         dist = ori_point - m_landmarks[i]
 
-        if is_save:
-            ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10,
-                       color='red')
-            ax.scatter([ori_point[0].cpu().detach().int().item()], [ori_point[1].cpu().detach().int().item()], 10,
-                       color='green')
-            ax.set_title('landmark')
+        # if is_save:
+        #     ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10,
+        #                color='red')
+        #     ax.scatter([ori_point[0].cpu().detach().int().item()], [ori_point[1].cpu().detach().int().item()], 10,
+        #                color='green')
+        #     ax.set_title('landmark')
 
         all_dist.append(dist * spec)
 
-    if is_save:
-        plt.show()
+    # if is_save:
+    #     plt.show()
 
     all_dist = torch.stack(all_dist)
     pt_errs_phys = torch.sqrt(torch.sum(all_dist * all_dist, 1))
