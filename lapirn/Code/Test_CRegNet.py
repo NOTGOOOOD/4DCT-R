@@ -48,7 +48,7 @@ def test_dirlab(args, checkpoint, is_save=False):
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
-            Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
+            # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
 
@@ -73,9 +73,17 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'],
                                         fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
-            losses.append([_mean.item(), _std.item(), _mse.item(), Jac.item()])
-            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f' % (
-                batch + 1, _mean.item(), _std.item(), _mse.item(), Jac.item()))
+            ncc = NCC(fixed_img.cpu().detach().numpy(), lv3_out.cpu().detach().numpy())
+
+            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
+            jac = jacobian_determinant(lv3_out[0].cpu().detach().numpy())
+
+            # SSIM
+            _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
+
+            losses.append([_mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()])
+            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()))
 
             if is_save:
                 # Save DVF
@@ -102,7 +110,10 @@ def test_dirlab(args, checkpoint, is_save=False):
     mean_std = mean_total[1]
     mean_mse = mean_total[2]
     mean_jac = mean_total[3]
-    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
+    mean_ncc = mean_total[4]
+    mean_ssim = mean_total[5]
+    print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+        mean_tre, mean_std, mean_mse, mean_jac, mean_ncc, mean_ssim))
     # print('mean MSE=%.3f Jac=%.6f' % (mean_mse, mean_jac))
     # # respectively
     # losses = []
@@ -313,8 +324,8 @@ if __name__ == '__main__':
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
-        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
-        test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+        # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
