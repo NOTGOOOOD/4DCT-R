@@ -168,13 +168,13 @@ if __name__ == '__main__':
     )
     model.to(device)
     if args.checkpoint_name is not None:
-        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
-        # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
+        test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
             test_dirlab(args, checkpoint)
-            # test_patient(args, checkpoint)
+            test_patient(args, checkpoint)
 
     # validation(args)

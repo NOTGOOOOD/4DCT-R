@@ -35,7 +35,8 @@ def test_dirlab(args, checkpoint, is_save=False):
                                 range_flow=range_flow, model_lvl2=model_lvl2,
                                 grid=grid_class).cuda()
 
-            model.load_state_dict(torch.load(checkpoint)['model'])
+            # model.load_state_dict(torch.load(checkpoint)['model'])
+            model.load_state_dict(torch.load(checkpoint))
             model.eval()
 
             F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
@@ -122,7 +123,8 @@ def test_patient(args, checkpoint, is_save=False):
                                 range_flow=range_flow, model_lvl2=model_lvl2,
                                 grid=grid_class).cuda()
 
-            model.load_state_dict(torch.load(checkpoint)['model'])
+            # model.load_state_dict(torch.load(checkpoint)['model'])
+            model.load_state_dict(torch.load(checkpoint))
             model.eval()
 
             F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
@@ -221,7 +223,7 @@ if __name__ == '__main__':
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            # test_dirlab(args, checkpoint)
+            test_dirlab(args, checkpoint)
             test_patient(args, checkpoint)
 
     # validation(args)
