@@ -217,17 +217,18 @@ def dirlab_train(file_folder, m_path, f_path):
         # for file_name_fixed in os.listdir(file_folder):
         # every data as a fiexed [T00-T90]
         # fixed_name = file_name_fixed.split('.nii')[0] + '_%02d' % num_fixed + '.nii.gz'
-        for num_moving, file_name_moving in enumerate(os.listdir(file_folder)):
-            if file_name_moving == file_name_fixed:
-                continue
+        if 'T05' in file_name_fixed:
+            for num_moving, file_name_moving in enumerate(os.listdir(file_folder)):
+                if file_name_moving == file_name_fixed:
+                    continue
 
-            new_name = file_name_fixed.split('.nii')[0] + '_T%02d' % num_moving + '.nii.gz'
+                new_name = file_name_fixed.split('.nii')[0] + '_T%02d' % num_moving + '.nii.gz'
 
-            fixed_file_path = os.path.join(f_path, new_name)
-            moving_file_path = os.path.join(m_path, new_name)
+                fixed_file_path = os.path.join(f_path, new_name)
+                moving_file_path = os.path.join(m_path, new_name)
 
-            shutil.copyfile(os.path.join(file_folder, file_name_fixed), fixed_file_path)
-            shutil.copyfile(os.path.join(file_folder, file_name_moving), moving_file_path)
+                shutil.copyfile(os.path.join(file_folder, file_name_fixed), fixed_file_path)
+                shutil.copyfile(os.path.join(file_folder, file_name_moving), moving_file_path)
 
 
 def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resize):
@@ -273,8 +274,8 @@ def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
 
         img = crop_resampling_resize_clamp(img, None,
                                            args.dirlab_cfg[case]['crop_range'][::-1],
-                                           [144, 144, 144],
-                                           [0, 900])
+                                           None,
+                                           [0, 1250])
 
         case_name = 'dirlab_case%02d.nii.gz' % case
         target_file_path = os.path.join(target_path,
@@ -797,35 +798,39 @@ if __name__ == '__main__':
     # make_dir(target_test_fixed_path)
     # make_dir(target_test_moving_path)
 
-    # dirlab数据集img转mhd
-    data_path = r'D:\xxf\dirlab'
-    for item in dirlab_case_cfg.items():
-        case = item[0]
-        shape = item[1]
-        save_path = os.path.join(data_path, 'case%02d' % case)
-        make_dir(save_path)
-        img_path = f'E:\datasets\dirlab\img\Case{case}Pack\Images'
-
-        # crop, resample,resize
-        # dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=[160, 160, 160])
-
-        # make a train set
-        m_path = r'D:\xxf\dirlab\moving'
-        f_path = r'D:\xxf\dirlab\fixed'
-        make_dir(m_path)
-        make_dir(f_path)
-        file_folder = os.path.join(r'D:\xxf\dirlab', 'case%02d' % case)
-        dirlab_train(file_folder, m_path, f_path)
-        print('case %02d done!' % case)
-
-    # dirlab for test
-    # print("dirlab: ")
-    #
+    # # dirlab数据集img转mhd
+    # data_path = r'D:\xxf\test_ori'
+    # make_dir(data_path)
     # for item in dirlab_case_cfg.items():
     #     case = item[0]
     #     shape = item[1]
-    #     img_path = os.path.join(project_folder, f'datasets/dirlab/img/Case{case}Pack/Images')
-    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+    #     save_path = os.path.join(data_path, 'case%02d' % case)
+    #     make_dir(save_path)
+    #     img_path = f'E:\datasets\dirlab\img\Case{case}Pack\Images'
+    #
+    #     # crop, resample,resize
+    #     dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=None)
+    #
+    #     # make a train set
+    #     # m_path = os.path.join(data_path, 'moving_small')
+    #     # f_path = os.path.join(data_path, 'fixed_small')
+    #     # make_dir(m_path)
+    #     # make_dir(f_path)
+    #     # file_folder = os.path.join(data_path, 'case%02d' % case)
+    #     # dirlab_train(file_folder, m_path, f_path)
+    #     # print('case %02d done!' % case)
+
+    # dirlab for test
+    print("dirlab: ")
+    target_test_fixed_path = f'd:/xxf/test_ori/fixed'
+    target_test_moving_path = f'd:/xxf/test_ori/moving'
+    make_dir(target_test_moving_path)
+    make_dir(target_test_fixed_path)
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        shape = item[1]
+        img_path = f'E:\datasets\dirlab\img\Case{case}Pack\Images'
+        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # # COPD数据集img转nii.gz
     # print("copd: ")
