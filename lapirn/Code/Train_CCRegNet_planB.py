@@ -14,6 +14,7 @@ from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
+
 # from thop import profile
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -261,7 +262,7 @@ def train_lvl2():
         # break
 
 
-def train_lvl3():
+def train_lvl3(load=False, **cfg):
     print("Training lvl3...")
     device = args.device
 
@@ -269,6 +270,8 @@ def train_lvl3():
                                     range_flow=range_flow, grid=grid_class).to(device)
     model_lvl2 = CCRegNet_planB_lv2(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
+
+    if load: model_name = cfg['model_name']
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
     # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-20-40-00_lapirn_corr_att_planB_stagelvl2_000_-0.6411.pth'
@@ -319,6 +322,18 @@ def train_lvl3():
     #     temp_lossall = np.load("../Model/loss_LDR_LPBA_NCC_lap_share_preact_1_05_3000.npy")
     #     lossall[:, 0:3000] = temp_lossall[:, 0:3000]
     best_loss = 99.
+
+    if load:
+        continue_point = torch.load(load_path)
+        model.load_state_dict(continue_point['model'])
+        optimizer.load_state_dict(continue_point['optimizer'])
+        stop_criterion.ncc_loss_list = continue_point['simi_loss']
+        stop_criterion.jac_loss_list = continue_point['reg_loss']
+        stop_criterion.train_loss_list = continue_point['train_loss']
+        stop_criterion.total_loss_list = continue_point['total_loss']
+        step = cfg['new_step']
+        best_loss = cfg['best_loss']
+
 
     while step <= iteration_lvl3:
         lossall = []
@@ -416,6 +431,15 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
-    train_lvl1()
-    train_lvl2()
-    train_lvl3()
+
+    load = True
+    if load:
+        load_path = r'D:\xxf\4DCT-R\lapirn\Model\2023-05-19-19-49-12_CCENet_planB_stagelvl3_1017_-1.4242.pth'
+        model_name = "{}_CCENet_planB_".format('2023-05-19-19-49-12')
+        new_step = 1018
+        best_loss = -1.4242
+        train_lvl3(load, load_path=load_path, new_step=new_step, best_loss=best_loss, model_name=model_name)
+    else:
+        train_lvl1()
+        train_lvl2()
+        train_lvl3()
