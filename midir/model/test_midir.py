@@ -60,8 +60,8 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
             losses.append([_mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()])
-            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f NCC=%.5f' % (
-                batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item(),ncc.item()))
+            # print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f NCC=%.5f' % (
+            #     batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item(),ncc.item()))
 
             losses.append([_mse.item(), jac, _ssim.item(), ncc.item(), _mean.item(), _std.item()])
 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
                                         landmark_files=landmark_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-05-01-09-43-29'
+    prefix = '2023-05-19-19-51-13'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
