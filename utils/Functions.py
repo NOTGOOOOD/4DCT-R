@@ -69,7 +69,7 @@ class SpatialTransformer(nn.Module):
             input_image += torch.zeros_like(new_grid)
             new_grid += torch.zeros_like(input_image)
 
-        warped_input_img = F.grid_sample(input_image, new_grid * norm_coeff /2., mode='bilinear', align_corners=True,
+        warped_input_img = F.grid_sample(input_image, new_grid * norm_coeff -1., mode='bilinear', align_corners=True,
                                          padding_mode='border')
         return warped_input_img
 
