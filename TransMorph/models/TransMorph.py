@@ -255,7 +255,7 @@ class SwinTransformerBlock(nn.Module):
         else:
             x = shifted_x
 
-        if pad_r > 0 or pad_b > 0:
+        if pad_r > 0 or pad_b > 0 or pad_h > 0:
             x = x[:, :H, :W, :T, :].contiguous()
 
         x = x.view(B, H * W * T, C)
@@ -439,13 +439,9 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        """
-        这个卷积层的作用是将输入图像分解为一系列大小为patch_size的块，并将每个块转换为embed_dim维的向量。
-        """
+
         self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        """
-        如果提供了norm_layer参数，则使用该参数创建一个名为norm的规范化层。否则，将self.norm设置为None
-        """
+
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -705,7 +701,7 @@ class SwinTransformer(nn.Module):
                 norm_layer = getattr(self, f'norm{i}')
                 x_out = norm_layer(x_out)
 
-                out = x_out.view(-1, H, W, T, self.num_features[i]).permute(0, 4, 1, 2, 3).contiguous()
+                out = x_out.view(-1, H, W, T, self.num_features[i]).permute(0, 4, 3, 1, 2).contiguous()
                 outs.append(out)
         return outs
 
@@ -879,12 +875,11 @@ class TransMorph(nn.Module):
             out_channels=3,
             kernel_size=3,
         )
-        self.spatial_trans = SpatialTransformer(config.img_size)
         self.avg_pool = nn.AvgPool3d(3, stride=2, padding=1)
         self.STN = SpatialTransformerself()
 
     def forward(self, x, infer=False):
-        source = x[:, 0:1, :, :]
+        source = x[:, 0:1, ...]
         if self.if_convskip:
             x_s0 = x.clone()
             x_s1 = self.avg_pool(x)
@@ -894,7 +889,8 @@ class TransMorph(nn.Module):
             f4 = None
             f5 = None
 
-        out_feats = self.transformer(x)
+        # x-> d h w->h w d
+        out_feats = self.transformer(x.permute(0, 1, 3, 4, 2))
 
         if self.if_transskip:
             f1 = out_feats[-2]
