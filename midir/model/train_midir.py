@@ -1,5 +1,4 @@
 import os
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import sys
@@ -11,21 +10,70 @@ import time
 
 from utils.config import get_args
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model
+from utils.utilize import set_seed, save_model, load_landmarks
+from utils.metric import landmark_loss
 
 set_seed(20)
 
 from network import CubicBSplineNet
 from loss import LNCCLoss, l2reg_loss
-from utils.datagenerators import Dataset
+from utils.datagenerators import Dataset, DirLabDataset
 from utils.Functions import validation_midir, generate_grid
 from utils.losses import NCC, neg_Jdet_loss
 from transformation import CubicBSplineFFDTransform, warp
 
+args = get_args()
 
-# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+def test_dirlab(args, checkpoint, is_save=False):
+    with torch.no_grad():
+        losses = []
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            moving_img = moving.to(args.device).float()
+            fixed_img = fixed.to(args.device).float()
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+
+            img_shape = fixed_img.shape[2:]
+
+            transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
+                                                   , svf_steps=7
+                                                   , svf_scale=1)
+            model = CubicBSplineNet(ndim=3,
+                                    img_size=img_shape,
+                                    cps=(4, 4, 4)).to(args.device)
+
+            model.load_state_dict(torch.load(checkpoint)['model'])
+            model.eval()
+
+            svf = model(fixed_img, moving_img)  # b,c,d,h,w
+            flow, disp = transformer(svf)
+            # wapred_x = warp(moving_img, disp)
+            # ncc = NCC(fixed_img.cpu().detach().numpy(), wapred_x.cpu().detach().numpy())
+            # jac = jacobian_determinant(disp[0].cpu().detach().numpy())
+            #
+            # # MSE
+            # _mse = MSE(fixed_img, wapred_x)
+            # # SSIM
+            # _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], wapred_x.cpu().detach().numpy()[0, 0])
+
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+            # TRE
+            _mean, _std = landmark_loss(disp[0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0], is_save)
+
+            losses.append([_mean.item(), _std.item()])
+
+    mean_total = np.mean(losses, 0)
+    mean_tre = mean_total[0]
+    mean_std = mean_total[1]
+    # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
+    print('mean TRE=%.2f+-%.2f' % (mean_tre, mean_std))
 
 def make_dirs():
     if not os.path.exists(args.model_dir):
@@ -61,7 +109,8 @@ def train():
     # weight for l2 reg
     reg_weight = 0.08
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.9)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
     #                                             step_size=100,
     #                                             gamma=0.1,
@@ -150,6 +199,10 @@ def train():
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
+        # test
+        if step % 5 ==0:
+            test_dirlab(args, modelname)
+
         if stop_criterion.stop():
             break
 
@@ -159,7 +212,6 @@ def train():
 
 
 if __name__ == "__main__":
-    args = get_args()
 
     lr = args.lr
 
@@ -171,6 +223,19 @@ if __name__ == "__main__":
                               file_name.lower().endswith('.gz')])
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
+
+    landmark_list = load_landmarks(args.landmark_dir)
+    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    dir_moving_folder = os.path.join(args.test_dir, 'moving')
+
+    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_dir_file_list = sorted(
+        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+         file_name.lower().endswith('.gz')])
+    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                        landmark_files=landmark_list)
+    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     make_dirs()
 

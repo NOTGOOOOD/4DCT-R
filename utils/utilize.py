@@ -1,4 +1,5 @@
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
 import SimpleITK as sitk
 import numpy as np
@@ -8,7 +9,7 @@ from PIL import Image
 import random
 import torch.nn as nn
 
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 
 
 def show_slice(img_mov):

@@ -8,17 +8,49 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.datagenerators import Dataset, PatientDataset
+from utils.datagenerators import Dataset, PatientDataset, DirLabDataset
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks, save_model
 from utils.scheduler import StopCriterion
-from utils.metric import get_test_photo_loss
+from utils.metric import get_test_photo_loss, landmark_loss
 from utils.Functions import validation_vm
 
 args = get_args()
 
+def test_dirlab(args, model):
+    with torch.no_grad():
+        model.eval()
+        losses = []
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            moving_img = moving.to(args.device).float()
+            fixed_img = fixed.to(args.device).float()
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+
+            y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
+
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+            # TRE
+            _mean, _std = landmark_loss(y_pred[1][0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0])
+
+            losses.append([_mean.item(), _std.item()])
+            # print('case=%d after warped, TRE=%.2f+-%.2f' % (
+            #     batch + 1, _mean.item(), _std.item()))
+
+    mean_total = np.mean(losses, 0)
+    mean_tre = mean_total[0]
+    mean_std = mean_total[1]
+
+    print('mean TRE=%.2f+-%.2f' % (
+        mean_tre, mean_std))
 
 def count_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -47,16 +79,11 @@ def train():
                               file_name.lower().endswith('.gz')])
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
-
-    # test_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    # test_moving_folder = os.path.join(args.test_dir, 'moving')
-
-    # test_fixed_list = sorted(
-    #     [os.path.join(test_fixed_folder, file_name) for file_name in os.listdir(test_fixed_folder) if
-    #      file_name.lower().endswith('.gz')])
-    # test_moving_list = sorted(
-    #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
-    #      file_name.lower().endswith('.gz')])
+    # load data
+    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    # test_dataset = PatientDataset(moving_files=test_moving_list, fixed_files=test_fixed_list)
+    print("Number of training images: ", len(train_dataset))
+    train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
     enc_nf = [16, 32, 32, 32]
     dec_nf = [32, 32, 32, 32, 32, 16, 16]
@@ -96,17 +123,12 @@ def train():
     # scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
     # stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
 
-    # load data
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    # test_dataset = PatientDataset(moving_files=test_moving_list, fixed_files=test_fixed_list)
-    print("Number of training images: ", len(train_dataset))
-    train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+
     # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     stop_criterion = StopCriterion()
     best_loss = 99.
     # Training
-    train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    for i in range(1, args.n_iter + 1):
+    for i in range(0, args.n_iter + 1):
         model.train()
         loss_total = []
         print('iter:{} start'.format(i))
@@ -196,6 +218,8 @@ def train():
         if stop_criterion.stop():
             break
 
+        if i % 10 ==0:
+            test_dirlab(args, model)
 
 if __name__ == "__main__":
     with warnings.catch_warnings():
@@ -214,4 +238,19 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+
+
+    landmark_list = load_landmarks(args.landmark_dir)
+    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    dir_moving_folder = os.path.join(args.test_dir, 'moving')
+
+    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_dir_file_list = sorted(
+        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+         file_name.lower().endswith('.gz')])
+    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                        landmark_files=landmark_list)
+    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
     train()
