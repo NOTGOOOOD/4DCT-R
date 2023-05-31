@@ -19,7 +19,7 @@ from network import CubicBSplineNet
 from loss import LNCCLoss, l2reg_loss
 from utils.datagenerators import Dataset, DirLabDataset
 from utils.Functions import validation_midir, generate_grid
-from utils.losses import NCC, neg_Jdet_loss
+from utils.losses import NCC, neg_Jdet_loss, MILossGaussian
 from transformation import CubicBSplineFFDTransform, warp
 
 args = get_args()
@@ -101,20 +101,25 @@ def train():
         model.load_state_dict(torch.load(model_path)['model'])
 
     # loss_similarity = LNCCLoss(window_size=7)
-    loss_similarity = NCC(win=7)
+    # loss_similarity = NCC(win=7)
+    loss_similarity = MILossGaussian()
     transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
                                            , svf_steps=7
                                            , svf_scale=1)
 
     # weight for l2 reg
-    reg_weight = 0.08
+    reg_weight = 0.1
 
-    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.9)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
     #                                             step_size=100,
     #                                             gamma=0.1,
     #                                             last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                step_size=50,
+                                                gamma=0.1,
+                                                last_epoch=-1)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     model_dir = '../Model'
@@ -127,7 +132,7 @@ def train():
     train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
-    stop_criterion = StopCriterion()
+    stop_criterion = StopCriterion(patient_len=200)
     step = 0
     best_loss = 99.
 
@@ -146,10 +151,10 @@ def train():
             loss_ncc = loss_similarity(wapred_x, Y)
             loss_reg = l2reg_loss(disp)
 
-            grid = generate_grid(img_shape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
+            # grid = generate_grid(img_shape)
+            # grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
-            loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
+            # loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
 
             loss = loss_ncc + loss_reg * reg_weight
 
@@ -159,11 +164,11 @@ def train():
 
             # lossall[:, step] = np.array(
             #     [loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()])
-            lossall.append([loss.item(), loss_ncc.item(), loss_Jacobian.item(), loss_reg.item()])
+            lossall.append([loss.item(), loss_ncc.item(), loss_reg.item()])
 
             sys.stdout.write(
-                "\r" + 'midir:step:batch "{0}:{1}" -> training loss "{2:.4f}" - sim_NCC "{3:4f}" - Jdet "{4:.10f}" -smo "{5:.4f}"'.format(
-                    step, batch, loss.item(), loss_ncc.item(), loss_Jacobian.item(), loss_reg.item()))
+                "\r" + 'midir:step:batch "{0}:{1}" -> training loss "{2:.4f}" - sim_NCC "{3:4f}" -smo "{4:.4f}"'.format(
+                    step, batch, loss.item(), loss_ncc.item(), loss_reg.item()))
             sys.stdout.flush()
 
             # if batch == 0:
@@ -175,7 +180,7 @@ def train():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_midir(args, model, img_shape,
                                                                                     loss_similarity)
-        # scheduler.step()
+        scheduler.step()
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(

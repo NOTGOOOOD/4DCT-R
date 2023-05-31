@@ -5,15 +5,18 @@ import torch
 import torch.utils.data as Data
 import logging
 import time
+import torch.nn.functional as F
+import copy
 
-from utils.Functions import get_loss, validation_ccregnet, Grid
+from utils.Functions import get_loss, Grid, AdaptiveSpatialTransformer, transform_unit_flow_to_flow_cuda
 from CCRegNet_planB import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
-from utils.datagenerators import Dataset
+from utils.datagenerators import Dataset, DirLabDataset
 from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
+from utils.metric import landmark_loss, jacobian_determinant, SSIM, MSE, NCC as mtNCC
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model
+from utils.utilize import set_seed, save_model, load_landmarks
 
 # from thop import profile
 
@@ -35,12 +38,36 @@ iteration_lvl1 = args.iteration_lvl1
 iteration_lvl2 = args.iteration_lvl2
 iteration_lvl3 = args.iteration_lvl3
 
-fixed_folder = os.path.join(args.train_dir, 'fixed')
-moving_folder = os.path.join(args.train_dir, 'moving')
-f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+train_fixed_folder = os.path.join(args.train_dir, 'fixed')
+train_moving_folder = os.path.join(args.train_dir, 'moving')
+f_train_list = sorted([os.path.join(train_fixed_folder, file_name) for file_name in os.listdir(train_fixed_folder) if
+                       file_name.lower().endswith('.gz')])
+m_train_list = sorted(
+    [os.path.join(train_moving_folder, file_name) for file_name in os.listdir(train_moving_folder) if
+     file_name.lower().endswith('.gz')])
+
+landmark_list = load_landmarks(args.landmark_dir)
+dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+dir_moving_folder = os.path.join(args.test_dir, 'moving')
+
+f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
                           file_name.lower().endswith('.gz')])
-m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                          file_name.lower().endswith('.gz')])
+m_dir_file_list = sorted(
+    [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+     file_name.lower().endswith('.gz')])
+test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                    landmark_files=landmark_list)
+test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+val_fixed_folder = os.path.join(args.val_dir, 'fixed')
+val_moving_folder = os.path.join(args.val_dir, 'moving')
+f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
+                     file_name.lower().endswith('.gz')])
+m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
+                     file_name.lower().endswith('.gz')])
+
+val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
+val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
 
 def make_dirs():
@@ -52,6 +79,92 @@ def make_dirs():
         os.makedirs(args.log_dir)
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
+
+
+def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
+    transform = AdaptiveSpatialTransformer()
+
+    # upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
+    with torch.no_grad():
+        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
+        losses = []
+        for batch, (moving, fixed) in enumerate(val_loader):
+            input_moving = moving[0].to('cuda').float()
+            input_fixed = fixed[0].to('cuda').float()
+            pred = model(input_moving, input_fixed)
+            F_X_Y = pred[0]
+
+            if scale_factor > 1:
+                F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
+                                      align_corners=True, recompute_scale_factor=False)
+
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1),
+                               grid_class.get_grid(input_moving.shape[2:], True))
+            mse_loss = MSE(X_Y_up, input_fixed)
+            ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
+
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid_class.get_grid(input_moving.shape[2:]))
+            # loss_Jacobian = jacobian_determinant(F_X_Y[0].cpu().detach().numpy())
+
+            # reg2 - use velocity
+            _, _, z, y, x = F_X_Y.shape
+            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
+            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
+            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
+            loss_regulation = smoothloss(F_X_Y)
+            # loss_regulation = bending_energy_loss(F_X_Y)
+            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
+
+            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
+
+        mean_loss = np.mean(losses, 0)
+        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+
+
+def test_dirlab(args, model):
+    model_tmp = copy.deepcopy(model)
+    model_tmp.eval()
+    with torch.no_grad():
+        losses = []
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            moving_img = moving.to(args.device).float()
+            fixed_img = fixed.to(args.device).float()
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+
+            pred = model_tmp(moving_img, fixed_img)
+            F_X_Y = pred[0]  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            lv3_out = pred[3]
+
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+            F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+
+            # TRE
+            _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0])
+
+            ncc = mtNCC(fixed_img.cpu().detach().numpy(), lv3_out.cpu().detach().numpy())
+
+            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
+            jac = jacobian_determinant(lv3_out[0].cpu().detach().numpy())
+
+            # SSIM
+            ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
+
+            losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
+
+    mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
+
+    print('mean TRE=%.2f+-%.2f NCC=%.6f SSIM=%.6f J=%.6f' % (
+        mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac))
 
 
 def train_lvl1():
@@ -75,7 +188,7 @@ def train_lvl1():
     # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
     #                                      shuffle=True, num_workers=2)
 
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     stop_criterion = StopCriterion()
@@ -187,7 +300,7 @@ def train_lvl2():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     step = 0
@@ -262,7 +375,7 @@ def train_lvl2():
         # break
 
 
-def train_lvl3(load=False, **cfg):
+def train_lvl3(**cfg):
     print("Training lvl3...")
     device = args.device
 
@@ -271,7 +384,7 @@ def train_lvl3(load=False, **cfg):
     model_lvl2 = CCRegNet_planB_lv2(1, 3, start_channel, is_train=True,
                                     range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
-    if load: model_name = cfg['model_name']
+    model_name = cfg['model_name']
 
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
     # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-20-40-00_lapirn_corr_att_planB_stagelvl2_000_-0.6411.pth'
@@ -308,7 +421,7 @@ def train_lvl3(load=False, **cfg):
 
     # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
     #                                      shuffle=True, num_workers=2)
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
     train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
 
     stop_criterion = StopCriterion()
@@ -323,7 +436,7 @@ def train_lvl3(load=False, **cfg):
     #     lossall[:, 0:3000] = temp_lossall[:, 0:3000]
     best_loss = 99.
 
-    if load:
+    if cfg['load']:
         continue_point = torch.load(load_path)
         model.load_state_dict(continue_point['model'])
         optimizer.load_state_dict(continue_point['optimizer'])
@@ -333,7 +446,6 @@ def train_lvl3(load=False, **cfg):
         stop_criterion.total_loss_list = continue_point['total_loss']
         step = cfg['new_step']
         best_loss = cfg['best_loss']
-
 
     while step <= iteration_lvl3:
         lossall = []
@@ -401,6 +513,9 @@ def train_lvl3(load=False, **cfg):
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
+        # if step % 2 == 0:
+        test_dirlab(args, model)
+
         if stop_criterion.stop():
             break
 
@@ -434,12 +549,12 @@ if __name__ == "__main__":
 
     load = True
     if load:
-        load_path = r'D:\xxf\4DCT-R\lapirn\Model\2023-05-19-19-49-12_CCENet_planB_stagelvl3_1017_-1.4242.pth'
-        model_name = "{}_CCENet_planB_".format('2023-05-19-19-49-12')
-        new_step = 1018
-        best_loss = -1.4242
-        train_lvl3(load, load_path=load_path, new_step=new_step, best_loss=best_loss, model_name=model_name)
+        load_path = r'D:\xxf\4DCT-R\lapirn\Model\2023-05-22-12-45-35_CCENet_planB_stagelvl3_365_-1.4669.pth'
+        model_name = "{}_CCENet_planB_".format('2023-05-22-12-45-35')
+        new_step = 366
+        best_loss = -1.4708
+        train_lvl3(load=True, load_path=load_path, new_step=new_step, best_loss=best_loss, model_name=model_name)
     else:
         train_lvl1()
         train_lvl2()
-        train_lvl3()
+        train_lvl3(load=False, model_name=model_name)

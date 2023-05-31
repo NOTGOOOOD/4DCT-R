@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+
 import torch
 import torch.nn as nn
 from torch import optim
@@ -8,15 +9,17 @@ import logging
 import time
 import torch.utils.data as Data
 
-from utils.Functions import SpatialTransformer as SpatialTransformer
 from utils.config import get_args
 from utils.losses import NCC, neg_Jdet_loss, Grad3d
 from utils.datagenerators import Dataset, DirLabDataset
-from utils.metric import landmark_loss
-from utils.utilize import save_model, load_landmarks
+from utils.metric import landmark_loss, jacobian_determinant, SSIM, NCC as mtNCC
+from utils.utilize import save_model, load_landmarks, set_seed
 from utils.scheduler import StopCriterion
+from utils.Functions import SpatialTransformer
 from models.TransMorph import CONFIGS as CONFIGS_TM
 import models.TransMorph as TransMorph
+
+set_seed(1024)
 
 
 class AverageMeter(object):
@@ -42,18 +45,6 @@ class AverageMeter(object):
         self.std = np.std(self.vals)
 
 
-class register_model(nn.Module):
-    def __init__(self, img_size=(64, 256, 256), mode='bilinear'):
-        super(register_model, self).__init__()
-        self.spatial_trans = SpatialTransformer()
-
-    def forward(self, x):
-        img = x[0].cuda()
-        flow = x[1].cuda()
-        out = self.spatial_trans(img, flow)
-        return out
-
-
 def make_dirs():
     if not os.path.exists(args.model_dir):
         os.makedirs(args.model_dir)
@@ -66,7 +57,7 @@ def make_dirs():
 def test_dirlab(args, model):
     with torch.no_grad():
         losses = []
-        losses_re = []
+        # losses_re = []
         model.eval()
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
             x = moving.to(args.device).float()
@@ -77,6 +68,12 @@ def test_dirlab(args, model):
             x_in = torch.cat((x, y), dim=1)
             flow = model(x_in, True)  # warped,DVF
 
+            x_def = STN(x, flow)
+
+            ncc = mtNCC(y.cpu().detach().numpy(), x_def.cpu().detach().numpy())
+            jac = jacobian_determinant(flow.squeeze().cpu().detach().numpy())
+            ssim = SSIM(y.cpu().detach().numpy()[0, 0], x_def.cpu().detach().numpy()[0, 0])
+
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
             # TRE
             _mean, _std = landmark_loss(flow[0], landmarks00 - torch.tensor(
@@ -86,38 +83,40 @@ def test_dirlab(args, model):
                                                                                                                   3).cuda(),
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'],
                                         y.cpu().detach().numpy()[0, 0])
-            losses.append([_mean.item(), _std.item()])
             # print('case=%d after warped, TRE=%.2f+-%.2f' % (
             #     batch + 1, _mean.item(), _std.item()))
 
             # flip moving and fixed images
-            y_in = torch.cat((y, x), dim=1)
-            flow = model(y_in, True)
-            # TRE
-            _mean, _std = landmark_loss(flow[0], landmarks50 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks00 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        y.cpu().detach().numpy()[0, 0])
-            losses_re.append([_mean.item(), _std.item()])
+            # y_in = torch.cat((y, x), dim=1)
+            # flow = model(y_in, True)
+            # # TRE
+            # _mean, _std = landmark_loss(flow[0], landmarks50 - torch.tensor(
+            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+            #                             landmarks00 - torch.tensor(
+            #                                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+            #                                                                                                       3).cuda(),
+            #                             args.dirlab_cfg[batch + 1]['pixel_spacing'],
+            #                             y.cpu().detach().numpy()[0, 0])
+            # losses_re.append([_mean.item(), _std.item()])
             # print('case=%d after warped, TRE=%.2f+-%.2f' % (
             #     batch + 1, _mean.item(), _std.item()))
+            losses.append([_mean.item(), _std.item(), jac, ncc.item(), ssim.item()])
+            # print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+            #     batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
     mean_std = mean_total[1]
-
-    mean_total_re = np.mean(losses_re, 0)
-    mean_tre_re = mean_total_re[0]
-    mean_std_re = mean_total_re[1]
-    print('mean TRE=%.2f+-%.2f  Re: TRE=%.2f+-%.2f' % (
-        mean_tre, mean_std, mean_tre_re, mean_std_re))
+    mean_jac = mean_total[2]
+    mean_ncc = mean_total[3]
+    mean_ssim = mean_total[4]
+    print('mean TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+        mean_tre, mean_std, mean_jac, mean_ncc, mean_ssim))
 
 
 def main():
-    weights = [1, 0.02]  # loss weights
+    weights = [1, 1]  # loss weights
     epoch_start = 0
     max_epoch = 500  # max traning epoch
     cont_training = False  # if continue training
@@ -131,14 +130,6 @@ def main():
     model = TransMorph.TransMorph(config)
     model.cuda()
 
-    '''
-    Initialize spatial transformation function
-    '''
-    reg_model = register_model(config.img_size, 'nearest')
-    reg_model.cuda()
-    reg_model_bilin = register_model(config.img_size, 'bilinear')
-    reg_model_bilin.cuda()
-
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = image_loss_func_NCC
     criterions = [criterion]
@@ -149,9 +140,7 @@ def main():
     if cont_training:
         checkpoint = r'D:\TransMorph_Transformer_for_Medical_Image_Registration_main\TransMorph\model\2023-05-07-15-12-52_TM__133_1.0887best.pth'
         model.load_state_dict(torch.load(checkpoint)['model'])
-        optimizer.load_state_dict(torch.load(checkpoint)['o'
-                                                         ''
-                                                         'ptimizer'])
+        optimizer.load_state_dict(torch.load(checkpoint)['optimizer'])
 
     # writer = SummaryWriter(log_dir = save_dir)
     best_loss = 99.
@@ -165,9 +154,9 @@ def main():
         idx = 0
         model.train()
         # for data in train_loader:
+        adjust_learning_rate(optimizer, epoch, max_epoch, lr)
         for batch, (moving, fixed) in enumerate(train_loader):
             idx += 1
-            adjust_learning_rate(optimizer, epoch, max_epoch, lr)
             x = moving[0].to(device).float()
             y = fixed[0].to(device).float()
 
@@ -185,85 +174,82 @@ def main():
             loss.backward()
             optimizer.step()
 
-            del x_in
-            del output
-
-            # flip fixed and moving images
-            loss = 0
-            x_in = torch.cat((y, x), dim=1)
-            output = model(x_in)
-            for n, loss_function in enumerate(criterions):
-                curr_loss = loss_function(output[n], x) * weights[n]
-                loss_vals[n] += curr_loss
-                loss += curr_loss
             loss_all.update(loss.item(), y.numel())
-            # compute gradient and do SGD step
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
+            # del x_in
+            # del output
+            #
+            # # flip fixed and moving images
+            # loss = 0
+            # x_in = torch.cat((y, x), dim=1)
+            # output = model(x_in)
+            # for n, loss_function in enumerate(criterions):
+            #     curr_loss = loss_function(output[n], x) * weights[n]
+            #     loss_vals[n] += curr_loss
+            #     loss += curr_loss
+            # loss_all.update(loss.item(), y.numel())
+            # # compute gradient and do SGD step
+            # optimizer.zero_grad()
+            # loss.backward()
+            # optimizer.step()
             # print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader), loss.item(), loss_vals[0].item()/2, loss_vals[1].item()/2))
             sys.stdout.write(
                 "\r" + 'Transmorph:step:batch "{0}:{1}" -> training loss "{2:.4f}" - sim_NCC "{3:4f}" -smo "{4:.4f}"'.format(
-                    epoch, batch, loss.item(), loss_vals[0].item()/2, loss_vals[1].item() / 2))
+                    epoch, batch, loss.item(), loss_vals[0].item() / 2, loss_vals[1].item() / 2))
             sys.stdout.flush()
 
-            # logging.info("img_name:{}".format(moving[1][0]))
-            # logging.info("TM, epoch: %d  iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
-            #     epoch, idx, len(train_loader), loss.item(), loss_vals[0].item() / 2, loss_vals[1].item() / 2))
+            logging.info("img_name:{}".format(moving[1][0]))
+            logging.info("TM, epoch: %d  iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
+                epoch, idx, len(train_loader), loss.item(), loss_vals[0].item() / 2, loss_vals[1].item() / 2))
 
         print('Train: Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
-        '''
-        Validation
-        '''
+        # val
+        # with torch.no_grad():
+        #     # for data in val_loader:
+        #     model.eval()
+        #     losses = []
+        #     for batch, (moving, fixed) in enumerate(val_loader):
+        #         x = moving[0].to('cuda').float()
+        #         y = fixed[0].to('cuda').float()
+        #         x_in = torch.cat((x, y), dim=1)
+        #         output = model(x_in)  # [warped,DVF]
+        #
+        #         loss_Jacobian = criterions[1](output[1], y)
+        #         ncc_loss_ori = image_loss_func_NCC(output[0], y)
+        #
+        #         loss_sum = ncc_loss_ori + weights[1] * loss_Jacobian
+        #         losses.append([ncc_loss_ori.item(), loss_Jacobian.item(), loss_sum.item()])
+        #
+        #     mean_loss = np.mean(losses, 0)
+        #     val_ncc_loss, val_jac_loss, val_total_loss = mean_loss
 
-        with torch.no_grad():
-            # for data in val_loader:
-            model.eval()
-            losses = []
-            for batch, (moving, fixed) in enumerate(val_loader):
-                x = moving[0].to('cuda').float()
-                y = fixed[0].to('cuda').float()
-                x_in = torch.cat((x, y), dim=1)
-                output = model(x_in)  # [warped,DVF]
-
-                loss_Jacobian = criterions[1](output[1], y)
-                ncc_loss_ori = image_loss_func_NCC(output[0], y)
-
-                loss_sum = ncc_loss_ori + weights[1] * loss_Jacobian
-                losses.append([ncc_loss_ori.item(), loss_Jacobian.item(), loss_sum.item()])
-
-            mean_loss = np.mean(losses, 0)
-            val_ncc_loss, val_jac_loss, val_total_loss = mean_loss
-
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
-
-        if val_total_loss <= best_loss:
-            best_loss = val_total_loss
-            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
-            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}best.pth'.format(
-                val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
-        else:
-            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}.pth'.format(
-                val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        # stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+        #
+        # if val_total_loss <= best_loss:
+        #     best_loss = val_total_loss
+        #     # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}best.pth'.format(
+        #         val_total_loss)
+        #     logging.info("save model:{}".format(modelname))
+        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+        #                stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        # else:
+        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}.pth'.format(
+        #         val_total_loss)
+        #     logging.info("save model:{}".format(modelname))
+        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+        #                stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         # mean_loss = np.mean(np.array(loss_total), 0)
-        print(
-            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-                loss_all.avg, val_ncc_loss, val_jac_loss, val_total_loss))
+        # print(
+        #     "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+        #         loss_all.avg, val_ncc_loss, val_jac_loss, val_total_loss))
 
         loss_all.reset()
 
         # test
-        if epoch % 5 == 0:
-            test_dirlab(args, model)
+        # if epoch % 5 == 0:
+        test_dirlab(args, model)
 
         if stop_criterion.stop():
             break
@@ -342,5 +328,7 @@ if __name__ == '__main__':
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+
+    STN = SpatialTransformer()
 
     main()

@@ -113,16 +113,15 @@ class RegNet_pairwise(nn.Module):
         Whether to add instance normalization after activation. The default is True.
     '''
 
-    def __init__(self, dim, scale=1, depth=5, initial_channels=64, normalization=True):
+    def __init__(self, dim, scale=1, depth=5, initial_channels=64, normalization=False):
 
         super().__init__()
         assert dim in (2, 3)
         self.dim = dim
         self.scale = scale
-
         # self.unet = unet.UNet(in_channels=2, out_channels=dim, dim=dim, depth=depth, initial_channels=initial_channels,
         #                       normalization=normalization)
-        self.unet = unet.UNet3D(in_channel=2, n_classes=3)
+        self.unet = unet.UNet3D(in_channel=2, n_classes=3, norm=normalization)
         self.spatial_transform = SpatialTransformer(self.dim)
 
     def forward(self, fixed_image, moving_image):
@@ -165,7 +164,7 @@ class RegNet_pairwise(nn.Module):
 
         warped_moving_image = self.spatial_transform(moving_image, disp)  # (h, w) or (d, h, w)
 
-        res = {'disp': disp, 'scaled_disp': scaled_disp,
+        res = {'disp': disp, 'scaled_disp': disp,
                'warped_moving_image': warped_moving_image}
         return res
 

@@ -208,68 +208,6 @@ def imgnorm(img):
     return norm_img
 
 
-def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
-    fixed_folder = os.path.join(args.val_dir, 'fixed')
-    moving_folder = os.path.join(args.val_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-    transform = AdaptiveSpatialTransformer()
-
-    # upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
-    with torch.no_grad():
-        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
-        losses = []
-        for batch, (moving, fixed) in enumerate(val_loader):
-            input_moving = moving[0].to('cuda').float()
-            input_fixed = fixed[0].to('cuda').float()
-            pred = model(input_moving, input_fixed)
-            F_X_Y = pred[0]
-
-            if scale_factor > 1:
-                F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
-                                      align_corners=True, recompute_scale_factor=False)
-
-            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1),
-                               grid_class.get_grid(input_moving.shape[2:], True))
-            mse_loss = MSE(X_Y_up, input_fixed)
-            ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-
-            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid_class.get_grid(input_moving.shape[2:]))
-            # loss_Jacobian = jacobian_determinant(F_X_Y[0].cpu().detach().numpy())
-
-            # reg2 - use velocity
-            _, _, z, y, x = F_X_Y.shape
-            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
-            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
-            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
-            loss_regulation = smoothloss(F_X_Y)
-            # loss_regulation = bending_energy_loss(F_X_Y)
-            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
-
-            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
-            # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
-            # save_img(X_Y, args.output_dir + '/warpped_moving.nii.gz')
-            # m_name = "{}_warped.nii.gz".format(moving[1][0].split('.nii')[0])
-            # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-            # save_image(X_Y, input_fixed, args.output_dir, m_name)
-            # if batch == 0:
-            #     m_name = '{0}_{1}.nii.gz'.format(imgshape[0], step)
-            #     save_image(pred[1], input_fixed, args.output_dir, m_name)
-            #     m_name = '{0}_{1}_up.nii.gz'.format(imgshape[0], step)
-            #     save_image(X_Y_up, input_fixed, args.output_dir, m_name)
-
-        mean_loss = np.mean(losses, 0)
-        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
-
-
 def validation_lapirn_ori(args, model, loss_similarity, grid_class, scale_factor):
     max_smooth = 10.
     antifold = args.antifold

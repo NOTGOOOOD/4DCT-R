@@ -7,15 +7,16 @@ from torch.optim import SGD
 import torch.utils.data as Data
 from tqdm import tqdm
 import time
+import copy
 
 from utils.Functions import SpatialTransform_unit, generate_grid
 from utils.losses import NCC, gradient_loss, neg_Jdet_loss
 from utils.config import get_args
-from utils.datagenerators import Dataset, PatientDataset
+from utils.datagenerators import Dataset, PatientDataset, DirLabDataset
 from GDIR.model import regnet
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model, save_image, count_parameters
-from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC
+from utils.utilize import set_seed, save_model, save_image, count_parameters, load_landmarks
+from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC, landmark_loss
 
 
 def make_dirs():
@@ -35,7 +36,7 @@ def test_patient(args, checkpoint, is_save=False):
         model.eval()
         losses = []
         for batch, (moving, fixed, img_name) in enumerate(test_loader_patient):
-            if batch==6: break
+            if batch == 6: break
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
@@ -77,6 +78,52 @@ def test_patient(args, checkpoint, is_save=False):
     mean_ncc = mean_total[3]
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
     print('mean SSIM=%.5f Jac=%.8f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
+
+
+def test_dirlab(args, model):
+    with torch.no_grad():
+        model.eval()
+        losses = []
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            moving_img = moving.to(args.device).float()
+            fixed_img = fixed.to(args.device).float()
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+
+            res = model(moving_img, fixed_img)  # b, c, d, h, w warped_image, flow_m2f
+            warped_image, flow = res['warped_moving_image'], res['disp']
+
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+
+            norm_coeff = 2. / (torch.tensor(moving_img.shape[2:][::-1], dtype=flow.dtype,
+                                            device=flow.device) - 1.)
+
+            flow_norm = copy.deepcopy(flow)
+            # z, y, x = moving_img.shape[2:]
+            # flow_norm[:, 2, :, :, :] = flow_norm[:, 2, :, :, :] * (z - 1) / 2.
+            # flow_norm[:, 1, :, :, :] = flow_norm[:, 1, :, :, :] * (y - 1) / 2.
+            # flow_norm[:, 0, :, :, :] = flow_norm[:, 0, :, :, :] * (x - 1) / 2.
+            # flow_norm = flow_norm.permute(0, 2, 3, 4, 1) / norm_coeff
+            # flow_norm = flow_norm.permute(0, 4, 1, 2, 3)
+            # TRE
+            _mean, _std = landmark_loss(flow_norm[0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0])
+
+            losses.append([_mean.item(), _std.item()])
+            # print('case=%d after warped, TRE=%.2f+-%.2f' % (
+            #     batch + 1, _mean.item(), _std.item()))
+
+    mean_total = np.mean(losses, 0)
+    mean_tre = mean_total[0]
+    mean_std = mean_total[1]
+
+    print('mean TRE=%.2f+-%.2f' % (
+        mean_tre, mean_std))
 
 
 def validation(args, model, loss_similarity, loss_reg):
@@ -121,36 +168,17 @@ def train_unet():
     #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
     #      file_name.lower().endswith('.gz')])
 
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=True)
     model = model.to(device)
 
     print(count_parameters(model))
 
-    # Set optimizer and losses
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
-    # prepare image loss
-
     image_loss_func = NCC(win=args.win_size)
-
-    # # need two image loss functions if bidirectional
-    # if args.bidir:
-    #     losses = [image_loss_func, image_loss_func]
-    #     weights = [0.5, 0.5]
-    # else:
-    #     losses = [image_loss_func]
-    #     weights = [1]
-
-    # prepare deformation loss
     regular_loss = gradient_loss
 
-    # # set scheduler
-    # scheduler = WarmupCosineSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=args.n_iter)
-    # stop_criterion = StopCriterion(stop_std=args.stop_std, query_len=args.stop_query_len)
-
     # load data
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    # test_dataset = PatientDataset(moving_files=test_moving_list, fixed_files=test_fixed_list)
+    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -221,6 +249,8 @@ def train_unet():
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
+        test_dirlab(args, model)
+
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
         if stop_criterion.stop():
             break
@@ -237,25 +267,28 @@ if __name__ == "__main__":
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_unet_lr{}_".format(train_time, args.lr)
 
-    set_seed(1024)
+    set_seed(42)
     make_dirs()
 
-    fixed_folder = os.path.join(args.train_dir, 'fixed')
-    moving_folder = os.path.join(args.train_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
+    fixed_folder_train = os.path.join(args.train_dir, 'fixed')
+    moving_folder_train = os.path.join(args.train_dir, 'moving')
+    f_train_list = sorted(
+        [os.path.join(fixed_folder_train, file_name) for file_name in os.listdir(fixed_folder_train) if
+         file_name.lower().endswith('.gz')])
+    m_train_list = sorted(
+        [os.path.join(moving_folder_train, file_name) for file_name in os.listdir(moving_folder_train) if
+         file_name.lower().endswith('.gz')])
     # img_shape = [144, 192, 160]
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device
 
     # ===========validation=================
-    fixed_folder = os.path.join(args.val_dir, 'fixed')
+    fixed_folder_val = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
-    f_img_file_list_vali = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                                   file_name.lower().endswith('.gz')])
+    f_img_file_list_vali = sorted(
+        [os.path.join(fixed_folder_val, file_name) for file_name in os.listdir(fixed_folder_val) if
+         file_name.lower().endswith('.gz')])
     m_img_file_list_vali = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                                    file_name.lower().endswith('.gz')])
 
@@ -263,37 +296,51 @@ if __name__ == "__main__":
     val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     # =======================================
 
-    # train_unet()
+    landmark_list = load_landmarks(args.landmark_dir)
+    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+    dir_moving_folder = os.path.join(args.test_dir, 'moving')
 
-    # ==============test====================
-    pa_fixed_folder = r'E:\datasets\registration\test_ori\fixed'
-    # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    pa_moving_folder = r'E:\datasets\registration\test_ori\moving'
-    # pa_moving_folder = r'D:\xxf\test_patient\moving'
-
-    f_patient_file_list = sorted(
-        [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
+    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_dir_file_list = sorted(
+        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
          file_name.lower().endswith('.gz')])
-    m_patient_file_list = sorted(
-        [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
-         file_name.lower().endswith('.gz')])
+    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                        landmark_files=landmark_list)
+    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
-                                          num_workers=0)
+    train_unet()
 
-    prefix = '2023-04-21-17-47-16'
-    model_dir = args.checkpoint_path
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
-    model = model.to(device)
-
-    if args.checkpoint_name is not None:
-        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
-        test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
-    else:
-        checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
-        for checkpoint in checkpoint_list:
-            print(checkpoint)
-            # test_dirlab(args, checkpoint)
-            test_patient(args, checkpoint)
-    # =======================================
+    # # ==============test====================
+    # pa_fixed_folder = r'E:\datasets\registration\test_ori\fixed'
+    # # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # pa_moving_folder = r'E:\datasets\registration\test_ori\moving'
+    # # pa_moving_folder = r'D:\xxf\test_patient\moving'
+    #
+    # f_patient_file_list = sorted(
+    #     [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
+    #      file_name.lower().endswith('.gz')])
+    # m_patient_file_list = sorted(
+    #     [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
+    #      file_name.lower().endswith('.gz')])
+    #
+    # test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
+    # test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
+    #                                       num_workers=0)
+    #
+    # prefix = '2023-04-21-17-47-16'
+    # model_dir = args.checkpoint_path
+    # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
+    # model = model.to(device)
+    #
+    # model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
+    # if args.checkpoint_name is not None:
+    #     test_dirlab(args, model)
+    #     # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+    # else:
+    #     checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+    #     for checkpoint in checkpoint_list:
+    #         print(checkpoint)
+    #         test_dirlab(args, checkpoint)
+    #         # test_patient(args, checkpoint)
+    # # =======================================

@@ -1,4 +1,5 @@
 import os
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
 import SimpleITK as sitk
@@ -10,9 +11,10 @@ import random
 import torch.nn as nn
 
 
-
-
 def show_slice(img_mov):
+    if type(img_mov) == torch.Tensor:
+        img_mov = img_mov.detach().cpu().numpy()
+
     fig, ax = plt.subplots(1, 1)
     if len(img_mov.shape) == 5:
         img_mov = img_mov[0, 0]

@@ -5,8 +5,9 @@ import torch
 import torch.utils.data as Data
 import logging
 import time
+import torch.nn.functional as F
 
-from utils.Functions import get_loss, validation_ccregnet, Grid
+from utils.Functions import get_loss, Grid, transform_unit_flow_to_flow_cuda, AdaptiveSpatialTransformer
 from CCENet_single import CCRegNet_planB_lv1, \
     CCRegNet_planB_lv2, CCRegNet_planB_lvl3
 from utils.datagenerators import Dataset
@@ -14,6 +15,7 @@ from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model
+from utils.metric import MSE
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -40,6 +42,15 @@ f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in
 m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                           file_name.lower().endswith('.gz')])
 
+val_fixed_folder = os.path.join(args.val_dir, 'fixed')
+val_moving_folder = os.path.join(args.val_dir, 'moving')
+f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
+                     file_name.lower().endswith('.gz')])
+m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
+                     file_name.lower().endswith('.gz')])
+
+val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
+val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
 def make_dirs():
     if not os.path.exists(args.model_dir):
@@ -51,6 +62,46 @@ def make_dirs():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
+def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
+    transform = AdaptiveSpatialTransformer()
+
+    # upsample = torch.nn.Upsample(scale_factor=scale_factor, mode="trilinear")
+    with torch.no_grad():
+        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
+        losses = []
+        for batch, (moving, fixed) in enumerate(val_loader):
+            input_moving = moving[0].to('cuda').float()
+            input_fixed = fixed[0].to('cuda').float()
+            pred = model(input_moving, input_fixed)
+            F_X_Y = pred[0]
+
+            if scale_factor > 1:
+                F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
+                                      align_corners=True, recompute_scale_factor=False)
+
+            X_Y_up = transform(input_moving, F_X_Y.permute(0, 2, 3, 4, 1),
+                               grid_class.get_grid(input_moving.shape[2:], True))
+            mse_loss = MSE(X_Y_up, input_fixed)
+            ncc_loss_ori = loss_similarity(X_Y_up, input_fixed)
+
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+
+            loss_Jacobian = neg_Jdet_loss(F_X_Y_norm, grid_class.get_grid(input_moving.shape[2:]))
+            # loss_Jacobian = jacobian_determinant(F_X_Y[0].cpu().detach().numpy())
+
+            # reg2 - use velocity
+            _, _, z, y, x = F_X_Y.shape
+            F_X_Y[:, 2, :, :, :] = F_X_Y[:, 2, :, :, :] * (z - 1)
+            F_X_Y[:, 1, :, :, :] = F_X_Y[:, 1, :, :, :] * (y - 1)
+            F_X_Y[:, 0, :, :, :] = F_X_Y[:, 0, :, :, :] * (x - 1)
+            loss_regulation = smoothloss(F_X_Y)
+            # loss_regulation = bending_energy_loss(F_X_Y)
+            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian + args.smooth * loss_regulation
+
+            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
+
+        mean_loss = np.mean(losses, 0)
+        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 def train_lvl1():
     print("Training lvl1...")
@@ -145,7 +196,6 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-        # break
 
 def train_lvl2():
     print("Training lvl2...")

@@ -20,6 +20,19 @@ from utils.datagenerators import DirLabDataset, PatientDataset
 
 
 def test_dirlab(args, checkpoint, is_save=False):
+    model_lvl1 = CRegNet_lv1(1, 3, args.initial_channels, is_train=True,
+                             range_flow=range_flow, grid=grid_class).cuda()
+    model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=True,
+                             range_flow=range_flow,
+                             model_lvl1=model_lvl1, grid=grid_class).cuda()
+
+    model = CRegNet_lv3(1, 3, args.initial_channels, is_train=False,
+                        range_flow=range_flow, model_lvl2=model_lvl2,
+                        grid=grid_class).cuda()
+
+    model.load_state_dict(torch.load(checkpoint)['model'])
+    model.eval()
+
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
@@ -28,25 +41,12 @@ def test_dirlab(args, checkpoint, is_save=False):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            model_lvl1 = CRegNet_lv1(1, 3, args.initial_channels, is_train=True,
-                                     range_flow=range_flow, grid=grid_class).cuda()
-            model_lvl2 = CRegNet_lv2(1, 3, args.initial_channels, is_train=True,
-                                     range_flow=range_flow,
-                                     model_lvl1=model_lvl1, grid=grid_class).cuda()
-
-            model = CRegNet_lv3(1, 3, args.initial_channels, is_train=False,
-                                range_flow=range_flow, model_lvl2=model_lvl2,
-                                grid=grid_class).cuda()
-
-            model.load_state_dict(torch.load(checkpoint)['model'])
-            model.eval()
-
             F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
-
-            # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
 
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
+
+            # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
 
             # Jac = neg_Jdet_loss(F_X_Y_cpu.unsqueeze(0).permute(0, 2, 3, 4, 1), grid_class.get_grid(lv3_out.shape[2:]))
 
@@ -85,25 +85,27 @@ def test_dirlab(args, checkpoint, is_save=False):
             print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
                 batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()))
 
-            if is_save:
-                # Save DVF
-                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-                m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
-                save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
-                           m2f_name)
-
-                # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
-                # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-                # save_image(X_Y, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
-                save_image(lv1_out, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-                save_image(lv2_out, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
-                save_image(lv3_out, fixed_img, args.output_dir, m_name)
+            # if is_save:
+            #     # F_X_Y_cpu = F_X_Y[0, :, :, :, :]
+            #     # F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
+            #     # Save DVF
+            #     # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+            #     m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
+            #     save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
+            #                m2f_name)
+            #
+            #     # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
+            #     # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
+            #     # save_image(X_Y, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
+            #     save_image(lv1_out, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+            #     save_image(lv2_out, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
+            #     save_image(lv3_out, fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]

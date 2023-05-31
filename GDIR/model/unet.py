@@ -1,25 +1,26 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.distributions.normal import Normal
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channel, n_classes):
+    def __init__(self, in_channel, n_classes, norm=False):
         self.in_channel = in_channel
         self.n_classes = n_classes
         super(UNet3D, self).__init__()
-        self.ec0 = self.encoder(self.in_channel, 32, bias=False, batchnorm=False)
-        self.ec1 = self.encoder(32, 64, bias=False, batchnorm=False)
-        self.ec2 = self.encoder(64, 64, bias=False, batchnorm=False)
-        self.ec3 = self.encoder(64, 128, bias=False, batchnorm=False)
-        self.ec4 = self.encoder(128, 128, bias=False, batchnorm=False)
-        self.ec5 = self.encoder(128, 256, bias=False, batchnorm=False)
-        self.ec6 = self.encoder(256, 256, bias=False, batchnorm=False)
-        self.ec7 = self.encoder(256, 512, bias=False, batchnorm=False)
+        self.ec0 = self.encoder(self.in_channel, 32, bias=False, batchnorm=norm)
+        self.ec1 = self.encoder(32, 64, bias=False, batchnorm=norm)
+        self.ec2 = self.encoder(64, 64, bias=False, batchnorm=norm)
+        self.ec3 = self.encoder(64, 128, bias=False, batchnorm=norm)
+        self.ec4 = self.encoder(128, 128, bias=False, batchnorm=norm)
+        self.ec5 = self.encoder(128, 256, bias=False, batchnorm=norm)
+        self.ec6 = self.encoder(256, 256, bias=False, batchnorm=norm)
+        self.ec7 = self.encoder(256, 512, bias=False, batchnorm=norm)
 
-        self.pool0 = nn.AvgPool3d(2)
-        self.pool1 = nn.AvgPool3d(2)
-        self.pool2 = nn.AvgPool3d(2)
+        self.pool0 = nn.MaxPool3d(2)
+        self.pool1 = nn.MaxPool3d(2)
+        self.pool2 = nn.MaxPool3d(2)
 
         self.dc9 = self.decoder(512, 512, kernel_size=3, stride=1, padding=1, bias=False)
         self.dc8 = self.decoder(256 + 512, 256, kernel_size=3, stride=1, padding=1, bias=False)
@@ -30,14 +31,18 @@ class UNet3D(nn.Module):
         self.dc3 = self.decoder(128, 128, kernel_size=3, stride=1, padding=1, bias=False)
         self.dc2 = self.decoder(64 + 128, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.dc1 = self.decoder(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.dc0 = self.decoder(64, n_classes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.dc0 = self.decoder(64, 16, kernel_size=3, stride=1, padding=1, bias=False)
+
+        self.flow = nn.Conv3d(16, 3, kernel_size=3, padding=1)
+        self.flow.weight = nn.Parameter(Normal(0, 1e-5).sample(self.flow.weight.shape))
+        self.flow.bias = nn.Parameter(torch.zeros(self.flow.bias.shape))
 
     def encoder(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
                 bias=True, batchnorm=False):
         if batchnorm:
             layer = nn.Sequential(
                 nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
+                nn.InstanceNorm3d(out_channels),
                 nn.LeakyReLU(0.2))
         else:
             layer = nn.Sequential(
@@ -56,17 +61,23 @@ class UNet3D(nn.Module):
     def forward(self, x):
         e0 = self.ec0(x)
         syn0 = self.ec1(e0)
-        e1 = self.pool0(syn0)
+        # e1 = self.pool0(syn0)
+        e1 = F.interpolate(syn0, scale_factor=0.5, mode='trilinear',
+                           align_corners=True, recompute_scale_factor=False)
         e2 = self.ec2(e1)
         syn1 = self.ec3(e2)
         del e0, e1, e2
 
-        e3 = self.pool1(syn1)
+        # e3 = self.pool1(syn1)
+        e3 = F.interpolate(syn1, scale_factor=0.5, mode='trilinear',
+                           align_corners=True, recompute_scale_factor=False)
         e4 = self.ec4(e3)
         syn2 = self.ec5(e4)
         del e3, e4
 
-        e5 = self.pool2(syn2)
+        # e5 = self.pool2(syn2)
+        e5 = F.interpolate(syn2, scale_factor=0.5, mode='trilinear',
+                           align_corners=True, recompute_scale_factor=False)
         e6 = self.ec6(e5)
         e7 = self.ec7(e6)
         del e5, e6
@@ -105,7 +116,7 @@ class UNet3D(nn.Module):
         del d3, d2
 
         d0 = self.dc0(d1)
-        return d0
+        return self.flow(d0)
 
 
 class UNet(nn.Module):

@@ -90,10 +90,6 @@ class CCRegNet_planB_lv1(nn.Module):
 
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
-        # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
-        # self.cross_att = Cross_head(self.start_channel * 4, 3)
-
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 5, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2),
