@@ -244,7 +244,7 @@ def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resiz
         img = crop_resampling_resize_clamp(img, resize,
                                            args.dirlab_cfg[case]['crop_range'][::-1],
                                            None,
-                                           [None, 900])
+                                           [None, 1250])
 
         case_name = 'dirlab_case%02d_T%02d.nii.gz' % (case, num)
         target_file_path = os.path.join(save_path,
@@ -798,8 +798,8 @@ if __name__ == '__main__':
     # make_dir(target_test_fixed_path)
     # make_dir(target_test_moving_path)
 
-    # # dirlab数据集img转mhd
-    # data_path = r'D:\xxf\test_ori'
+    # dirlab
+    # data_path = r'D:\xxf\dirlab_160'
     # make_dir(data_path)
     # for item in dirlab_case_cfg.items():
     #     case = item[0]
@@ -809,21 +809,21 @@ if __name__ == '__main__':
     #     img_path = f'E:\datasets\dirlab\img\Case{case}Pack\Images'
     #
     #     # crop, resample,resize
-    #     dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=None)
+    #     dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=[160, 160, 160])
     #
     #     # make a train set
-    #     # m_path = os.path.join(data_path, 'moving_small')
-    #     # f_path = os.path.join(data_path, 'fixed_small')
-    #     # make_dir(m_path)
-    #     # make_dir(f_path)
-    #     # file_folder = os.path.join(data_path, 'case%02d' % case)
-    #     # dirlab_train(file_folder, m_path, f_path)
-    #     # print('case %02d done!' % case)
+    #     m_path = os.path.join(data_path, 'moving')
+    #     f_path = os.path.join(data_path, 'fixed')
+    #     make_dir(m_path)
+    #     make_dir(f_path)
+    #     file_folder = os.path.join(data_path, 'case%02d' % case)
+    #     dirlab_train(file_folder, m_path, f_path)
+    #     print('case %02d done!' % case)
 
     # dirlab for test
     print("dirlab: ")
-    target_test_fixed_path = f'd:/xxf/test_ori/fixed'
-    target_test_moving_path = f'd:/xxf/test_ori/moving'
+    target_test_fixed_path = f'd:/xxf/test_ori_spa/fixed'
+    target_test_moving_path = f'd:/xxf/test_ori_spa/moving'
     make_dir(target_test_moving_path)
     make_dir(target_test_fixed_path)
     for item in dirlab_case_cfg.items():
