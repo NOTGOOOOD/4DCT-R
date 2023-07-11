@@ -54,7 +54,7 @@ def test_dirlab(args, checkpoint, is_save=False):
                 save_image(torch.permute(y_pred[1][0], (1, 2, 3, 0)), fixed_img[0], args.output_dir,
                            m2f_name)
 
-                m_name = "{}_warped_vm.nii.gz".format(img_name[0][:13])
+                m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
                 save_image(y_pred[0], fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)

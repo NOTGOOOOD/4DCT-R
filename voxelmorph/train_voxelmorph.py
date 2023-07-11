@@ -218,8 +218,8 @@ def train():
         if stop_criterion.stop():
             break
 
-        if i % 10 ==0:
-            test_dirlab(args, model)
+
+        test_dirlab(args, model)
 
 if __name__ == "__main__":
     with warnings.catch_warnings():

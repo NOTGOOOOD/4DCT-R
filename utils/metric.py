@@ -79,9 +79,11 @@ def calc_tre(disp_t2i, landmark_00_converted, landmark_disp, spacing):
     return np.mean(diff), np.std(diff)
 
 
-def landmark_loss(flow, m_landmarks, f_landmarks, spacing, fixed_img=None, is_save=False):
+def landmark_loss(flow, m_landmarks, f_landmarks, spacing=None, fixed_img=None, is_save=False):
     # flow + fixed - moving
-    spec = torch.tensor(spacing).cuda()
+    spec = 1
+    if spacing is not None:
+        spec = torch.tensor(spacing).cuda()
 
     all_dist = []
     # zz, yy, xx = flow[0].shape
