@@ -12,7 +12,7 @@ from utils.metric import MSE, SSIM, NCC, jacobian_determinant, landmark_loss
 from utils.utilize import save_image, load_landmarks
 from utils.Functions import SpatialTransformer
 
-def test_dirlab(args, checkpoint):
+def test_dirlab(args, checkpoint, is_save=False):
     model.load_state_dict(torch.load(checkpoint)['model'])
 
     with torch.no_grad():
@@ -41,11 +41,20 @@ def test_dirlab(args, checkpoint):
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
                                                                                                                   3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        y.cpu().detach().numpy()[0, 0])
+                                        None)
             losses.append([_mean.item(), _std.item(), mse.item(), jac, ncc.item(), ssim.item()])
             print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
                 batch + 1, _mean.item(), _std.item(), mse.item(), jac, ncc.item(), ssim.item()))
+
+            if is_save:
+                # Save DVF
+                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+                m2f_name = img_name[0][:13] + '_flow_TM.nii.gz'
+                save_image(torch.permute(flow[0], (1, 2, 3, 0)), y[0], args.output_dir,
+                           m2f_name)
+
+                m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
+                save_image(x_def, y, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
@@ -104,8 +113,7 @@ if __name__ == '__main__':
     model = model.to(device)
 
     if args.checkpoint_name is not None:
-        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
-        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name))
+        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:

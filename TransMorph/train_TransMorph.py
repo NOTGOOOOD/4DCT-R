@@ -10,7 +10,7 @@ import time
 import torch.utils.data as Data
 
 from utils.config import get_args
-from utils.losses import NCC, neg_Jdet_loss, Grad3d
+from utils.losses import NCC, neg_Jdet_loss, Grad3d, Grad
 from utils.datagenerators import Dataset, DirLabDataset
 from utils.metric import landmark_loss, jacobian_determinant, SSIM, NCC as mtNCC
 from utils.utilize import save_model, load_landmarks, set_seed
@@ -118,7 +118,7 @@ def test_dirlab(args, model):
 def main():
     weights = [1, 1]  # loss weights
     epoch_start = 0
-    max_epoch = 500  # max traning epoch
+    max_epoch = 50000  # max traning epoch
     cont_training = False  # if continue training
 
     image_loss_func_NCC = NCC(win=args.win_size)
@@ -130,11 +130,14 @@ def main():
     model = TransMorph.TransMorph(config)
     model.cuda()
 
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = image_loss_func_NCC
-    criterions = [criterion]
-    criterions += [Grad3d(
-        penalty='l2')]  # criterions 被定义为一个列表，首先包含了一个均方误差损失函数 nn.MSELoss()，然后又添加了一个基于梯度的正则化损失函数 losses.Grad3d()。这个列表中的损失函数将在模型训练过程中被同时使用，以帮助模型学习更好的特征表示和更稳定的模型。
+    # optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    regular_loss = Grad('l2', loss_mult=2).loss
+    image_loss_func = image_loss_func_NCC
+    # criterion = image_loss_func_NCC
+    # criterions = [criterion]
+    # criterions += [Grad3d(
+    #     penalty='l2')]  # criterions 被定义为一个列表，首先包含了一个均方误差损失函数 nn.MSELoss()，然后又添加了一个基于梯度的正则化损失函数 losses.Grad3d()。这个列表中的损失函数将在模型训练过程中被同时使用，以帮助模型学习更好的特征表示和更稳定的模型。
 
     stop_criterion = StopCriterion()
     if cont_training:
@@ -154,7 +157,7 @@ def main():
         idx = 0
         model.train()
         # for data in train_loader:
-        adjust_learning_rate(optimizer, epoch, max_epoch, lr)
+        # adjust_learning_rate(optimizer, epoch, max_epoch, lr)
         for batch, (moving, fixed) in enumerate(train_loader):
             idx += 1
             x = moving[0].to(device).float()
@@ -165,32 +168,41 @@ def main():
 
             loss = 0
             loss_vals = []
-            for n, loss_function in enumerate(criterions):
-                curr_loss = loss_function(output[n], y) * weights[n]
-                loss_vals.append(curr_loss)
-                loss += curr_loss
+
+            sim_loss = image_loss_func(output[0], y)
+            loss_vals.append(sim_loss)
+
+            r_loss = args.alpha * regular_loss(None, output[1])
+            loss_vals.append(r_loss)
+
+            loss = r_loss + sim_loss
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             loss_all.update(loss.item(), y.numel())
-            # del x_in
-            # del output
-            #
-            # # flip fixed and moving images
-            # loss = 0
-            # x_in = torch.cat((y, x), dim=1)
-            # output = model(x_in)
-            # for n, loss_function in enumerate(criterions):
-            #     curr_loss = loss_function(output[n], x) * weights[n]
-            #     loss_vals[n] += curr_loss
-            #     loss += curr_loss
-            # loss_all.update(loss.item(), y.numel())
-            # # compute gradient and do SGD step
-            # optimizer.zero_grad()
-            # loss.backward()
-            # optimizer.step()
+            del x_in
+            del output
+            del sim_loss
+            del r_loss
+
+            # flip fixed and moving images
+            x_in = torch.cat((y, x), dim=1)
+            output = model(x_in)
+            loss = 0
+
+            sim_loss = image_loss_func(output[0], x)
+            r_loss = args.alpha * regular_loss(None, output[1])
+            loss_vals[0] += sim_loss
+            loss_vals[1] += r_loss
+
+            loss = r_loss + sim_loss
+            loss_all.update(loss.item(), y.numel())
+            # compute gradient and do SGD step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
             # print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader), loss.item(), loss_vals[0].item()/2, loss_vals[1].item()/2))
             sys.stdout.write(
                 "\r" + 'Transmorph:step:batch "{0}:{1}" -> training loss "{2:.4f}" - sim_NCC "{3:4f}" -smo "{4:.4f}"'.format(
@@ -203,47 +215,47 @@ def main():
 
         print('Train: Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
-        # val
-        # with torch.no_grad():
-        #     # for data in val_loader:
-        #     model.eval()
-        #     losses = []
-        #     for batch, (moving, fixed) in enumerate(val_loader):
-        #         x = moving[0].to('cuda').float()
-        #         y = fixed[0].to('cuda').float()
-        #         x_in = torch.cat((x, y), dim=1)
-        #         output = model(x_in)  # [warped,DVF]
-        #
-        #         loss_Jacobian = criterions[1](output[1], y)
-        #         ncc_loss_ori = image_loss_func_NCC(output[0], y)
-        #
-        #         loss_sum = ncc_loss_ori + weights[1] * loss_Jacobian
-        #         losses.append([ncc_loss_ori.item(), loss_Jacobian.item(), loss_sum.item()])
-        #
-        #     mean_loss = np.mean(losses, 0)
-        #     val_ncc_loss, val_jac_loss, val_total_loss = mean_loss
+        # validation
+        with torch.no_grad():
+            # for data in val_loader:
+            model.eval()
+            losses = []
+            for batch, (moving, fixed) in enumerate(val_loader):
+                x = moving[0].to('cuda').float()
+                y = fixed[0].to('cuda').float()
+                x_in = torch.cat((x, y), dim=1)
+                output = model(x_in)  # [warped,DVF]
 
-        # stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
-        #
-        # if val_total_loss <= best_loss:
-        #     best_loss = val_total_loss
-        #     # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
-        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}best.pth'.format(
-        #         val_total_loss)
-        #     logging.info("save model:{}".format(modelname))
-        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-        #                stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
-        # else:
-        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}.pth'.format(
-        #         val_total_loss)
-        #     logging.info("save model:{}".format(modelname))
-        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
-        #                stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+                reg_loss = regular_loss(None, output[1])
+                ncc_loss_ori = image_loss_func(output[0], y)
+
+                loss_sum = ncc_loss_ori + args.alpha * reg_loss
+                losses.append([ncc_loss_ori.item(), reg_loss.item(), loss_sum.item()])
+
+            mean_loss = np.mean(losses, 0)
+            val_ncc_loss, val_jac_loss, val_total_loss = mean_loss
+
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}best.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        else:
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(epoch) + '{:.4f}.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         # mean_loss = np.mean(np.array(loss_total), 0)
-        # print(
-        #     "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-        #         loss_all.avg, val_ncc_loss, val_jac_loss, val_total_loss))
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                loss_all.avg, val_ncc_loss, val_jac_loss, val_total_loss))
 
         loss_all.reset()
 
