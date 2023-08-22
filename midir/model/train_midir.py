@@ -76,8 +76,8 @@ def test_dirlab(args, checkpoint, is_save=False):
     print('mean TRE=%.2f+-%.2f' % (mean_tre, mean_std))
 
 def make_dirs():
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):

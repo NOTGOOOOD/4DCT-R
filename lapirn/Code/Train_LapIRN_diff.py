@@ -55,8 +55,8 @@ from Test_CRegNet import validation
 # opt = parser.parse_args()
 
 def make_dirs():
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):

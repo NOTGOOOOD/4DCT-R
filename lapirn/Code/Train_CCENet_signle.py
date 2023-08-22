@@ -53,8 +53,8 @@ val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
 val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
 def make_dirs():
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):
