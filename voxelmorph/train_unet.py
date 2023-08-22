@@ -111,8 +111,7 @@ def test_dirlab(args, model):
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
                                                                                                                   3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        fixed_img.cpu().detach().numpy()[0, 0])
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
             losses.append([_mean.item(), _std.item()])
             # print('case=%d after warped, TRE=%.2f+-%.2f' % (
@@ -171,7 +170,7 @@ def train_unet():
     model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=True)
     model = model.to(device)
 
-    print(count_parameters(model))
+    print(count_parameters(model.unet))
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
     image_loss_func = NCC(win=args.win_size)
@@ -182,7 +181,7 @@ def train_unet():
     print("Number of training images: ", len(train_dataset))
     train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    stop_criterion = StopCriterion()
+    stop_criterion = StopCriterion(min_epoch=300)
     best_loss = 99.
     # Training
     for i in range(1, args.n_iter + 1):
@@ -262,7 +261,7 @@ if __name__ == "__main__":
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-    model_dir = 'model'
+    model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_unet_lr{}_".format(train_time, args.lr)

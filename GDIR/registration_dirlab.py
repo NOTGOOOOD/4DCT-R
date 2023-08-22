@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from GDIR.process.processing import data_standardization_0_n, imgTomhd, data_standardization_min_max
 import random
-from utils.metric import MSE, NCC
+from utils.metric import SSIM, NCC as mtNCC, jacobian_determinant
 
 plot_dpi = 300
 import numpy as np
@@ -69,62 +69,9 @@ def set_seed(seed=1024):
     torch.backends.cudnn.deterministic = True
 
 
-# size:z y x spacing: x y z
-# cfg_bak = [{},
-#        {"case": 1,
-#         "crop_range": [slice(0, 81), slice(43, 199), slice(10, 250)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (94, 256, 256)
-#         },
-#        {"case": 2,
-#         "crop_range": [slice(5, 98), slice(30, 195), slice(8, 243)],
-#         "pixel_spacing": np.array([1.16, 1.16, 2.5], dtype=np.float32),
-#         "orign_size": (112, 256, 256)
-#         },
-#        {"case": 3,
-#         "crop_range": [slice(0, 95), slice(42, 209), slice(10, 248)],
-#         "pixel_spacing": np.array([1.15, 1.15, 2.5], dtype=np.float32),
-#         "orign_size": (104, 256, 256)
-#         },
-#        {"case": 4,
-#         "crop_range": [slice(0, 90), slice(45, 209), slice(11, 242)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (99, 256, 256)
-#         },
-#        {"case": 5,
-#         "crop_range": [slice(0, 90), slice(60, 222), slice(16, 237)],
-#         "pixel_spacing": np.array([1.10, 1.10, 2.5], dtype=np.float32),
-#         "orign_size": (106, 256, 256)
-#         },
-#        {"case": 6,
-#         "crop_range": [slice(10, 107), slice(144, 328), slice(132, 426)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (128, 512, 512)
-#         },
-#        {"case": 7,
-#         "crop_range": [slice(13, 108), slice(141, 331), slice(114, 423)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (136, 512, 512)
-#         },
-#        {"case": 8,
-#         "crop_range": [slice(18, 118), slice(84, 299), slice(113, 390)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (128, 512, 512)
-#         },
-#        {"case": 9,
-#         "crop_range": [slice(0, 70), slice(126, 334), slice(128, 390)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (128, 512, 512)
-#         },
-#        {"case": 10,
-#         "crop_range": [slice(0, 90), slice(119, 333), slice(140, 382)],
-#         "pixel_spacing": np.array([0.97, 0.97, 2.5], dtype=np.float32),
-#         "orign_size": (120, 512, 512)
-#         }]
-
 config = dict(
     dim=3,  # dimension of the input image
-    scale=0.5,
+    scale=0.3,
     initial_channels=32,
     depth=4,
     max_num_iteration=300,
@@ -142,7 +89,7 @@ config = dict(
     stop_query_len=200,
 )
 config = utils.structure.Struct(**config)
-project_path = get_project_path("4DCT-R")
+project_path = get_project_path("4DCT")
 states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -169,7 +116,7 @@ def train(case=1):
     crop_range2_start = crop_range2.start
 
     # landmark
-    landmark_file = os.path.join(project_path, f'data/dirlab/Case0{case}_300_00_50.pt')
+    landmark_file = os.path.join(project_path, 'data/dirlab/Case{%02d}_300_00_50.pt' % (case) )
     landmark_info = torch.load(landmark_file)
     landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
     landmark_00 = landmark_info['landmark_00']
@@ -195,6 +142,8 @@ def train(case=1):
         image_list.append(stkimg)
 
     input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
+    input_image = input_image.float()
+
     if config.group_index_list is not None:
         input_image = input_image[config.group_index_list]
 
@@ -363,7 +312,12 @@ def train(case=1):
                                           grid_tuple, landmark_00_converted, landmark_disp,
                                           args.dirlab_cfg[case]['pixel_spacing'])
             diff_stats.append([i, mean, std])
-            print(f'\ndiff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+
+
+            ncc = mtNCC(res['warped_input_image'].cpu().detach().numpy(), res['template'].cpu().detach().numpy())
+            jac = jacobian_determinant(res['disp_t2i'][0].cpu().detach().numpy())
+            ssim = SSIM(res['warped_input_image'].cpu().detach().numpy()[0, 0], res['template'].cpu().detach().numpy()[0, 0])
+            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.5f} ssim {ssim:.4f}')
         #
         #     # Save images
         #     phase = 0
@@ -411,4 +365,4 @@ def train(case=1):
 
 
 if __name__ == '__main__':
-    train()
+    train(10)
