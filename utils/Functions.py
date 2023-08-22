@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset
-from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss
+from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss, Grad
 from utils.metric import MSE, jacobian_determinant
 
 
@@ -307,7 +307,7 @@ def validation_midir(args, model, imgshape, loss_similarity):
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 
-def validation_vm(args, model, imgshape, loss_similarity):
+def validation_vm(args, model, loss_similarity):
     fixed_folder = os.path.join(args.val_dir, 'fixed')
     moving_folder = os.path.join(args.val_dir, 'moving')
     f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
@@ -320,9 +320,6 @@ def validation_vm(args, model, imgshape, loss_similarity):
 
     transform = SpatialTransform_unit().cuda()
     transform.eval()
-
-    grid = generate_grid(imgshape)
-    grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
 
     with torch.no_grad():
         model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
@@ -338,7 +335,7 @@ def validation_vm(args, model, imgshape, loss_similarity):
 
             # F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
 
-            loss_Jacobian = neg_Jdet_loss(flow.permute(0, 2, 3, 4, 1), grid)
+            loss_reg = Grad('l2', loss_mult=2).loss(None, flow)
 
             # # reg2 - use velocity
             # _, _, z, y, x = flow.shape
@@ -347,9 +344,9 @@ def validation_vm(args, model, imgshape, loss_similarity):
             # flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
             # loss_regulation = smoothloss(flow)
 
-            loss_sum = ncc_loss_ori + args.antifold * loss_Jacobian
+            loss_sum = ncc_loss_ori + args.alpha * loss_reg
 
-            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_Jacobian.item(), loss_sum.item()])
+            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_reg.item(), loss_sum.item()])
             # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
             # save_img(X_Y, args.output_dir + '/warpped_moving.nii.gz')
             # m_name = "{}_warped.nii.gz".format(moving[1][0].split('.nii')[0])

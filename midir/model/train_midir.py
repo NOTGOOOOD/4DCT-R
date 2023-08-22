@@ -76,8 +76,8 @@ def test_dirlab(args, checkpoint, is_save=False):
     print('mean TRE=%.2f+-%.2f' % (mean_tre, mean_std))
 
 def make_dirs():
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):
@@ -89,7 +89,7 @@ def make_dirs():
 def train():
     print("Training midir...")
     device = args.device
-    img_shape = [160, 160, 160]
+    img_shape = [96, 144, 144]
     cps = (4, 4, 4)
     model = CubicBSplineNet(ndim=3,
                             img_size=img_shape,
@@ -205,7 +205,7 @@ def train():
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
         # test
-        if step % 5 ==0:
+        if step % 2 ==0:
             test_dirlab(args, modelname)
 
         if stop_criterion.stop():

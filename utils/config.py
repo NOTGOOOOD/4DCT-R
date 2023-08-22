@@ -91,8 +91,6 @@ def get_args():
                         dest="batch_size", default=1)
     parser.add_argument("--n_save_iter", type=int, help="frequency of model saves",
                         dest="n_save_iter", default=1)
-    parser.add_argument("--model_dir", type=str, help="models folder",
-                        dest="model_dir", default='./Checkpoint')
     parser.add_argument("--log_dir", type=str, help="logs folder",
                         dest="log_dir", default='./Log')
     parser.add_argument("--output_dir", type=str, help="output folder with dvf and warped image",

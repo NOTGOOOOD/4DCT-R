@@ -59,8 +59,8 @@ def count_parameters(model):
 
 
 def make_dirs():
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
     if not os.path.exists(args.log_dir):
@@ -68,7 +68,6 @@ def make_dirs():
 
 
 def train():
-    img_shape = [160, 160, 160]
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device
@@ -193,7 +192,7 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, img_shape,
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
                                                                                  image_loss_func
                                                                                  )
         if val_total_loss <= best_loss:
