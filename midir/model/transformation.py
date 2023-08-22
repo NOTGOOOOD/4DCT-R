@@ -235,7 +235,7 @@ def warp(x, disp, interp_mode="bilinear"):
     disp = disp.type_as(x)
 
     # normalise disp to [-1, 1]
-    disp = normalise_disp(disp)
+    # disp = normalise_disp(disp)
 
     # generate standard mesh grid
     grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)])

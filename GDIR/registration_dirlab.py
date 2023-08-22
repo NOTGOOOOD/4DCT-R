@@ -194,7 +194,8 @@ def train(case=1):
 
         image_list.append(stkimg)
 
-    input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
+    input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0).float()
+
     if config.group_index_list is not None:
         input_image = input_image[config.group_index_list]
 
