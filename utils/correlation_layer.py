@@ -44,7 +44,7 @@ class CorrTorch(nn.Module):
         self.max_hdisp = max_displacement
         self.padlayer = nn.ConstantPad3d(pad_size, 0)
         self.activate = nn.LeakyReLU(0.2)
-        self.conv = nn.Conv3d(in_channels=27, out_channels=3, kernel_size=(1, 1, 1), stride=1)
+        # self.conv = nn.Conv3d(in_channels=27, out_channels=3, kernel_size=(1, 1, 1), stride=1)
 
     def forward(self, in1, in2):
         in2_pad = self.padlayer(in2)
@@ -59,7 +59,7 @@ class CorrTorch(nn.Module):
             sum.append(torch.mean(in1 * in2_pad[:, :, dz:dz + depth, dy:dy + hei, dx:dx + wid], 1, keepdim=True))
 
         output = torch.cat(sum, 1)
-        output = self.conv(output)
+        # output = self.conv(output)
 
         return self.activate(output)
 

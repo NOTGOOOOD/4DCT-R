@@ -19,6 +19,7 @@ class StopCriterion(object):
         self.total_loss_list = []
         self.train_loss_list = []
         self.loss_min = 30.
+        self.loss_min_i = 0
 
     def add(self, ncc_loss, jac_loss=None, total_loss=None,train_loss=None):
         self.ncc_loss_list.append(ncc_loss)

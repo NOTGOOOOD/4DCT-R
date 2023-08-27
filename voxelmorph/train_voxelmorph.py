@@ -17,6 +17,8 @@ from utils.scheduler import StopCriterion
 from utils.metric import get_test_photo_loss, landmark_loss
 from utils.Functions import validation_vm
 
+from GDIR.model import regnet
+
 args = get_args()
 
 def test_dirlab(args, model):
@@ -29,11 +31,13 @@ def test_dirlab(args, model):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
+            # y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
+            y_pred = model(moving_img, fixed_img)
+            flow = y_pred['disp']
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
             # TRE
-            _mean, _std = landmark_loss(y_pred[1][0], landmarks00 - torch.tensor(
+            _mean, _std = landmark_loss(flow[0], landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
@@ -93,6 +97,7 @@ def train():
         int_steps=7,
         int_downsize=2
     )
+    # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
     model = model.to(device)
 
     # Set optimizer and losses
@@ -142,11 +147,15 @@ def train():
             input_fixed = fixed_file[0].to(device).float()
 
             y_true = [input_fixed, input_moving] if args.bidir else [input_fixed, None]
-            y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
+            # y_pred = model(input_moving, input_fixed)  # b, c, d, h, w warped_image, flow_m2f
+            # flow, warped_image = y_pred[2], y_pred[0]
+
+            res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
+            warped_image, flow = res['warped_img'], res['disp']
 
             loss_list = []
-            r_loss = args.alpha * regular_loss(None, y_pred[2])
-            sim_loss = image_loss_func(y_true[0], y_pred[0])
+            r_loss = args.alpha * regular_loss(None, flow)
+            sim_loss = image_loss_func(y_true[0], warped_image)
 
             # _, _, z, y, x = flow.shape
             # flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
@@ -192,30 +201,30 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
-                                                                                 image_loss_func
-                                                                                 )
-        if val_total_loss <= best_loss:
-            best_loss = val_total_loss
-            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
-            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
-                val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
-        else:
-            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
-                val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        # val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
+        #                                                                          image_loss_func
+        #                                                                          )
+        # if val_total_loss <= best_loss:
+        #     best_loss = val_total_loss
+        #     # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
+        #         val_total_loss)
+        #     logging.info("save model:{}".format(modelname))
+        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        # else:
+        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
+        #         val_total_loss)
+        #     logging.info("save model:{}".format(modelname))
+        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        mean_loss = np.mean(np.array(loss_total), 0)
-        print(
-            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
-
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
-        if stop_criterion.stop():
-            break
+        # mean_loss = np.mean(np.array(loss_total), 0)
+        # print(
+        #     "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+        #         mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        #
+        # stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+        # if stop_criterion.stop():
+        #     break
 
 
         test_dirlab(args, model)
@@ -225,7 +234,7 @@ if __name__ == "__main__":
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     set_seed(42)
-    model_dir = 'model'
+    model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_vm_".format(train_time)
     if not os.path.isdir(model_dir):

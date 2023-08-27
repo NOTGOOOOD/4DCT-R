@@ -123,8 +123,9 @@ class RegNet_pairwise(nn.Module):
         #                       normalization=normalization)
         self.unet = unet.UNet3D(in_channel=2, n_classes=3, norm=normalization)
         self.spatial_transform = SpatialTransformer(self.dim)
+        # print(count_parameters(self.unet))
 
-    def forward(self, fixed_image, moving_image):
+    def forward(self, moving_image, fixed_image):
         '''
         Parameters
         ----------
@@ -133,7 +134,7 @@ class RegNet_pairwise(nn.Module):
 
         Returns
         -------
-        warped_moving_image : (h, w) or (d, h, w)
+        warped_img : (h, w) or (d, h, w)
             Warped input image.
         disp : (2, h, w) or (3, d, h, w)
             Flow field from fixed image to moving image.
@@ -162,10 +163,10 @@ class RegNet_pairwise(nn.Module):
         else:
             disp = torch.unsqueeze(scaled_disp, 0)
 
-        warped_moving_image = self.spatial_transform(moving_image, disp)  # (h, w) or (d, h, w)
+        warped_img = self.spatial_transform(moving_image, disp)  # (h, w) or (d, h, w)
 
         res = {'disp': disp, 'scaled_disp': disp,
-               'warped_moving_image': warped_moving_image}
+               'warped_img': warped_img}
         return res
 
 

@@ -455,7 +455,7 @@ def train_lvl3(**cfg):
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-            F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
+            pred = model(X, Y)
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,

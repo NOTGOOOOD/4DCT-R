@@ -9,8 +9,8 @@ from tqdm import tqdm
 import time
 import copy
 
-from utils.Functions import SpatialTransform_unit, generate_grid
-from utils.losses import NCC, gradient_loss, neg_Jdet_loss
+from utils.Functions import SpatialTransform_unit, generate_grid, test_dirlab
+from utils.losses import NCC, gradient_loss, neg_Jdet_loss, Grad
 from utils.config import get_args
 from utils.datagenerators import Dataset, PatientDataset, DirLabDataset
 from GDIR.model import regnet
@@ -40,8 +40,8 @@ def test_patient(args, checkpoint, is_save=False):
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
 
-            res = model(fixed_img, moving_img)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_moving_image'], res['disp']
+            res = model(moving_img,fixed_img)  # b, c, d, h, w  disp, scale_disp, warped
+            warped_image, flow = res['warped_img'], res['disp']
 
             ncc = calc_NCC(fixed_img.cpu().detach().numpy(), warped_image.cpu().detach().numpy())
 
@@ -80,52 +80,7 @@ def test_patient(args, checkpoint, is_save=False):
     print('mean SSIM=%.5f Jac=%.8f MSE=%.5f NCC=%.5f' % (mean_ssim, mean_jac, mean_mse, mean_ncc))
 
 
-def test_dirlab(args, model):
-    with torch.no_grad():
-        model.eval()
-        losses = []
-        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
-            moving_img = moving.to(args.device).float()
-            fixed_img = fixed.to(args.device).float()
-            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
-
-            res = model(moving_img, fixed_img)  # b, c, d, h, w warped_image, flow_m2f
-            warped_image, flow = res['warped_moving_image'], res['disp']
-
-            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-
-            norm_coeff = 2. / (torch.tensor(moving_img.shape[2:][::-1], dtype=flow.dtype,
-                                            device=flow.device) - 1.)
-
-            flow_norm = copy.deepcopy(flow)
-            # z, y, x = moving_img.shape[2:]
-            # flow_norm[:, 2, :, :, :] = flow_norm[:, 2, :, :, :] * (z - 1) / 2.
-            # flow_norm[:, 1, :, :, :] = flow_norm[:, 1, :, :, :] * (y - 1) / 2.
-            # flow_norm[:, 0, :, :, :] = flow_norm[:, 0, :, :, :] * (x - 1) / 2.
-            # flow_norm = flow_norm.permute(0, 2, 3, 4, 1) / norm_coeff
-            # flow_norm = flow_norm.permute(0, 4, 1, 2, 3)
-            # TRE
-            _mean, _std = landmark_loss(flow_norm[0], landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
-
-            losses.append([_mean.item(), _std.item()])
-            # print('case=%d after warped, TRE=%.2f+-%.2f' % (
-            #     batch + 1, _mean.item(), _std.item()))
-
-    mean_total = np.mean(losses, 0)
-    mean_tre = mean_total[0]
-    mean_std = mean_total[1]
-
-    print('mean TRE=%.2f+-%.2f' % (
-        mean_tre, mean_std))
-
-
-def validation(args, model, loss_similarity, loss_reg):
+def validation(args, model, loss_similarity):
     transform = SpatialTransform_unit().cuda()
     transform.eval()
 
@@ -136,12 +91,12 @@ def validation(args, model, loss_similarity, loss_reg):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
 
-            res = model(input_fixed, input_moving)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_moving_image'], res['disp']
+            res = model(input_moving,input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
+            warped_image, flow = res['warped_img'], res['disp']
 
             mse_loss = MSE(warped_image, input_fixed)
             ncc_loss_ori = loss_similarity(warped_image, input_fixed)
-            grad_loss = args.alpha * loss_reg(flow)
+            grad_loss = args.alpha * gradient_loss(flow)
 
             # F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
 
@@ -167,14 +122,15 @@ def train_unet():
     #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
     #      file_name.lower().endswith('.gz')])
 
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=True)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
     model = model.to(device)
 
     print(count_parameters(model.unet))
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     image_loss_func = NCC(win=args.win_size)
-    regular_loss = gradient_loss
+    reg_loss = Grad('l2', loss_mult=2).loss
 
     # load data
     train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
@@ -198,12 +154,13 @@ def train_unet():
             input_moving = moving_file[0].to(device).float()
             input_fixed = fixed_file[0].to(device).float()
 
-            res = model(input_fixed, input_moving)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow_m2f = res['warped_moving_image'], res['disp']
+            res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
+            warped_image, flow_m2f = res['warped_img'], res['disp']
 
             loss_list = []
             sim_loss = image_loss_func(warped_image, input_fixed)
-            grad_loss = args.alpha * regular_loss(flow_m2f)  # b*c*h*w*d
+            # grad_loss = args.alpha * reg_loss(None,flow_m2f)  # b*c*h*w*d
+            grad_loss = torch.tensor(0., dtype=sim_loss.dtype, device=sim_loss.device)
 
             # _, _, z, y, x = flow.shape
             # flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
@@ -226,8 +183,7 @@ def train_unet():
             loss.backward()
             optimizer.step()
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, image_loss_func,
-                                                                              regular_loss)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation(args, model, image_loss_func)
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
@@ -248,7 +204,7 @@ def train_unet():
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        test_dirlab(args, model)
+        test_dirlab(args, model, test_loader_dirlab)
 
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
         if stop_criterion.stop():
@@ -334,7 +290,7 @@ if __name__ == "__main__":
     #
     # model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
     # if args.checkpoint_name is not None:
-    #     test_dirlab(args, model)
+    #     test_dirlab(args, model, test_loader_dirlab)
     #     # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     # else:
     #     checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])

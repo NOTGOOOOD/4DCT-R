@@ -6,14 +6,13 @@ import torch.utils.data as Data
 import logging
 import time
 import torch.nn.functional as F
-import copy
 
 from utils.utilize import set_seed, save_model, load_landmarks
 
 set_seed(1024)
 
-# from CRegNet import CRegNet_lv1, \
-#     CRegNet_lv2, CRegNet_lv3
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3
 from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
@@ -21,9 +20,8 @@ from utils.datagenerators import Dataset, DirLabDataset
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss
 from utils.scheduler import StopCriterion
-from utils.Functions import Grid, get_loss, AdaptiveSpatialTransformer, transform_unit_flow_to_flow_cuda
-from utils.metric import MSE, landmark_loss, NCC as mtNCC, SSIM, jacobian_determinant
-
+from utils.Functions import Grid, get_loss, AdaptiveSpatialTransformer, transform_unit_flow_to_flow_cuda, test_dirlab
+from utils.metric import MSE
 
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -70,48 +68,6 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
-def test_dirlab(args, model):
-    model_tmp = copy.deepcopy(model)
-    model_tmp.eval()
-    with torch.no_grad():
-        losses = []
-        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
-            moving_img = moving.to(args.device).float()
-            fixed_img = fixed.to(args.device).float()
-            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
-
-            pred = model_tmp(moving_img, fixed_img)
-            F_X_Y = pred[0]  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
-            lv3_out = pred[3]
-
-            F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
-            F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
-            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-
-            # TRE
-            _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        fixed_img.cpu().detach().numpy()[0, 0])
-
-            ncc = mtNCC(fixed_img.cpu().detach().numpy(), lv3_out.cpu().detach().numpy())
-
-            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
-            jac = jacobian_determinant(lv3_out[0].cpu().detach().numpy())
-
-            # SSIM
-            ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], lv3_out.cpu().detach().numpy()[0, 0])
-
-            losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
-
-    mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
-
-    print('mean TRE=%.2f+-%.2f NCC=%.6f SSIM=%.6f J=%.6f' % (
-        mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac))
 
 def make_dirs():
     if not os.path.exists(args.checkpoint_path):
@@ -389,11 +345,12 @@ def train_lvl3():
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-            F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
+            pred = model(X, Y)
+            F_X_Y, X_Y = pred['disp'], pred['warped_img']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
-                                                                     X_Y, Y_4x)
+                                                                     X_Y, Y)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -447,7 +404,7 @@ def train_lvl3():
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        test_dirlab(args, model)
+        test_dirlab(args, model, test_loader_dirlab, norm=True)
 
         if stop_criterion.stop():
             break

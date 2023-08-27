@@ -376,7 +376,7 @@ def train_lvl3():
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-            F_X_Y, _, _, X_Y, Y_4x, F_xy, F_xy_lvl1, F_xy_lvl2, _ = model(X, Y)
+            pred = model(X, Y)
 
             # 3 level deep supervision NCC
             loss_multiNCC = loss_similarity(X_Y, Y_4x)

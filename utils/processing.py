@@ -289,7 +289,24 @@ def dirlab_train(file_folder, m_path, f_path):
                 shutil.copyfile(os.path.join(file_folder, file_name_moving), moving_file_path)
 
 
-def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resize=None, isotropic=False):
+def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resize:list =None, isotropic=False):
+    """
+
+    Parameters
+    ----------
+    args
+    save_path
+    file_folder
+    datatype
+    shape
+    case
+    resize z,y,x
+    isotropic
+
+    Returns
+    -------
+
+    """
     for num, file_name in enumerate(os.listdir(file_folder)):
 
         file_path = os.path.join(file_folder, file_name)
@@ -824,9 +841,9 @@ if __name__ == '__main__':
     #     disp_00_50 = (ref_lmk - landmark_00).astype(np.float)
     #     torch.save(disp_00_50, os.path.join(flow_path, 'case%02d_disp_affine.pt' % case))
     #
-    # %%
+    #
 
-    # %%===================== adjust all registration image=================================
+    # ===================== adjust all registration image=================================
     # size = [144, 144, 144]
     # fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
     # moving_path = '/home/cqut/project/xxf/test_ori/moving'
@@ -858,43 +875,43 @@ if __name__ == '__main__':
     # make_dir(target_test_moving_path)
 
     # dirlab train
-    # data_path = r'D:\xxf\dirlab_train_resample_isotropic'
-    # make_dir(data_path)
-    # for item in dirlab_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     save_path = os.path.join(data_path, 'case%02d' % case)
-    #     make_dir(save_path)
-    #     img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
-    #
-    #     # crop, resample,resize
-    #     dirlab_processing(args, save_path, img_path, np.int16, shape, case, isotropic=True)
-    #
-    #     # make a train set
-    #     m_path = os.path.join(data_path, 'moving')
-    #     f_path = os.path.join(data_path, 'fixed')
-    #     make_dir(m_path)
-    #     make_dir(f_path)
-    #     file_folder = os.path.join(data_path, 'case%02d' % case)
-    #     dirlab_train(file_folder, m_path, f_path)
-    #     print('case %02d done!' % case)
-
-    # dirlab for test
-    print("dirlab: ")
-    target_test_fixed_path = f'd:/xxf/test_ori_resample/fixed'
-    target_test_moving_path = f'd:/xxf/test_ori_resample/moving'
-    make_dir(target_test_moving_path)
-    make_dir(target_test_fixed_path)
+    data_path = r'D:\xxf\dirlab_train_resample_144'
+    make_dir(data_path)
     for item in dirlab_case_cfg.items():
         case = item[0]
         shape = item[1]
+        save_path = os.path.join(data_path, 'case%02d' % case)
+        make_dir(save_path)
         img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
-        dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+
+        # crop, resample,resize
+        dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=[96, 144, 144])
+
+        # make a train set
+        m_path = os.path.join(data_path, 'moving')
+        f_path = os.path.join(data_path, 'fixed')
+        make_dir(m_path)
+        make_dir(f_path)
+        file_folder = os.path.join(data_path, 'case%02d' % case)
+        dirlab_train(file_folder, m_path, f_path)
+        print('case %02d done!' % case)
+
+    # # dirlab for test
+    # print("dirlab: ")
+    # target_test_fixed_path = f'd:/xxf/test_ori_resample/fixed'
+    # target_test_moving_path = f'd:/xxf/test_ori_resample/moving'
+    # make_dir(target_test_moving_path)
+    # make_dir(target_test_fixed_path)
+    # for item in dirlab_case_cfg.items():
+    #     case = item[0]
+    #     shape = item[1]
+    #     img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
+    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
 
     # # COPD数据集img转nii.gz
     # print("copd: ")
     # target_fixed_path = r'E:\datasets\registration\copd_144_192_160\fixed'
-    # target_moving_path = r'E:\datasets\registration\copd_144_192_160\moving'
+    # target_moving_path = r'E:\datasets\registration\copd_144_19xiaohongshu 2_160\moving'
     # make_dir(target_moving_path)
     # make_dir(target_fixed_path)
     #

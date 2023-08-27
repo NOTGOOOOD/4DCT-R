@@ -5,12 +5,13 @@ import torch
 import torch.nn as nn
 from torch.utils import data as Data
 import torch.nn.functional as F
+import copy
 
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset
 from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss, Grad
-from utils.metric import MSE, jacobian_determinant
+from utils.metric import MSE, jacobian_determinant, landmark_loss, NCC as mtNCC, SSIM
 
 
 def generate_grid(imgshape):
@@ -465,3 +466,57 @@ class Grid():
             # self.norm_coeff_dict[img_shape] = norm_coeff
 
         return grid
+
+
+def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logging=None):
+    model.eval()
+    with torch.no_grad():
+        losses = []
+        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            moving_img = moving.to(args.device).float()
+            fixed_img = fixed.to(args.device).float()
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+
+            pred = model(moving_img, fixed_img)
+            flow = pred['disp']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            warped_img = pred['warped_img']
+
+            F_X_Y_norm = copy.deepcopy(flow)
+            if norm:
+                F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+                F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
+
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+
+            # TRE
+            _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
+                                        fixed_img.cpu().detach().numpy()[0, 0])
+
+            ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
+
+            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
+            jac = jacobian_determinant(warped_img[0].cpu().detach().numpy())
+
+            # SSIM
+            ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], warped_img.cpu().detach().numpy()[0, 0])
+
+            losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
+            if not is_train:
+                print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                    batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+
+    mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
+
+    print('mean TRE=%.2f+-%.2f NCC=%.6f SSIM=%.6f J=%.6f' % (
+        mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac))
+    if logging is not None:
+        logging.info('mean TRE=%.2f+-%.2f NCC=%.6f SSIM=%.6f J=%.6f' % (
+        mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac))
+
+    return mean_tre

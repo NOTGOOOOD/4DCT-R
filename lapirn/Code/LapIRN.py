@@ -718,10 +718,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
-        if self.is_train is True:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-        else:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out
+        return {'disp':compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
 
 
 class PreActBlock(nn.Module):

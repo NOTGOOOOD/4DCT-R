@@ -11,8 +11,7 @@ from utils.utilize import set_seed,save_model
 set_seed(20)
 
 from utils.Functions import generate_grid, get_loss, validation_ccregnet, Grid
-from CCRegNet import CCRegNet_lv1, \
-    CCRegNet_lv2, CCRegNet_lv3
+from CCENet import CCENet_lv1, CCENet_lv2, CCENet_lv3
 
 from utils.datagenerators import Dataset
 from utils.config import get_args
