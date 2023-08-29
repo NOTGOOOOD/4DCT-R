@@ -460,9 +460,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out, 'down_y': down_y, 'embedding': e0}
         else:
-            return output_disp_e0_v, warpped_inputx_lvl1_out
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out}
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
@@ -559,7 +559,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        # lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        pred = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['disp'], pred['warped_img'], pred['embedding']
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
@@ -592,9 +594,10 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            # return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
         else:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
@@ -689,8 +692,11 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
-        lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
-            x, y)
+        # lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
+        #     x, y)
+        pred = self.model_lvl2(x, y)
+        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['disp'], pred['warped_img'], pred['embedding']
+
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
                                      align_corners=True)

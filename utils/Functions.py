@@ -484,7 +484,7 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
 
             F_X_Y_norm = copy.deepcopy(flow)
             if norm:
-                F_X_Y_norm = transform_unit_flow_to_flow_cuda(F_X_Y.permute(0, 2, 3, 4, 1).clone())
+                F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
                 F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']

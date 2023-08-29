@@ -126,9 +126,9 @@ class CRegNet_lv1(nn.Module):
                                                  self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out, 'down_y': down_y, 'embedding': e0}
         else:
-            return output_disp_e0_v, warpped_inputx_lvl1_out
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out}
 
 
 class CRegNet_lv2(nn.Module):
@@ -190,7 +190,8 @@ class CRegNet_lv2(nn.Module):
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        pred = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['disp'], pred['warped_img'], pred['embedding']
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
@@ -225,9 +226,10 @@ class CRegNet_lv2(nn.Module):
                                                  self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            # return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
         else:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
 
 
 class CRegNet_lv3(nn.Module):
@@ -287,8 +289,8 @@ class CRegNet_lv3(nn.Module):
 
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
-        lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
-            x, y)
+        pred = self.model_lvl2(x, y)
+        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['disp'], pred['warped_img'], pred['embedding']
         # lvl2_disp_up = self.up_tri(lvl2_disp)
 
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],

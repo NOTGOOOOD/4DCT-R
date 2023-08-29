@@ -38,7 +38,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
             pred = model(input_moving, input_fixed)
-            F_X_Y = pred[0]
+            F_X_Y = pred['disp']
 
             if scale_factor > 1:
                 F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
@@ -123,7 +123,8 @@ def train_lvl1():
             Y = fixed[0].to(device).float()
 
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-            F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
+            pred = model(X, Y)
+            F_X_Y, X_Y, Y_4x = pred['disp'], pred['warped_img'], pred['down_y']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
@@ -172,6 +173,7 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
+        break
 
 def train_lvl2():
     print("Training lvl2...")
@@ -223,7 +225,8 @@ def train_lvl2():
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
-            F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
+            pred = model(X, Y)
+            F_X_Y, X_Y, Y_4x = pred['disp'], pred['warped_img'], pred['down_y']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
@@ -283,6 +286,7 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
+        break
 
 def train_lvl3():
     print("Training lvl3...")

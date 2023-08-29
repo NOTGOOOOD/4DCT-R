@@ -10,48 +10,15 @@ import torch.nn.functional as F
 from utils.Functions import get_loss, Grid, transform_unit_flow_to_flow_cuda, AdaptiveSpatialTransformer, test_dirlab
 from CCENet_single import Model_lv1_signle as Model_lv1, \
     Model_lv2, Model_lv3
-from utils.datagenerators import Dataset
+from utils.datagenerators import Dataset, DirLabDataset
 from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model
+from utils.utilize import set_seed, save_model, load_landmarks
 from utils.metric import MSE
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-args = get_args()
-
-lr = args.lr
-start_channel = args.initial_channels
-antifold = args.antifold
-# antifold = 0
-# n_checkpoint = args.n_save_iter
-smooth = args.smooth
-# datapath = opt.datapath
-freeze_step = args.freeze_step
-
-iteration_lvl1 = args.iteration_lvl1
-iteration_lvl2 = args.iteration_lvl2
-iteration_lvl3 = args.iteration_lvl3
-
-fixed_folder = os.path.join(args.train_dir, 'fixed')
-moving_folder = os.path.join(args.train_dir, 'moving')
-f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                          file_name.lower().endswith('.gz')])
-m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                          file_name.lower().endswith('.gz')])
-
-val_fixed_folder = os.path.join(args.val_dir, 'fixed')
-val_moving_folder = os.path.join(args.val_dir, 'moving')
-f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
-                     file_name.lower().endswith('.gz')])
-m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
-                     file_name.lower().endswith('.gz')])
-
-val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
-val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
 def make_dirs():
     if not os.path.exists(args.checkpoint_path):
         os.makedirs(args.checkpoint_path)
@@ -108,7 +75,7 @@ def train_lvl1():
     device = args.device
 
     model = Model_lv1(1, 3, start_channel, is_train=True,
-                      range_flow=range_flow, grid=grid_class).to(device)
+                      range_flow=range_flow, grid=grid_class, corr=False).to(device)
 
     loss_similarity = NCC(win=7)
     loss_Jdet = neg_Jdet_loss
@@ -147,7 +114,7 @@ def train_lvl1():
             Y = fixed[0].to(device).float()
 
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-            F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
+            # F_X_Y, X_Y, Y_4x, F_xy, _ = model(X, Y)
             pred = model(X, Y)
             disp, wapred = pred['disp'], pred['warped_img']
             if Y.shape[2:] != disp.shape[2:]:
@@ -177,7 +144,7 @@ def train_lvl1():
         # validation
         # val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
         #                                                                                grid_class, 4)
-        mean_tre = test_dirlab(args, model, test_loader_dirlab)
+        mean_tre = test_dirlab(args, model, test_loader_dirlab, norm=True, logging=logging)
         mean_loss = np.mean(np.array(lossall), 0)[0]
         stop_criterion.add(mean_tre, mean_tre, mean_tre, train_loss=mean_loss)
 
@@ -444,8 +411,10 @@ def train_lvl3():
 
 
 if __name__ == "__main__":
-    make_dirs()
     set_seed(1024)
+    args = get_args()
+    make_dirs()
+
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
@@ -455,10 +424,37 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    # size = [144,192,160] # z y x
-    # imgshape = (size[0], size[1], size[2])
-    # imgshape_4 = (size[0] / 4,  size[1] / 4, size[2] / 4)
-    # imgshape_2 = (size[0] / 2,  size[1] / 2, size[2] / 2)
+
+    lr = args.lr
+    start_channel = args.initial_channels
+    antifold = args.antifold
+    # antifold = 0
+    # n_checkpoint = args.n_save_iter
+    smooth = args.smooth
+    # datapath = opt.datapath
+    freeze_step = args.freeze_step
+
+    iteration_lvl1 = args.iteration_lvl1
+    iteration_lvl2 = args.iteration_lvl2
+    iteration_lvl3 = args.iteration_lvl3
+
+    fixed_folder = os.path.join(args.train_dir, 'fixed')
+    moving_folder = os.path.join(args.train_dir, 'moving')
+    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                              file_name.lower().endswith('.gz')])
+    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                              file_name.lower().endswith('.gz')])
+
+    val_fixed_folder = os.path.join(args.val_dir, 'fixed')
+    val_moving_folder = os.path.join(args.val_dir, 'moving')
+    f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
+                         file_name.lower().endswith('.gz')])
+    m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
+                         file_name.lower().endswith('.gz')])
+
+    val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
+    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
     landmark_list = load_landmarks(args.landmark_dir)
     dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
     dir_moving_folder = os.path.join(args.test_dir, 'moving')
