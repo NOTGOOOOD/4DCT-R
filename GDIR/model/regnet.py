@@ -113,7 +113,7 @@ class RegNet_pairwise(nn.Module):
         Whether to add instance normalization after activation. The default is True.
     '''
 
-    def __init__(self, dim, scale=1, depth=5, initial_channels=64, normalization=False):
+    def __init__(self, dim, scale=1, depth=5, initial_channels=64, normalization=False, flag_512=False):
 
         super().__init__()
         assert dim in (2, 3)
@@ -121,7 +121,7 @@ class RegNet_pairwise(nn.Module):
         self.scale = scale
         # self.unet = unet.UNet(in_channels=2, out_channels=dim, dim=dim, depth=depth, initial_channels=initial_channels,
         #                       normalization=normalization)
-        self.unet = unet.UNet3D(in_channel=2, n_classes=3, norm=normalization)
+        self.unet = unet.UNet3D(in_channel=2, n_classes=3, norm=normalization, flag_512=flag_512)
         self.spatial_transform = SpatialTransformer(self.dim)
         # print(count_parameters(self.unet))
 

@@ -122,7 +122,7 @@ def train_unet():
     #     [os.path.join(test_moving_folder, file_name) for file_name in os.listdir(test_moving_folder) if
     #      file_name.lower().endswith('.gz')])
 
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=False)
     model = model.to(device)
 
     print(count_parameters(model.unet))
@@ -264,7 +264,7 @@ if __name__ == "__main__":
                                         landmark_files=landmark_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    train_unet()
+    # train_unet()
 
     # # ==============test====================
     # pa_fixed_folder = r'E:\datasets\registration\test_ori\fixed'
@@ -283,19 +283,19 @@ if __name__ == "__main__":
     # test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
     #                                       num_workers=0)
     #
-    # prefix = '2023-04-21-17-47-16'
-    # model_dir = args.checkpoint_path
-    # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
-    # model = model.to(device)
-    #
-    # model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-    # if args.checkpoint_name is not None:
-    #     test_dirlab(args, model, test_loader_dirlab)
-    #     # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
-    # else:
-    #     checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
-    #     for checkpoint in checkpoint_list:
-    #         print(checkpoint)
-    #         test_dirlab(args, checkpoint)
-    #         # test_patient(args, checkpoint)
-    # # =======================================
+    # # prefix = '2023-04-21-17-47-16'
+    model_dir = args.checkpoint_path
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=False)
+    model = model.to(device)
+
+    model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
+    if args.checkpoint_name is not None:
+        test_dirlab(args, model, test_loader_dirlab, is_train=False)
+        # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+    else:
+        checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+        for checkpoint in checkpoint_list:
+            print(checkpoint)
+            test_dirlab(args, checkpoint)
+            # test_patient(args, checkpoint)
+    # =======================================
