@@ -1,10 +1,14 @@
+import os
 import platform
 import numpy as np
 import SimpleITK as sitk
 import torch
 import torch.utils.data as Data
 import torch.nn.functional as F
+from torch.utils import data as Data
+
 from utils.processing import data_standardization_0_n
+from utils.utilize import load_landmarks
 
 
 class Dataset(Data.Dataset):
@@ -103,3 +107,43 @@ class PatientDataset(Data.Dataset):
 
         return [m_img, f_img, m_name]
 
+
+def build_dataloader(args, mode='train'):
+    if mode=="train":
+        fixed_folder = os.path.join(args.train_dir, 'fixed')
+        moving_folder = os.path.join(args.train_dir, 'moving')
+        f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
+                                  file_name.lower().endswith('.gz')])
+        m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
+                                  file_name.lower().endswith('.gz')])
+        train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+        return Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+
+    elif mode=="val":
+        val_fixed_folder = os.path.join(args.val_dir, 'fixed')
+        val_moving_folder = os.path.join(args.val_dir, 'moving')
+        f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
+                             file_name.lower().endswith('.gz')])
+        m_val_list = sorted(
+            [os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
+             file_name.lower().endswith('.gz')])
+
+        val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
+        return Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    elif mode=="test":
+        landmark_list = load_landmarks(args.landmark_dir)
+        dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
+        dir_moving_folder = os.path.join(args.test_dir, 'moving')
+
+        f_dir_file_list = sorted(
+            [os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
+             file_name.lower().endswith('.gz')])
+        m_dir_file_list = sorted(
+            [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
+             file_name.lower().endswith('.gz')])
+        test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
+                                            landmark_files=landmark_list)
+        return Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False,
+                                             num_workers=0)
+    else:
+        raise ValueError("mode must be train, val or test")

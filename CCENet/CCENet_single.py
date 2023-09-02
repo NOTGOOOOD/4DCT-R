@@ -219,7 +219,7 @@ class Model_lv1(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl1 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl1 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
     def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
@@ -238,12 +238,12 @@ class Model_lv1(nn.Module):
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w
-        # cat_input = torch.cat((x, y), 1)
-        # cat_input = self.down_avg(cat_input)
-        # cat_input_lvl1 = self.down_avg(cat_input)
+        cat_input = torch.cat((x, y), 1)
+        cat_input = self.down_avg(cat_input)
+        cat_input_lvl1 = self.down_avg(cat_input)
 
-        # down_x = cat_input_lvl1[:, 0:1, :, :, :]
-        # down_y = cat_input_lvl1[:, 1:2, :, :, :]
+        down_x = cat_input_lvl1[:, 0:1, :, :, :]
+        down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
         dialation_out1 = self.dialation_conv0(cat_input_lvl1)
         dialation_out2 = self.dialation_conv1(cat_input_lvl1)
@@ -280,9 +280,9 @@ class Model_lv1(nn.Module):
                                                  self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return output_disp_e0_v, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out, 'down_y': down_y, 'embedding': e0}
         else:
-            return output_disp_e0_v, warpped_inputx_lvl1_out
+            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out}
 
 class Model_lv2(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4,
@@ -333,7 +333,7 @@ class Model_lv2(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl2 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl2 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -347,7 +347,8 @@ class Model_lv2(nn.Module):
 
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
+        pred = self.model_lvl1(x, y)
+        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['disp'], pred['warped_img'], pred['embedding']
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
@@ -393,9 +394,9 @@ class Model_lv2(nn.Module):
                                                  self.grid_1.get_grid(x_down.shape[2:], True))
 
         if self.is_train is True:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
         else:
-            return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out
+            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
 
 
 class Model_lv3(nn.Module):
@@ -454,7 +455,7 @@ class Model_lv3(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl3 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl3 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -468,8 +469,8 @@ class Model_lv3(nn.Module):
 
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
-        lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
-            x, y)
+        pred = self.model_lvl2(x, y)
+        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['disp'], pred['warped_img'], pred['embedding']
 
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
@@ -519,10 +520,7 @@ class Model_lv3(nn.Module):
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x.shape[2:], True))
 
-        if self.is_train is True:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-        else:
-            return compose_field_e0_lvl1, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, warpped_inputx_lvl3_out
+        return {'disp':compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
 
 
 class PreActBlock(nn.Module):

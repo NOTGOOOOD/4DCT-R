@@ -2,19 +2,20 @@ import os
 import sys
 import numpy as np
 import torch
-import torch.utils.data as Data
 import logging
 import time
 import torch.nn.functional as F
 
 from utils.Functions import get_loss, Grid, transform_unit_flow_to_flow_cuda, AdaptiveSpatialTransformer, test_dirlab
-from CCENet_single import Model_lv1_signle as Model_lv1, \
+from CCENet_single import Model_lv1, \
     Model_lv2, Model_lv3
-from utils.datagenerators import Dataset, DirLabDataset
+# from lapirn.Code.LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as Model_lv1,\
+#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as Model_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as Model_lv3
+from utils.datagenerators import build_dataloader
 from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model, load_landmarks
+from utils.utilize import set_seed, save_model, count_parameters
 from utils.metric import MSE
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -40,7 +41,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
             pred = model(input_moving, input_fixed)
-            F_X_Y = pred[0]
+            F_X_Y = pred['disp']
 
             if scale_factor > 1:
                 F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
@@ -74,8 +75,9 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    model = Model_lv1(1, 3, start_channel, is_train=True,
-                      range_flow=range_flow, grid=grid_class, corr=False).to(device)
+    model = Model_lv1(2, 3, start_channel, is_train=True,
+                      range_flow=range_flow, grid=grid_class).to(device)
+    print(count_parameters(model))
 
     loss_similarity = NCC(win=7)
     loss_Jdet = neg_Jdet_loss
@@ -83,16 +85,10 @@ def train_lvl1():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    model_dir = args.checkpoint_path
+    model_dir = './ckpt/stage'
 
     if not os.path.isdir(model_dir):
-        os.mkdir(model_dir)
-
-    # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
-    #                                      shuffle=True, num_workers=2)
-
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+        os.makedirs(model_dir)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -142,15 +138,15 @@ def train_lvl1():
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
         # validation
-        # val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
-        #                                                                                grid_class, 4)
-        mean_tre = test_dirlab(args, model, test_loader_dirlab, norm=True, logging=logging)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+                                                                                       grid_class, 4)
+        # mean_tre = test_dirlab(args, model, test_loader_dirlab, norm=True, logging=logging)
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        stop_criterion.add(mean_tre, mean_tre, mean_tre, train_loss=mean_loss)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
 
         # save model
-        if mean_tre <= best_loss:
-            best_loss = mean_tre
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
             modelname = model_dir + '/' + model_name + "stagelvl1" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
                 best_loss)
             logging.info("save model:{}".format(modelname))
@@ -168,6 +164,8 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
+        break
+
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
@@ -177,9 +175,9 @@ def train_lvl2():
 
     # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-04-08-21-0-27_CCENet_planB_stagelvl1_243_-0.3347.pth'
     model_list = []
-    for f in os.listdir('../Model/Stage'):
+    for f in os.listdir('./ckpt/stage'):
         if model_name + "stagelvl1" in f:
-            model_list.append(os.path.join('../Model/Stage', f))
+            model_list.append(os.path.join('./ckpt/stage', f))
 
     model_path = sorted(model_list)[-1]
 
@@ -193,6 +191,8 @@ def train_lvl2():
     model = Model_lv2(2, 3, start_channel, is_train=True,
                       range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).to(device)
 
+    print(count_parameters(model) - count_parameters(model_lvl1))
+
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     # loss_smooth = bending_energy_loss
     loss_smooth = smoothloss
@@ -201,13 +201,10 @@ def train_lvl2():
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     stop_criterion = StopCriterion()
-    model_dir = '../Model/Stage'
+    model_dir = './ckpt/stage'
 
     if not os.path.isdir(model_dir):
-        os.mkdir(model_dir)
-
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+        os.makedirs(model_dir)
 
     step = 0
     best_loss = 99.
@@ -219,11 +216,12 @@ def train_lvl2():
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
-            F_X_Y, _, X_Y, Y_4x, F_xy, F_xy_lvl1, _ = model(X, Y)
+            pred = model(X, Y)
+            disp, wapred, down_y = pred['disp'], pred['warped_img'], pred['down_y']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
-                                                                     loss_smooth, F_X_Y,
-                                                                     X_Y, Y_4x)
+                                                                     loss_smooth, disp,
+                                                                     wapred, down_y)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -277,6 +275,7 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
+        break
 
 def train_lvl3():
     print("Training lvl3...")
@@ -290,9 +289,9 @@ def train_lvl3():
     # model_path = '/home/cqut/project/xxf/4DCT-R/lapirn/Model/Stage/2023-02-27-20-18-12_lapirn_corr_att_planB_stagelvl2_000_-0.7056.pth'
     # model_path = r'D:\project\xxf\4DCT\lapirn\Model\Stage\2023-03-27-20-40-00_lapirn_corr_att_planB_stagelvl2_000_-0.6411.pth'
     model_list = []
-    for f in os.listdir('../Model/Stage'):
+    for f in os.listdir('./ckpt/stage'):
         if model_name + "stagelvl2" in f:
-            model_list.append(os.path.join('../Model/Stage', f))
+            model_list.append(os.path.join('./ckpt/stage', f))
 
     model_path = sorted(model_list)[-1]
     model_lvl2.load_state_dict(torch.load(model_path)['model'])
@@ -304,22 +303,17 @@ def train_lvl3():
 
     model = Model_lv3(2, 3, start_channel, is_train=True,
                       range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
-
+    print(count_parameters(model) - count_parameters(model_lvl2) -count_parameters(model_lvl1))
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    model_dir = '../Model'
+    model_dir = './ckpt/'
 
     if not os.path.isdir(model_dir):
-        os.mkdir(model_dir)
-
-    # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
-    #                                      shuffle=True, num_workers=2)
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+        os.makedirs(model_dir)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -342,10 +336,11 @@ def train_lvl3():
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             pred = model(X, Y)
+            F_X_Y, X_Y = pred['disp'], pred['warped_img']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
-                                                                     X_Y, Y_4x)
+                                                                     X_Y, Y)
 
             loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
 
@@ -373,31 +368,31 @@ def train_lvl3():
             #     save_image(Y_4x, Y, args.output_dir, m_name)
 
         # validation
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
-                                                                                       grid_class, 1)
-
+        # val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+        #                                                                                grid_class, 1)
+        mean_tre = test_dirlab(args, model, test_loader_dirlab, norm=True, logging=logging)
         mean_loss = np.mean(np.array(lossall), 0)[0]
-        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+        stop_criterion.add(mean_tre, mean_tre, mean_tre, train_loss=mean_loss)
 
         # save model
-        if val_total_loss <= best_loss:
-            best_loss = val_total_loss
+        if mean_tre <= best_loss:
+            best_loss = mean_tre
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
-                val_total_loss)
+                best_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
         else:
             modelname = model_dir + '/' + model_name + "stagelvl3" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
-                val_total_loss)
+                best_loss)
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        print(
-            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+        # print(
+            # "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+            #     mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
         if stop_criterion.stop():
             break
@@ -408,7 +403,6 @@ def train_lvl3():
         step += 1
         if step > iteration_lvl3:
             break
-
 
 if __name__ == "__main__":
     set_seed(1024)
@@ -428,48 +422,19 @@ if __name__ == "__main__":
     lr = args.lr
     start_channel = args.initial_channels
     antifold = args.antifold
-    # antifold = 0
-    # n_checkpoint = args.n_save_iter
     smooth = args.smooth
-    # datapath = opt.datapath
     freeze_step = args.freeze_step
 
     iteration_lvl1 = args.iteration_lvl1
     iteration_lvl2 = args.iteration_lvl2
     iteration_lvl3 = args.iteration_lvl3
 
-    fixed_folder = os.path.join(args.train_dir, 'fixed')
-    moving_folder = os.path.join(args.train_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    val_fixed_folder = os.path.join(args.val_dir, 'fixed')
-    val_moving_folder = os.path.join(args.val_dir, 'moving')
-    f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
-                         file_name.lower().endswith('.gz')])
-    m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
-                         file_name.lower().endswith('.gz')])
-
-    val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
-    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-    landmark_list = load_landmarks(args.landmark_dir)
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
-    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
-    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
     grid_class = Grid()
     range_flow = 0.4
+    train_loader = build_dataloader(args, 'train')
+    val_loader = build_dataloader(args, 'val')
+    test_loader_dirlab = build_dataloader(args, 'test')
+
     train_lvl1()
-    # train_lvl2()
-    # train_lvl3()
+    train_lvl2()
+    train_lvl3()

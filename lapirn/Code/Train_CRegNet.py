@@ -11,8 +11,8 @@ from utils.utilize import set_seed, save_model, load_landmarks
 
 set_seed(1024)
 
-from CRegNet import CRegNet_lv1, \
-    CRegNet_lv2, CRegNet_lv3
+# from CRegNet import CRegNet_lv1, \
+#     CRegNet_lv2, CRegNet_lv3
 from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
@@ -100,8 +100,8 @@ def train_lvl1():
     # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
     #                                      shuffle=True, num_workers=2)
 
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    # train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    # train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -212,8 +212,8 @@ def train_lvl2():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    # train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    # train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
     step = 0
     best_loss = 99.
@@ -326,8 +326,8 @@ def train_lvl3():
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
+    # train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    # train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -442,6 +442,9 @@ if __name__ == "__main__":
                               file_name.lower().endswith('.gz')])
     m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                               file_name.lower().endswith('.gz')])
+
+    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
+    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
     val_fixed_folder = os.path.join(args.val_dir, 'fixed')
     val_moving_folder = os.path.join(args.val_dir, 'moving')
