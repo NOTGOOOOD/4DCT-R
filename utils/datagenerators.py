@@ -108,7 +108,7 @@ class PatientDataset(Data.Dataset):
         return [m_img, f_img, m_name]
 
 
-def build_dataloader(args, mode='train'):
+def build_dataloader(args, mode='train', batch_size=1, num_w=0):
     if mode=="train":
         fixed_folder = os.path.join(args.train_dir, 'fixed')
         moving_folder = os.path.join(args.train_dir, 'moving')
@@ -117,7 +117,7 @@ def build_dataloader(args, mode='train'):
         m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
                                   file_name.lower().endswith('.gz')])
         train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-        return Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=2)
+        return Data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_w)
 
     elif mode=="val":
         val_fixed_folder = os.path.join(args.val_dir, 'fixed')
@@ -129,7 +129,7 @@ def build_dataloader(args, mode='train'):
              file_name.lower().endswith('.gz')])
 
         val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
-        return Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+        return Data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_w)
     elif mode=="test":
         landmark_list = load_landmarks(args.landmark_dir)
         dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
@@ -143,7 +143,7 @@ def build_dataloader(args, mode='train'):
              file_name.lower().endswith('.gz')])
         test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
                                             landmark_files=landmark_list)
-        return Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False,
-                                             num_workers=0)
+        return Data.DataLoader(test_dataset_dirlab, batch_size=batch_size, shuffle=False,
+                                             num_workers=num_w)
     else:
         raise ValueError("mode must be train, val or test")

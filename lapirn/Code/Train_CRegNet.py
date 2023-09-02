@@ -7,7 +7,7 @@ import logging
 import time
 import torch.nn.functional as F
 
-from utils.utilize import set_seed, save_model, load_landmarks
+from utils.utilize import set_seed, save_model, load_landmarks, count_parameters
 
 set_seed(1024)
 
@@ -16,7 +16,7 @@ set_seed(1024)
 from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
-from utils.datagenerators import Dataset, DirLabDataset
+from utils.datagenerators import Dataset, DirLabDataset, build_dataloader
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss
 from utils.scheduler import StopCriterion
@@ -86,6 +86,7 @@ def train_lvl1():
 
     model = CRegNet_lv1(2, 3, start_channel, is_train=True,
                         range_flow=range_flow, grid=grid_class).to(device)
+    print(count_parameters(model))
     loss_similarity = NCC(win=3)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
@@ -96,12 +97,6 @@ def train_lvl1():
 
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
-
-    # training_generator = Data.DataLoader(Dataset_epoch(names, norm=False), batch_size=1,
-    #                                      shuffle=True, num_workers=2)
-
-    # train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    # train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
 
     stop_criterion = StopCriterion()
     step = 0
@@ -199,7 +194,7 @@ def train_lvl2():
 
     model = CRegNet_lv2(2, 3, start_channel, is_train=True, range_flow=range_flow,
                         model_lvl1=model_lvl1, grid=grid_class).to(device)
-
+    print(count_parameters(model) - count_parameters(model_lvl1))
     loss_similarity = multi_resolution_NCC(win=5, scale=2)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
@@ -314,7 +309,7 @@ def train_lvl3():
 
     model = CRegNet_lv3(2, 3, start_channel, is_train=True,
                         range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
-
+    print(count_parameters(model) - count_parameters(model_lvl2))
     loss_similarity = multi_resolution_NCC(win=7, scale=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
@@ -436,38 +431,9 @@ if __name__ == "__main__":
     iteration_lvl2 = args.iteration_lvl2
     iteration_lvl3 = args.iteration_lvl3
 
-    fixed_folder = os.path.join(args.train_dir, 'fixed')
-    moving_folder = os.path.join(args.train_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
-
-    val_fixed_folder = os.path.join(args.val_dir, 'fixed')
-    val_moving_folder = os.path.join(args.val_dir, 'moving')
-    f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
-                         file_name.lower().endswith('.gz')])
-    m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
-                         file_name.lower().endswith('.gz')])
-
-    val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
-    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-    landmark_list = load_landmarks(args.landmark_dir)
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
-    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
-    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    train_loader = build_dataloader(args, mode='train')
+    val_loader = build_dataloader(args, mode='val')
+    test_loader_dirlab = build_dataloader(args, mode='test')
 
     make_dirs()
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
@@ -479,10 +445,6 @@ if __name__ == "__main__":
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    # size = [160, 160, 160]  # z y x
-    # imgshape = (size[0], size[1], size[2])
-    # imgshape_4 = (size[0] / 4, size[1] / 4, size[2] / 4)
-    # imgshape_2 = (size[0] / 2, size[1] / 2, size[2] / 2)
 
     grid_class = Grid()
     range_flow = 0.4
