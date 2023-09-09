@@ -297,7 +297,7 @@ class VxmDense(LoadableModel):
 
         # return non-integrated flow field if training
         if not registration:
-            return {'warped_img':y_source, 'birwarped_img':y_target, 'disp':preint_flow, 'flow':pos_flow} if self.bidir else {'warped_img':y_source, 'disp':preint_flow, 'flow':pos_flow}
+            return {'warped_img':y_source, 'birwarped_img':y_target, 'flow':preint_flow, 'disp':pos_flow} if self.bidir else {'warped_img':y_source, 'flow':preint_flow, 'disp':pos_flow}
         else:
             return {'warped_img':y_source, 'disp':pos_flow}
 

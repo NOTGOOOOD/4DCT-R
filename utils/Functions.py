@@ -9,7 +9,7 @@ import copy
 
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
-from utils.datagenerators import Dataset
+from utils.datagenerators import Dataset, build_dataloader
 from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss, Grad
 from utils.metric import MSE, jacobian_determinant, landmark_loss, NCC as mtNCC, SSIM
 
@@ -309,15 +309,7 @@ def validation_midir(args, model, imgshape, loss_similarity):
 
 
 def validation_vm(args, model, loss_similarity):
-    fixed_folder = os.path.join(args.val_dir, 'fixed')
-    moving_folder = os.path.join(args.val_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-
-    val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    val_loader = build_dataloader(args, mode='val')
 
     transform = SpatialTransform_unit().cuda()
     transform.eval()
@@ -329,35 +321,15 @@ def validation_vm(args, model, loss_similarity):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
 
-            warped_image, flow = model(input_moving, input_fixed, True)
-
+            pred = model(input_moving, input_fixed, True)
+            warped_image, flow = pred['warped_img'], pred['disp']
             mse_loss = MSE(warped_image, input_fixed)
             ncc_loss_ori = loss_similarity(warped_image, input_fixed)
 
-            # F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
-
             loss_reg = Grad('l2', loss_mult=2).loss(None, flow)
-
-            # # reg2 - use velocity
-            # _, _, z, y, x = flow.shape
-            # flow[:, 2, :, :, :] = flow[:, 2, :, :, :] * (z - 1)
-            # flow[:, 1, :, :, :] = flow[:, 1, :, :, :] * (y - 1)
-            # flow[:, 0, :, :, :] = flow[:, 0, :, :, :] * (x - 1)
-            # loss_regulation = smoothloss(flow)
-
             loss_sum = ncc_loss_ori + args.alpha * loss_reg
 
             losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_reg.item(), loss_sum.item()])
-            # save_flow(F_X_Y_cpu, args.output_dir + '/warpped_flow.nii.gz')
-            # save_img(X_Y, args.output_dir + '/warpped_moving.nii.gz')
-            # m_name = "{}_warped.nii.gz".format(moving[1][0].split('.nii')[0])
-            # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-            # save_image(X_Y, input_fixed, args.output_dir, m_name)
-            # if batch == 0:
-            #     m_name = '{0}_{1}.nii.gz'.format(imgshape[0], step)
-            #     save_image(pred[1], input_fixed, args.output_dir, m_name)
-            #     m_name = '{0}_{1}_up.nii.gz'.format(imgshape[0], step)
-            #     save_image(X_Y_up, input_fixed, args.output_dir, m_name)
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
@@ -495,8 +467,7 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
                                                                                                                   3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        fixed_img.cpu().detach().numpy()[0, 0])
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
             ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
 

@@ -8,53 +8,53 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.datagenerators import Dataset, PatientDataset, DirLabDataset
+from utils.datagenerators import Dataset, PatientDataset, DirLabDataset, build_dataloader
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
 from utils.utilize import set_seed, load_landmarks, save_model
 from utils.scheduler import StopCriterion
 from utils.metric import get_test_photo_loss, landmark_loss
-from utils.Functions import validation_vm
+from utils.Functions import validation_vm, test_dirlab
 
 from GDIR.model import regnet
 
 args = get_args()
 
-def test_dirlab(args, model):
-    with torch.no_grad():
-        model.eval()
-        losses = []
-        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
-            moving_img = moving.to(args.device).float()
-            fixed_img = fixed.to(args.device).float()
-            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
-
-            # y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
-            y_pred = model(moving_img, fixed_img)
-            flow = y_pred['disp']
-
-            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-            # TRE
-            _mean, _std = landmark_loss(flow[0], landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'],
-                                        fixed_img.cpu().detach().numpy()[0, 0])
-
-            losses.append([_mean.item(), _std.item()])
-            # print('case=%d after warped, TRE=%.2f+-%.2f' % (
-            #     batch + 1, _mean.item(), _std.item()))
-
-    mean_total = np.mean(losses, 0)
-    mean_tre = mean_total[0]
-    mean_std = mean_total[1]
-
-    print('mean TRE=%.2f+-%.2f' % (
-        mean_tre, mean_std))
+# def test_dirlab(args, model):
+#     with torch.no_grad():
+#         model.eval()
+#         losses = []
+#         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+#             moving_img = moving.to(args.device).float()
+#             fixed_img = fixed.to(args.device).float()
+#             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+#             landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+#
+#             # y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
+#             y_pred = model(moving_img, fixed_img)
+#             flow = y_pred['disp']
+#
+#             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+#             # TRE
+#             _mean, _std = landmark_loss(flow[0], landmarks00 - torch.tensor(
+#                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+#                                         landmarks50 - torch.tensor(
+#                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+#                                                                                                                   3).cuda(),
+#                                         args.dirlab_cfg[batch + 1]['pixel_spacing'],
+#                                         fixed_img.cpu().detach().numpy()[0, 0])
+#
+#             losses.append([_mean.item(), _std.item()])
+#             # print('case=%d after warped, TRE=%.2f+-%.2f' % (
+#             #     batch + 1, _mean.item(), _std.item()))
+#
+#     mean_total = np.mean(losses, 0)
+#     mean_tre = mean_total[0]
+#     mean_std = mean_total[1]
+#
+#     print('mean TRE=%.2f+-%.2f' % (
+#         mean_tre, mean_std))
 
 def count_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -75,19 +75,6 @@ def train():
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
     device = args.device
-    # load file
-    fixed_folder = os.path.join(args.train_dir, 'fixed')
-    moving_folder = os.path.join(args.train_dir, 'moving')
-    f_img_file_list = sorted([os.path.join(fixed_folder, file_name) for file_name in os.listdir(fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_img_file_list = sorted([os.path.join(moving_folder, file_name) for file_name in os.listdir(moving_folder) if
-                              file_name.lower().endswith('.gz')])
-    # load data
-    train_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
-    # test_dataset = PatientDataset(moving_files=test_moving_list, fixed_files=test_fixed_list)
-    print("Number of training images: ", len(train_dataset))
-    train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-
     enc_nf = [16, 32, 32, 32]
     dec_nf = [32, 32, 32, 32, 32, 16, 16]
     model = vmnetwork.VxmDense(
@@ -151,7 +138,7 @@ def train():
             # flow, warped_image = y_pred[2], y_pred[0]
 
             res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_img'], res['disp']
+            warped_image, flow = res['warped_img'], res['flow']
 
             loss_list = []
             r_loss = args.alpha * regular_loss(None, flow)
@@ -201,33 +188,33 @@ def train():
             #                m2f_name)
             #     print("dvf have saved.")
 
-        # val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
-        #                                                                          image_loss_func
-        #                                                                          )
-        # if val_total_loss <= best_loss:
-        #     best_loss = val_total_loss
-        #     # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
-        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
-        #         val_total_loss)
-        #     logging.info("save model:{}".format(modelname))
-        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
-        # else:
-        #     modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
-        #         val_total_loss)
-        #     logging.info("save model:{}".format(modelname))
-        #     save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
+                                                                                 image_loss_func
+                                                                                 )
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        else:
+            modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
-        # mean_loss = np.mean(np.array(loss_total), 0)
-        # print(
-        #     "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
-        #         mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
-        #
-        # stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
-        # if stop_criterion.stop():
-        #     break
+        mean_loss = np.mean(np.array(loss_total), 0)
+        mean_tre = test_dirlab(args, model, test_loader_dirlab, is_train=True)
 
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        test_dirlab(args, model)
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+        if stop_criterion.stop():
+            break
+
 
 if __name__ == "__main__":
     with warnings.catch_warnings():
@@ -247,18 +234,7 @@ if __name__ == "__main__":
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
-
-    landmark_list = load_landmarks(args.landmark_dir)
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
-    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
-    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    train_loader = build_dataloader(args, mode='train')
+    test_loader_dirlab = build_dataloader(args, mode='test')
 
     train()
