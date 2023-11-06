@@ -15,19 +15,8 @@ from utils.config import get_args
 from utils.datagenerators import Dataset, PatientDataset, DirLabDataset
 from GDIR.model import regnet
 from utils.scheduler import StopCriterion
-from utils.utilize import set_seed, save_model, save_image, count_parameters, load_landmarks
+from utils.utilize import set_seed, save_model, save_image, count_parameters, load_landmarks, make_dirs
 from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC, landmark_loss
-
-
-def make_dirs():
-    if not os.path.exists(args.checkpoint_path):
-        os.makedirs(args.checkpoint_path)
-    if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dir)
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
 
 
 def test_patient(args, checkpoint, is_save=False):
@@ -217,13 +206,14 @@ if __name__ == "__main__":
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+
     model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_unet_lr{}_".format(train_time, args.lr)
 
     set_seed(42)
-    make_dirs()
+    make_dirs(args)
 
     fixed_folder_train = os.path.join(args.train_dir, 'fixed')
     moving_folder_train = os.path.join(args.train_dir, 'moving')
@@ -264,7 +254,7 @@ if __name__ == "__main__":
                                         landmark_files=landmark_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    # train_unet()
+    train_unet()
 
     # # ==============test====================
     # pa_fixed_folder = r'E:\datasets\registration\test_ori\fixed'

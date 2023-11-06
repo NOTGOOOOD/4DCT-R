@@ -75,7 +75,7 @@ class Model_lv1_signle(nn.Module):
 
         self.dialation_conv1 = nn.ModuleList([nn.Conv3d(self.in_channel, self.in_channel, kernel_size=3, stride=1, padding=2**i, dilation=2**i) for i in range(self.dialation_num)])
 
-        self.input_encoder = self.input_feature_extract(self.in_channel, self.in_channel * self.dialation_num, bias=bias_opt)
+        self.input_encoder = input_feature_extract(self.in_channel, self.in_channel * self.dialation_num, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.in_channel * self.dialation_num * 2+27, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt) if corr else nn.Conv3d(self.in_channel * self.dialation_num * 2, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt)
 
@@ -102,19 +102,6 @@ class Model_lv1_signle(nn.Module):
         self.output = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                               bias=False)
 
-    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
-                              bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
-                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
-        return layer
     def path_one(self, x):
         dialation_res = []
         for dialation in self.dialation_conv0:
@@ -174,6 +161,218 @@ class Model_lv1_signle(nn.Module):
             return {'disp': disp, 'warped_img': warped_img}
 
 
+class Model_lv1_signle(nn.Module):
+
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None, corr=False):
+        super(Model_lv1_signle, self).__init__()
+        self.in_channel = in_channel
+        self.n_classes = n_classes
+        self.start_channel = start_channel
+
+        self.range_flow = range_flow
+        self.is_train = is_train
+
+        self.grid_1 = grid
+        self.transform = AdaptiveSpatialTransformer()
+        self.correlation = CorrTorch() if corr else None
+
+        bias_opt = False
+        self.dialation_num = 3
+        self.dialation_conv0 = nn.ModuleList([nn.Conv3d(self.in_channel, self.in_channel, kernel_size=3, stride=1, padding=2**i,  dilation=2**i) for i in range(self.dialation_num)])
+
+        self.dialation_conv1 = nn.ModuleList([nn.Conv3d(self.in_channel, self.in_channel, kernel_size=3, stride=1, padding=2**i, dilation=2**i) for i in range(self.dialation_num)])
+
+        self.input_encoder = input_feature_extract(self.in_channel, self.in_channel * self.dialation_num, bias=bias_opt)
+
+        self.down_conv = nn.Conv3d(self.in_channel * self.dialation_num * 2+27, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt) if corr else nn.Conv3d(self.in_channel * self.dialation_num * 2, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt)
+
+        self.resblock_group = resblock_seq(self.start_channel * 8, bias_opt=bias_opt)
+
+        self.up = nn.ConvTranspose3d(self.start_channel * 8, self.start_channel * 4, 2, stride=2,
+                                     padding=0, output_padding=0, bias=bias_opt)
+
+        self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4 + self.in_channel * self.dialation_num * 2+27, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1)) if corr else nn.Sequential(
+            nn.Conv3d(self.start_channel * 4 + self.in_channel * self.dialation_num * 2, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+                              bias=False)
+
+    def path_one(self, x):
+        dialation_res = []
+        for dialation in self.dialation_conv0:
+            res = dialation(x)
+            dialation_res.append(res)
+
+        dialation_out1 = torch.sum(torch.stack(dialation_res),0)
+        return self.input_encoder(dialation_out1)
+
+    def path_two(self, x):
+        dialation_res = []
+        for dialation in self.dialation_conv1:
+            res = dialation(x)
+            dialation_res.append(res)
+
+        dialation_out2 = torch.sum(torch.stack(dialation_res),0)
+        return self.input_encoder(dialation_out2)
+
+    def ds_encoder_path(self, moving, fixed):
+        fea_moving = self.path_one(moving)
+        fea_fixed = self.path_two(fixed)
+        if self.correlation is not None:
+            fea_correlation = self.correlation(fea_moving, fea_fixed)
+            return torch.cat((fea_moving, fea_fixed, fea_correlation), 1)
+        else:
+            return torch.cat((fea_moving, fea_fixed), 1)
+
+    def decoder_path(self, fea_encoder):
+        e0 = self.down_conv(fea_encoder)
+        e0 = self.resblock_group(e0)
+        e0 = self.up(e0)
+
+        if e0.shape[2:] != fea_encoder.shape[2:]:
+            e0 = F.interpolate(e0, size=fea_encoder.shape[2:],
+                               mode='trilinear',
+                               align_corners=True)
+
+        embeding = torch.cat([e0, fea_encoder], dim=1)
+
+        decoder = self.decoder(embeding)
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        return (decoder + x1 + x2), e0
+
+    def forward(self, moving, fixed):
+        # x: moving y:fixed  b,c,d,h,w
+        fea_encoder = self.ds_encoder_path(moving, fixed)
+        decoder, fea = self.decoder_path(fea_encoder)
+        disp = self.output(decoder) * self.range_flow
+        warped_img = self.transform(moving, disp.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(moving.shape[2:], True))
+
+        if self.is_train is True:
+            return {'disp': disp, 'warped_img': warped_img, 'fea_pre': fea}
+        else:
+            return {'disp': disp, 'warped_img': warped_img}
+
+class Model_lv2_signle(nn.Module):
+
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, dialation_num = 3, grid=None, corr=False):
+        super(Model_lv2_signle, self).__init__()
+        self.in_channel = in_channel
+        self.n_classes = n_classes
+        self.start_channel = start_channel
+
+        self.range_flow = range_flow
+        self.is_train = is_train
+
+        self.grid_1 = grid
+        self.transform = AdaptiveSpatialTransformer()
+        self.correlation = CorrTorch() if corr else None
+
+        bias_opt = False
+        self.dialation_num = dialation_num
+        self.dialation_conv0 = nn.ModuleList([nn.Conv3d(self.in_channel, self.in_channel, kernel_size=3, stride=1, padding=2**i,  dilation=2**i) for i in range(self.dialation_num)])
+
+        self.dialation_conv1 = nn.ModuleList([nn.Conv3d(self.in_channel, self.in_channel, kernel_size=3, stride=1, padding=2**i, dilation=2**i) for i in range(self.dialation_num)])
+
+        self.input_encoder = input_feature_extract(self.in_channel, self.in_channel * self.dialation_num, bias=bias_opt)
+
+        self.down_conv = nn.Conv3d(self.in_channel * self.dialation_num * 2+27, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt) if corr else nn.Conv3d(self.in_channel * self.dialation_num * 2, self.start_channel * 8, kernel_size=3, stride=2,padding=1,bias=bias_opt)
+
+        self.resblock_group = resblock_seq(self.start_channel * 8, bias_opt=bias_opt)
+
+        self.up = nn.ConvTranspose3d(self.start_channel * 8, self.start_channel * 4, 2, stride=2,
+                                     padding=0, output_padding=0, bias=bias_opt)
+
+        self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4 + self.in_channel * self.dialation_num * 2+27, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1)) if corr else nn.Sequential(
+            nn.Conv3d(self.start_channel * 4 + self.in_channel * self.dialation_num * 2, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
+                              bias=False)
+
+    def path_one(self, x):
+        dialation_res = []
+        for dialation in self.dialation_conv0:
+            res = dialation(x)
+            dialation_res.append(res)
+
+        dialation_out1 = torch.sum(torch.stack(dialation_res),0)
+        return self.input_encoder(dialation_out1)
+
+    def path_two(self, x):
+        dialation_res = []
+        for dialation in self.dialation_conv1:
+            res = dialation(x)
+            dialation_res.append(res)
+
+        dialation_out2 = torch.sum(torch.stack(dialation_res),0)
+        return self.input_encoder(dialation_out2)
+
+    def ds_encoder_path(self, moving, fixed):
+        fea_moving = self.path_one(moving)
+        fea_fixed = self.path_two(fixed)
+        if self.correlation is not None:
+            fea_correlation = self.correlation(fea_moving, fea_fixed)
+            return torch.cat((fea_moving, fea_fixed, fea_correlation), 1)
+        else:
+            return torch.cat((fea_moving, fea_fixed), 1)
+
+    def decoder_path(self, fea_encoder):
+        e0 = self.down_conv(fea_encoder)
+        e0 = self.resblock_group(e0)
+        e0 = self.up(e0)
+
+        if e0.shape[2:] != fea_encoder.shape[2:]:
+            e0 = F.interpolate(e0, size=fea_encoder.shape[2:],
+                               mode='trilinear',
+                               align_corners=True)
+
+        embeding = torch.cat([e0, fea_encoder], dim=1)
+
+        decoder = self.decoder(embeding)
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        return (decoder + x1 + x2), e0
+
+    def forward(self, moving, fixed):
+        # x: moving y:fixed  b,c,d,h,w
+        fea_encoder = self.ds_encoder_path(moving, fixed)
+        decoder, fea = self.decoder_path(fea_encoder)
+        disp = self.output(decoder) * self.range_flow
+        warped_img = self.transform(moving, disp.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(moving.shape[2:], True))
+
+        if self.is_train is True:
+            return {'disp': disp, 'warped_img': warped_img, 'fea_pre': fea}
+        else:
+            return {'disp': disp, 'warped_img': warped_img}
+
 class Model_lv1(nn.Module):
 
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
@@ -195,7 +394,7 @@ class Model_lv1(nn.Module):
         self.dialation_conv1 = nn.Conv3d(self.in_channel, self.start_channel, kernel_size=3, stride=1, padding=2,
                                          dilation=2)
 
-        self.input_encoder_lvl1 = self.input_feature_extract(self.start_channel, self.start_channel,
+        self.input_encoder_lvl1 = input_feature_extract(self.start_channel, self.start_channel,
                                                              bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel, self.start_channel * 4, kernel_size=3, stride=2,
@@ -221,20 +420,6 @@ class Model_lv1(nn.Module):
 
         self.output_lvl1 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
-
-    def input_feature_extract(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
-                              bias=False, batchnorm=False):
-        if batchnorm:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.BatchNorm3d(out_channels),
-                nn.ReLU())
-        else:
-            layer = nn.Sequential(
-                nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
-                nn.LeakyReLU(0.2),
-                nn.Conv3d(out_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias))
-        return layer
 
     def forward(self, x, y):
         # x: moving y:fixed  b,c,d,h,w

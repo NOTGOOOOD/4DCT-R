@@ -88,10 +88,11 @@ def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, spaci
 
 
 def data_standardization_0_n(range, img):
-    if torch.is_tensor(img):
-        return range * (img - torch.min(img)) / (torch.max(img) - torch.min(img))
-    else:
-        return range * (img - np.min(img)) / (np.max(img) - np.min(img))
+    return img / 1250.
+    # if torch.is_tensor(img):
+    #     return range * (img - torch.min(img)) / (torch.max(img) - torch.min(img))
+    # else:
+    #     return range * (img - np.min(img)) / (np.max(img) - np.min(img))
 
 
 def data_standardization_mean_std(img):

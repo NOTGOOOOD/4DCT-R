@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
+import utils.Functions
 from voxelmorph.vmmodel import layers
 from voxelmorph.vmmodel.modelio import store_config_args, LoadableModel
 
@@ -250,7 +251,7 @@ class VxmDense(LoadableModel):
         self.integrate = layers.VecInt(None,int_steps) if int_steps > 0 else None
         # configure transformer
         # self.transformer = layers.SpatialTransformer(inshape)
-        self.transformer = layers.SpatialTransformer(self.dim)
+        self.transformer = utils.Functions.SpatialTransformer(self.dim)
 
     def forward(self, source, target, registration=False):
         '''

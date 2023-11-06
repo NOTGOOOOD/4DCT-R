@@ -1,5 +1,4 @@
 import os
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
 import SimpleITK as sitk
@@ -234,3 +233,14 @@ if __name__ == '__main__':
     # scan = sitk.GetArrayFromImage(img)
     # print("1")
     # dvf_save_nii("4DCT-R", "result/general_reg/dvf/")
+
+
+def make_dirs(args):
+    if not os.path.exists(args.checkpoint_path):
+        os.makedirs(args.checkpoint_path)
+    if not os.path.exists(args.result_dir):
+        os.makedirs(args.result_dir)
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
