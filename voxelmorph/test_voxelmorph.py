@@ -24,18 +24,18 @@ def test_dirlab(args, checkpoint, is_save=False):
 
             y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
 
-            ncc = NCC(fixed_img.cpu().detach().numpy(), y_pred[0].cpu().detach().numpy())
+            ncc = NCC(fixed_img.cpu().detach().numpy(), y_pred['warped_img'].cpu().detach().numpy())
 
-            jac = jacobian_determinant(y_pred[1][0].cpu().detach().numpy())
+            jac = jacobian_determinant(y_pred['disp'][0].cpu().detach().numpy())
 
             # MSE
-            _mse = MSE(fixed_img, y_pred[0])
+            _mse = MSE(fixed_img, y_pred['warped_img'])
             # SSIM
-            _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], y_pred[0].cpu().detach().numpy()[0, 0])
+            _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], y_pred['warped_img'].cpu().detach().numpy()[0, 0])
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
             # TRE
-            _mean, _std = landmark_loss(y_pred[1][0], landmarks00 - torch.tensor(
+            _mean, _std = landmark_loss(y_pred['disp'][0], landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
@@ -51,11 +51,11 @@ def test_dirlab(args, checkpoint, is_save=False):
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
                 m2f_name = img_name[0][:13] + '_flow_vm.nii.gz'
-                save_image(torch.permute(y_pred[1][0], (1, 2, 3, 0)), fixed_img[0], args.output_dir,
+                save_image(y_pred['disp'][0].permute(1, 2, 3, 0), fixed_img[0], args.output_dir,
                            m2f_name)
 
-                m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
-                save_image(y_pred[0], fixed_img, args.output_dir, m_name)
+                m_name = "{}_warped_VM.nii.gz".format(img_name[0][:13])
+                save_image(y_pred['warped_img'], fixed_img, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
@@ -125,21 +125,21 @@ if __name__ == '__main__':
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
 
-    # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    # pa_moving_folder = r'E:\datasets\registration\patient\moving'
-    pa_moving_folder = r'D:\xxf\test_patient\moving'
-
-    f_patient_file_list = sorted(
-        [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
-         file_name.lower().endswith('.gz')])
-    m_patient_file_list = sorted(
-        [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
-         file_name.lower().endswith('.gz')])
-
-    test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
-                                          num_workers=0)
+    # # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
+    # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
+    # # pa_moving_folder = r'E:\datasets\registration\patient\moving'
+    # pa_moving_folder = r'D:\xxf\test_patient\moving'
+    #
+    # f_patient_file_list = sorted(
+    #     [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
+    #      file_name.lower().endswith('.gz')])
+    # m_patient_file_list = sorted(
+    #     [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
+    #      file_name.lower().endswith('.gz')])
+    #
+    # test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
+    # test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
+    #                                       num_workers=0)
 
     landmark_list = load_landmarks(args.landmark_dir)
     dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
@@ -154,7 +154,7 @@ if __name__ == '__main__':
                                         landmark_files=landmark_list)
     test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    prefix = '2023-04-09-15-39-19'
+    prefix = '2023-09-11-23-40-13'
     model_dir = args.checkpoint_path
 
     enc_nf = [16, 32, 32, 32]
@@ -175,6 +175,6 @@ if __name__ == '__main__':
         for checkpoint in checkpoint_list:
             print(checkpoint)
             test_dirlab(args, checkpoint)
-            test_patient(args, checkpoint)
+            # test_patient(args, checkpoint)
 
     # validation(args)
