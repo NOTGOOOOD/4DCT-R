@@ -16,7 +16,7 @@ set_seed(1024)
 from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
-from utils.datagenerators import Dataset, DirLabDataset, build_dataloader
+from utils.datagenerators import Dataset, DirLabDataset, build_dataloader_dirlab
 from utils.config import get_args
 from utils.losses import NCC, smoothloss, multi_resolution_NCC, neg_Jdet_loss
 from utils.scheduler import StopCriterion
@@ -431,9 +431,9 @@ if __name__ == "__main__":
     iteration_lvl2 = args.iteration_lvl2
     iteration_lvl3 = args.iteration_lvl3
 
-    train_loader = build_dataloader(args, mode='train')
-    val_loader = build_dataloader(args, mode='val')
-    test_loader_dirlab = build_dataloader(args, mode='test')
+    train_loader = build_dataloader_dirlab(args, mode='train')
+    val_loader = build_dataloader_dirlab(args, mode='val')
+    test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
 
     make_dirs()
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])

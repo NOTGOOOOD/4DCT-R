@@ -7,7 +7,7 @@ import time
 import torch.nn.functional as F
 
 from utils.Functions import get_loss, Grid, transform_unit_flow_to_flow_cuda, AdaptiveSpatialTransformer, test_dirlab
-from utils.datagenerators import build_dataloader
+from utils.datagenerators import build_dataloader_dirlab
 from utils.config import get_args
 from utils.losses import NCC, multi_resolution_NCC, neg_Jdet_loss, gradient_loss as smoothloss
 from utils.scheduler import StopCriterion
@@ -168,8 +168,8 @@ if __name__ == "__main__":
     iteration_lvl1 = args.iteration_lvl1
     grid_class = Grid()
     range_flow = 0.4
-    train_loader = build_dataloader(args, 'train')
-    val_loader = build_dataloader(args, 'val')
-    test_loader_dirlab = build_dataloader(args, 'test')
+    train_loader = build_dataloader_dirlab(args, 'train')
+    val_loader = build_dataloader_dirlab(args, 'val')
+    test_loader_dirlab = build_dataloader_dirlab(args, 'test')
 
     train_lvl1()

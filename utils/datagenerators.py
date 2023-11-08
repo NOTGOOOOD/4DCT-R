@@ -106,7 +106,10 @@ class PatientDataset(Data.Dataset):
         return [m_img, f_img, m_name]
 
 
-def build_dataloader(args, mode='train', batch_size=1, num_w=0):
+def build_dataloader_dirlab(args, mode='train', batch_size=1, num_w=0):
+    if mode not in ["train", "val", "test"]:
+        raise ValueError("mode not in [train, val, test]")
+
     if mode=="train":
         fixed_folder = os.path.join(args.train_dir, 'fixed')
         moving_folder = os.path.join(args.train_dir, 'moving')

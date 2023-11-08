@@ -68,7 +68,7 @@ def get_args():
     parser.add_argument("--model", type=str, help="select model",
                         dest="model", default='vm')
     parser.add_argument("--result_dir", type=str, help="results folder",
-                        dest="result_dir", default='./result/vm')
+                        dest="result_dir", default='./result')
     parser.add_argument("--size", type=int, dest="size", default='144')
     parser.add_argument("--initial_channels", type=int, dest="initial_channels", default=16)  # default 16
     parser.add_argument("--bidir", action='store_true')

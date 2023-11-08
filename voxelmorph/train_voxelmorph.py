@@ -8,11 +8,11 @@ import logging
 import time
 
 from utils.config import get_args
-from utils.datagenerators import Dataset, PatientDataset, DirLabDataset, build_dataloader
+from utils.datagenerators import Dataset, PatientDataset, DirLabDataset, build_dataloader_dirlab
 from voxelmorph.vmmodel import vmnetwork
 from voxelmorph.vmmodel.losses import Grad, MSE
 from utils.losses import NCC as NCC_new
-from utils.utilize import set_seed, load_landmarks, save_model
+from utils.utilize import set_seed, load_landmarks, save_model, count_parameters
 from utils.scheduler import StopCriterion
 from utils.metric import get_test_photo_loss, landmark_loss
 from utils.Functions import validation_vm, test_dirlab
@@ -62,15 +62,6 @@ def count_parameters(model):
     return params
 
 
-def make_dirs():
-    if not os.path.exists(args.checkpoint_path):
-        os.makedirs(args.checkpoint_path)
-    if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dir)
-    if not os.path.exists(args.log_dir):
-        os.makedirs(args.log_dir)
-
-
 def train():
     # set gpu
     # landmark_list = load_landmarks(args.landmark_dir)
@@ -86,7 +77,7 @@ def train():
     )
     # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False)
     model = model.to(device)
-
+    print(count_parameters(model))
     # Set optimizer and losses
     # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
@@ -196,14 +187,12 @@ def train():
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
             modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}best.pth'.format(
                 val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
         else:
             modelname = model_dir + '/' + model_name + '_{:03d}_'.format(i) + '{:.4f}.pth'.format(
                 val_total_loss)
-            logging.info("save model:{}".format(modelname))
-            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
 
+        save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        logging.info("save model:{}".format(modelname))
         mean_loss = np.mean(np.array(loss_total), 0)
         mean_tre = test_dirlab(args, model, test_loader_dirlab, is_train=True)
 
@@ -226,7 +215,7 @@ if __name__ == "__main__":
     model_name = "{}_vm_".format(train_time)
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
-    make_dirs()
+
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     logging.basicConfig(level=logging.INFO,
@@ -234,7 +223,7 @@ if __name__ == "__main__":
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
-    train_loader = build_dataloader(args, mode='train')
-    test_loader_dirlab = build_dataloader(args, mode='test')
+    train_loader = build_dataloader_dirlab(args, mode='train')
+    test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
 
     train()

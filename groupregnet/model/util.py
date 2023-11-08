@@ -54,7 +54,7 @@ class CalcDisp(object):
 
         return backward_disp
         
-    def compose_disp(self, disp_i2t, disp_t2i, mode = 'corr'):
+    def compose_disp(self, disp_i2t, disp_t2i, mode='corr'):
         '''
         compute the composition field
         

@@ -11,7 +11,7 @@ import copy
 
 from midir.model.loss import l2reg_loss
 from midir.model.transformation import CubicBSplineFFDTransform, warp
-from utils.datagenerators import Dataset, build_dataloader
+from utils.datagenerators import Dataset, build_dataloader_dirlab
 from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss, Grad
 from utils.metric import MSE, jacobian_determinant, landmark_loss, NCC as mtNCC, SSIM
 
@@ -257,32 +257,31 @@ def validation_midir(args, model, imgshape, loss_similarity):
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
-
+@torch.no_grad()
 def validation_vm(args, model, loss_similarity):
-    val_loader = build_dataloader(args, mode='val')
+    val_loader = build_dataloader_dirlab(args, mode='val')
 
     transform = SpatialTransform_unit().cuda()
     transform.eval()
 
-    with torch.no_grad():
-        model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
-        losses = []
-        for batch, (moving, fixed) in enumerate(val_loader):
-            input_moving = moving[0].to('cuda').float()
-            input_fixed = fixed[0].to('cuda').float()
+    model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
+    losses = []
+    for batch, (moving, fixed) in enumerate(val_loader):
+        input_moving = moving[0].to('cuda').float()
+        input_fixed = fixed[0].to('cuda').float()
 
-            pred = model(input_moving, input_fixed, True)
-            warped_image, flow = pred['warped_img'], pred['disp']
-            mse_loss = MSE(warped_image, input_fixed)
-            ncc_loss_ori = loss_similarity(warped_image, input_fixed)
+        pred = model(input_moving, input_fixed, True)
+        warped_image, flow = pred['warped_img'], pred['disp']
+        mse_loss = MSE(warped_image, input_fixed)
+        ncc_loss_ori = loss_similarity(warped_image, input_fixed)
 
-            loss_reg = Grad('l2', loss_mult=2).loss(None, flow)
-            loss_sum = ncc_loss_ori + args.alpha * loss_reg
+        loss_reg = Grad('l2', loss_mult=2).loss(None, flow)
+        loss_sum = ncc_loss_ori + args.alpha * loss_reg
 
-            losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_reg.item(), loss_sum.item()])
+        losses.append([ncc_loss_ori.item(), mse_loss.item(), loss_reg.item(), loss_sum.item()])
 
-        mean_loss = np.mean(losses, 0)
-        return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
+    mean_loss = np.mean(losses, 0)
+    return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 
 def validation_lapirn_bak(args, model, imgshape, loss_similarity, ori_shape):
@@ -389,48 +388,47 @@ class Grid():
 
         return grid
 
-
+@torch.no_grad()
 def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logging=None):
     model.eval()
-    with torch.no_grad():
-        losses = []
-        for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
-            moving_img = moving.to(args.device).float()
-            fixed_img = fixed.to(args.device).float()
-            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+    losses = []
+    for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+        moving_img = moving.to(args.device).float()
+        fixed_img = fixed.to(args.device).float()
+        landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+        landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            pred = model(moving_img, fixed_img)
-            flow = pred['disp']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
-            warped_img = pred['warped_img']
+        pred = model(moving_img, fixed_img)
+        flow = pred['disp']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+        warped_img = pred['warped_img']
 
-            F_X_Y_norm = copy.deepcopy(flow)
-            if norm:
-                F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
-                F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
+        F_X_Y_norm = copy.deepcopy(flow)
+        if norm:
+            F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
+            F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
 
-            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+        crop_range = args.dirlab_cfg[batch + 1]['crop_range']
 
-            # TRE
-            _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
-                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                        landmarks50 - torch.tensor(
-                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                                  3).cuda(),
-                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
+        # TRE
+        _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
+            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                    landmarks50 - torch.tensor(
+                                        [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                              3).cuda(),
+                                    args.dirlab_cfg[batch + 1]['pixel_spacing'])
 
-            ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
+        ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
 
-            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
-            jac = jacobian_determinant(warped_img[0].cpu().detach().numpy())
+        # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
+        jac = jacobian_determinant(warped_img[0].cpu().detach().numpy())
 
-            # SSIM
-            ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], warped_img.cpu().detach().numpy()[0, 0])
+        # SSIM
+        ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], warped_img.cpu().detach().numpy()[0, 0])
 
-            losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
-            if not is_train:
-                print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
-                    batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+        losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
+        if not is_train:
+            print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
 
     mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 
