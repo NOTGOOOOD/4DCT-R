@@ -3,11 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import resnet18
-
+from torch.distributions.normal import Normal
 from typing import Optional, Union, Type, List, Tuple, Dict
 from collections import OrderedDict
 from utils.Functions import SpatialTransformer
-
 from resnet18 import BasicBlock, Bottleneck
 
 
@@ -173,6 +172,9 @@ class UnetDecoder(nn.Module):
 
         for s in self.scales:
             self.convs[("dispconv", s)] = Conv3x3(self.num_ch_dec[s], self.num_output_channels)
+            # init flow layer with small weights and bias
+            self.convs[("dispconv", s)].weight = nn.Parameter(Normal(0, 1e-5).sample(self.convs[("dispconv", s)].conv.weight.shape))
+            self.convs[("dispconv", s)].bias = nn.Parameter(torch.zeros(self.convs[("dispconv", s)].conv.bias.shape))
 
         self.decoder = nn.ModuleList(list(self.convs.values()))
         self.activate = nn.LeakyReLU(0.2)
@@ -202,8 +204,7 @@ class UnetDecoder(nn.Module):
 
 
 class ResUnetModel(nn.Module):
-    def __init__(self,
-                 ):
+    def __init__(self):
         super(ResUnetModel, self).__init__()
 
         self.encoder = ResNetEncoder(num_layers=18)
