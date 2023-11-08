@@ -135,18 +135,19 @@ class Unet(nn.Module):
             for conv in convs:
                 x = conv(x)
             x_history.append(x)
-            # x = self.pooling[level](x)
-            x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
-                              align_corners=True, recompute_scale_factor=False)
+            x = self.pooling[level](x)
+            # x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
+            #                   align_corners=True, recompute_scale_factor=False)
 
         # decoder forward pass with upsampling and concatenation
         for level, convs in enumerate(self.decoder):
             for conv in convs:
                 x = conv(x)
             if not self.half_res or level < (self.nb_levels - 2):
-                # x = self.upsampling[level](x)
-                x = F.interpolate(x, x_history[-1].shape[2:], mode='trilinear',
-                                     align_corners=True)
+                x = self.upsampling[level](x)
+                if x.shape[2:] != x_history[-1].shape[2:]:
+                    x = F.interpolate(x, x_history[-1].shape[2:], mode='trilinear',
+                                         align_corners=True)
                 x = torch.cat([x, x_history.pop()], dim=1)
 
         # remaining convs at full resolution
@@ -288,7 +289,8 @@ class VxmDense(LoadableModel):
                 pos_flow = self.fullsize(pos_flow)
                 neg_flow = self.fullsize(neg_flow) if self.bidir else None
 
-        if source.shape != pos_flow.shape:
+        if source.shape[2:] != pos_flow.shape[2:]:
+            print("warning: source dosent consistence with pos_flow")
             pos_flow = F.interpolate(pos_flow, source.shape[2:], mode='trilinear',
                                     align_corners=True)
             
