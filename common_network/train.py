@@ -27,7 +27,7 @@ def validation(args, model, loss_similarity):
         input_fixed = fixed[0].to('cuda').float()
 
         res = model(input_moving,input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-        warped_image, flow = res['warped_img'], res['disp']
+        warped_image, flow = res['warped_img'], res['flow']
 
         mse_loss = MSE(warped_image, input_fixed)
         ncc_loss_ori = loss_similarity(warped_image, input_fixed)
@@ -40,16 +40,13 @@ def validation(args, model, loss_similarity):
     return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]
 
 
-def train_unet():
+def train_unet(model):
     """
     uent 系列都用这个
     Returns
     -------
 
     """
-
-    model = ResUnetModel()
-    model = model.to(device)
     print(count_parameters(model))
 
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
@@ -74,7 +71,7 @@ def train_unet():
             input_fixed = fixed_file[0].to(device).float()
 
             res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow_m2f = res['warped_img'], res['disp']
+            warped_image, flow_m2f = res['warped_img'], res['flow']
 
             loss_list = []
             sim_loss = image_loss_func(warped_image, input_fixed)
@@ -118,25 +115,27 @@ def train_unet():
         if stop_criterion.stop():
             break
 
-def test_unet():
+
+def test_unet(model):
     prefix = '2023-04-21-17-47-16'
     model_dir = args.checkpoint_path
-    model = ResUnetModel()
-    model = model.to(device)
 
-    model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
     if args.checkpoint_name is not None:
+        model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
         test_dirlab(args, model, test_loader_dirlab, is_train=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            test_dirlab(args, checkpoint)
+            model.load_state_dict(torch.load(checkpoint)['model'])
+            test_dirlab(args, model, test_loader_dirlab, is_train=False)
+
 
 if __name__ == "__main__":
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+
     args = get_args()
     model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
@@ -150,24 +149,7 @@ if __name__ == "__main__":
     val_loader = build_dataloader_dirlab(args, mode="val")
     test_loader_dirlab = build_dataloader_dirlab(args, mode="test")
 
-    train_unet()
-
-    # test_unet()
-    # # ==============test====================
-    # pa_fixed_folder = r'E:\datasets\registration\test_ori\fixed'
-    # # pa_fixed_folder = r'D:\xxf\test_patient\fixed'
-    # pa_moving_folder = r'E:\datasets\registration\test_ori\moving'
-    # # pa_moving_folder = r'D:\xxf\test_patient\moving'
-    #
-    # f_patient_file_list = sorted(
-    #     [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
-    #      file_name.lower().endswith('.gz')])
-    # m_patient_file_list = sorted(
-    #     [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
-    #      file_name.lower().endswith('.gz')])
-    #
-    # test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-    # test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
-    #                                       num_workers=0)
-    #
-    # =======================================
+    model = ResUnetModel()
+    model = model.to(device)
+    train_unet(model)
+    # test_unet(model)

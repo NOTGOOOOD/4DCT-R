@@ -30,7 +30,7 @@ def test_patient(args, checkpoint, is_save=False):
             fixed_img = fixed.to(args.device).float()
 
             res = model(moving_img,fixed_img)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_img'], res['disp']
+            warped_image, flow = res['warped_img'], res['flow']
 
             ncc = calc_NCC(fixed_img.cpu().detach().numpy(), warped_image.cpu().detach().numpy())
 
@@ -81,7 +81,7 @@ def validation(args, model, loss_similarity):
             input_fixed = fixed[0].to('cuda').float()
 
             res = model(input_moving,input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_img'], res['disp']
+            warped_image, flow = res['warped_img'], res['flow']
 
             mse_loss = MSE(warped_image, input_fixed)
             ncc_loss_ori = loss_similarity(warped_image, input_fixed)
@@ -144,7 +144,7 @@ def train_unet():
             input_fixed = fixed_file[0].to(device).float()
 
             res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow_m2f = res['warped_img'], res['disp']
+            warped_image, flow_m2f = res['warped_img'], res['flow']
 
             loss_list = []
             sim_loss = image_loss_func(warped_image, input_fixed)
@@ -278,14 +278,15 @@ if __name__ == "__main__":
     model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=False)
     model = model.to(device)
 
-    model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
     if args.checkpoint_name is not None:
+        model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
         test_dirlab(args, model, test_loader_dirlab, is_train=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
             print(checkpoint)
-            test_dirlab(args, checkpoint)
+            model.load_state_dict(torch.load(checkpoint)['model'])
+            test_dirlab(args, model, test_loader_dirlab, is_train=False)
             # test_patient(args, checkpoint)
     # =======================================

@@ -39,7 +39,7 @@ def set_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True   # 固定cuda的随机数种子 复现结果应选择False
+    torch.backends.cudnn.benchmark = False   # 是否固定cuda的随机数种子 复现结果应选择False
 
 
 def count_parameters(model):

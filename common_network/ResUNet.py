@@ -220,5 +220,5 @@ class ResUnetModel(nn.Module):
         warped_img = self.stn(src_img, output[("disp", 0)])
 
         res['warped_img'] = warped_img
-        res['disp'] = output[("disp", 0)]
+        res['flow'] = output[("disp", 0)]
         return res

@@ -38,7 +38,7 @@ def validation_ccregnet(args, model, loss_similarity, grid_class, scale_factor):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
             pred = model(input_moving, input_fixed)
-            F_X_Y = pred['disp']
+            F_X_Y = pred['flow']
 
             if scale_factor > 1:
                 F_X_Y = F.interpolate(F_X_Y, input_moving.shape[2:], mode='trilinear',
@@ -119,7 +119,7 @@ def train_lvl1():
 
             # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
             pred = model(X, Y)
-            F_X_Y, X_Y, Y_4x = pred['disp'], pred['warped_img'], pred['down_y']
+            F_X_Y, X_Y, Y_4x = pred['flow'], pred['warped_img'], pred['down_y']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
@@ -221,7 +221,7 @@ def train_lvl2():
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, lv2_out, down_y, output_disp_e0_v, lvl1_v, e0
             pred = model(X, Y)
-            F_X_Y, X_Y, Y_4x = pred['disp'], pred['warped_img'], pred['down_y']
+            F_X_Y, X_Y, Y_4x = pred['flow'], pred['warped_img'], pred['down_y']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,
@@ -345,7 +345,7 @@ def train_lvl3():
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
             pred = model(X, Y)
-            F_X_Y, X_Y = pred['disp'], pred['warped_img']
+            F_X_Y, X_Y = pred['flow'], pred['warped_img']
 
             loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
                                                                      loss_smooth, F_X_Y,

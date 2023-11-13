@@ -33,7 +33,7 @@ args = get_args()
 #
 #             # y_pred = model(moving_img, fixed_img, True)  # b, c, d, h, w warped_image, flow_m2f
 #             y_pred = model(moving_img, fixed_img)
-#             flow = y_pred['disp']
+#             flow = y_pred['flow']
 #
 #             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
 #             # TRE
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     set_seed(42)
     model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_vm_".format(train_time)
+    model_name = "{}_ccesingle_".format(train_time)
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 

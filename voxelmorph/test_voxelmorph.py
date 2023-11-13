@@ -26,7 +26,7 @@ def test_dirlab(args, checkpoint, is_save=False):
 
             ncc = NCC(fixed_img.cpu().detach().numpy(), y_pred['warped_img'].cpu().detach().numpy())
 
-            jac = jacobian_determinant(y_pred['disp'][0].cpu().detach().numpy())
+            jac = jacobian_determinant(y_pred['flow'][0].cpu().detach().numpy())
 
             # MSE
             _mse = MSE(fixed_img, y_pred['warped_img'])
@@ -35,7 +35,7 @@ def test_dirlab(args, checkpoint, is_save=False):
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
             # TRE
-            _mean, _std = landmark_loss(y_pred['disp'][0], landmarks00 - torch.tensor(
+            _mean, _std = landmark_loss(y_pred['flow'][0], landmarks00 - torch.tensor(
                 [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
                                         landmarks50 - torch.tensor(
                                             [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
@@ -51,7 +51,7 @@ def test_dirlab(args, checkpoint, is_save=False):
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
                 m2f_name = img_name[0][:13] + '_flow_vm.nii.gz'
-                save_image(y_pred['disp'][0].permute(1, 2, 3, 0), fixed_img[0], args.output_dir,
+                save_image(y_pred['flow'][0].permute(1, 2, 3, 0), fixed_img[0], args.output_dir,
                            m2f_name)
 
                 m_name = "{}_warped_VM.nii.gz".format(img_name[0][:13])

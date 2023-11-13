@@ -561,7 +561,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         # lvl1_disp, warpped_inputx_lvl1_out, _, lvl1_v, lvl1_embedding = self.model_lvl1(x, y)
         pred = self.model_lvl1(x, y)
-        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['disp'], pred['warped_img'], pred['embedding']
+        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['flow'], pred['warped_img'], pred['embedding']
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
@@ -695,7 +695,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         # lvl2_disp, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, _, lvl2_v, lvl1_v, lvl2_embedding = self.model_lvl2(
         #     x, y)
         pred = self.model_lvl2(x, y)
-        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['disp'], pred['warped_img'], pred['embedding']
+        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
 
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',

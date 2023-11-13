@@ -271,7 +271,7 @@ def validation_vm(args, model, loss_similarity):
         input_fixed = fixed[0].to('cuda').float()
 
         pred = model(input_moving, input_fixed, True)
-        warped_image, flow = pred['warped_img'], pred['disp']
+        warped_image, flow = pred['warped_img'], pred['flow']
         mse_loss = MSE(warped_image, input_fixed)
         ncc_loss_ori = loss_similarity(warped_image, input_fixed)
 
@@ -399,7 +399,7 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
         landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
         pred = model(moving_img, fixed_img)
-        flow = pred['disp']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+        flow = pred['flow']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
         warped_img = pred['warped_img']
 
         F_X_Y_norm = copy.deepcopy(flow)
