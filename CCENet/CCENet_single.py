@@ -533,7 +533,7 @@ class Model_lv2(nn.Module):
     def forward(self, x, y):
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
         pred = self.model_lvl1(x, y)
-        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['disp'], pred['warped_img'], pred['embedding']
+        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['flow'], pred['warped_img'], pred['embedding']
 
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
@@ -655,7 +655,7 @@ class Model_lv3(nn.Module):
     def forward(self, x, y):
         # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
         pred = self.model_lvl2(x, y)
-        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['disp'], pred['warped_img'], pred['embedding']
+        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
 
         lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                      mode='trilinear',
