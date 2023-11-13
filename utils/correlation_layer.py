@@ -63,6 +63,93 @@ class CorrTorch(nn.Module):
 
         return self.activate(output)
 
+# 2D
+class CorrBlock:
+    def __init__(
+            self,
+            fmap1: torch.Tensor,
+            fmap2: torch.Tensor,
+            num_levels: Optional[int] = 4,
+            radius: Optional[int] = 3
+    ):
+        """ Large-memory correlation-volume implementation
+        Args:
+            fmap1: Correlation features of shape (B, N, F, H, W) - F features per pixel
+            fmap2: Correlation features of shape (B, N, F, H, W)
+            num_levels: Number of correlation-volume levels (Each level l has dimensions (H/2**l, W/2**l, H, W))
+            radius: Volume sampling radius
+        """
+        self.num_levels = num_levels
+        self.radius = radius
+        self.corr_pyramid = []
+
+        # all pairs correlation
+        corr = CorrBlock.corr(fmap1, fmap2)
+
+        batch, num, h1, w1, h2, w2 = corr.shape
+        corr = corr.reshape(batch * num * h1 * w1, 1, h2, w2)
+
+        for i in range(self.num_levels):
+            self.corr_pyramid.append(
+                corr.view(batch * num, h1, w1, h2 // 2 ** i, w2 // 2 ** i))
+            corr = F.avg_pool2d(corr, 2, stride=2)
+
+    def __call__(self, coords: torch.Tensor, *args) -> torch.Tensor:
+        """ Sample from correlation volume
+        Args:
+            coords: Sampling coordinates of shape (B, N, H, W, 2)
+        Returns:
+            Sampled features of shape (B, N, num_levels * (radius + 1)**2, H, W)
+        """
+        out_pyramid = []
+        batch, num, ht, wd, _ = coords.shape
+        coords = coords.permute(0, 1, 4, 2, 3)
+        coords = coords.contiguous().view(batch * num, 2, ht, wd)
+
+        for i in range(self.num_levels):
+            corr = CorrSampler.apply(self.corr_pyramid[i], coords / 2 ** i, self.radius)
+            out_pyramid.append(corr.view(batch, num, -1, ht, wd))
+
+        return torch.cat(out_pyramid, dim=2)
+
+    def cat(self, other: Self) -> Self:
+        """ Concatenates self with given corr-volume
+        Args:
+            other: Other correlation-volume
+        Returns:
+            self
+        """
+        for i in range(self.num_levels):
+            self.corr_pyramid[i] = torch.cat([self.corr_pyramid[i], other.corr_pyramid[i]], 0)
+        return self
+
+    def __getitem__(self, index: torch.Tensor) -> Self:
+        """ Index correlation volume
+        Args:
+            index: Mask or indices of volumes to keep
+        Returns:
+            Indexed instance
+        """
+        for i in range(self.num_levels):
+            self.corr_pyramid[i] = self.corr_pyramid[i][index]
+        return self
+
+    @staticmethod
+    def corr(fmap1: torch.Tensor, fmap2: torch.Tensor) -> torch.Tensor:
+        """ Calculates all-pairs correlation
+        Args:
+            fmap1: Correlation features of shape (B, N, F, H, W) - F features per pixel
+            fmap2: Correlation features of shape (B, N, F, H, W)
+        Returns:
+            Correlation volume of shape (B, N, H, W, H; W)
+        """
+        batch, num, dim, ht, wd = fmap1.shape
+        fmap1 = fmap1.reshape(batch * num, dim, ht * wd) / 4.0
+        fmap2 = fmap2.reshape(batch * num, dim, ht * wd) / 4.0
+
+        corr = torch.matmul(fmap1.transpose(1, 2), fmap2)
+        return corr.view(batch, num, ht, wd, ht, wd)
+
 
 if __name__ == '__main__':
     a = torch.randn((1, 2, 3, 4, 5))
