@@ -13,10 +13,11 @@ from utils.Functions import SpatialTransform_unit, generate_grid, test_dirlab
 from utils.losses import NCC, gradient_loss, neg_Jdet_loss, Grad
 from utils.config import get_args
 from utils.datagenerators import Dataset, PatientDataset, DirLabDataset, build_dataloader_dirlab
-from ResUNet import ResUnetModel
 from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model, save_image, count_parameters, load_landmarks, make_dirs
 from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC, landmark_loss
+from ResUNet import ResUnetModel
+from GDIR.model import regnet
 
 @torch.no_grad()
 def validation(args, model, loss_similarity):
@@ -150,6 +151,8 @@ if __name__ == "__main__":
     test_loader_dirlab = build_dataloader_dirlab(args, mode="test")
 
     model = ResUnetModel()
+    # model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False,
+    #                                flag_512=False)
     model = model.to(device)
-    train_unet(model)
-    # test_unet(model)
+    # train_unet(model)
+    test_unet(model)

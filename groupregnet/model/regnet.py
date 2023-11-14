@@ -160,7 +160,7 @@ class RegNet_pairwise(nn.Module):
 
         warped_img = self.spatial_transform(input_image[:, 1:], disp).squeeze()  # (h, w) or (d, h, w)
 
-        res = {'disp': disp.squeeze(0), 'scaled_disp': scaled_disp.squeeze(0),
+        res = {'flow': disp.squeeze(0), 'scaled_disp': scaled_disp.squeeze(0),
                'warped_img': warped_img}
         return res
 
