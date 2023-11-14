@@ -44,8 +44,8 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
             losses.append([_mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()])
-            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
-                batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()))
+            # print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+            #     batch + 1, _mean.item(), _std.item(), _mse.item(), jac, ncc.item(), _ssim.item()))
 
             if is_save:
                 # Save DVF
