@@ -460,9 +460,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl1(nn.Module):
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
 
         if self.is_train is True:
-            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out, 'down_y': down_y, 'embedding': e0}
+            return {'flow': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out, 'down_y': down_y, 'embedding': e0}
         else:
-            return {'disp': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out}
+            return {'flow': output_disp_e0_v, 'warped_img': warpped_inputx_lvl1_out}
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
@@ -595,9 +595,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         if self.is_train is True:
             # return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
-            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
+            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
         else:
-            return {'disp': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
+            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
@@ -724,7 +724,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
 
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
-        return {'disp':compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
+        return {'flow':compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
 
 
 class PreActBlock(nn.Module):
