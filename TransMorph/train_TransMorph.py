@@ -13,7 +13,7 @@ from utils.config import get_args
 from utils.losses import NCC, neg_Jdet_loss, Grad3d, Grad
 from utils.datagenerators import Dataset, DirLabDataset
 from utils.metric import landmark_loss, jacobian_determinant, SSIM, NCC as mtNCC
-from utils.utilize import save_model, load_landmarks, set_seed
+from utils.utilize import save_model, load_landmarks, set_seed, count_parameters
 from utils.scheduler import StopCriterion
 from utils.Functions import SpatialTransformer
 from models.TransMorph import CONFIGS as CONFIGS_TM
@@ -128,6 +128,7 @@ def main():
     '''
     config = CONFIGS_TM['TransMorph']
     model = TransMorph.TransMorph(config)
+    print(count_parameters(model))
     model.cuda()
 
     # optimizer = optim.Adam(model.parameters(), lr=lr)

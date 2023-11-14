@@ -129,7 +129,7 @@ def train():
             # flow, warped_image = y_pred[2], y_pred[0]
 
             res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_img'], res['flow']
+            warped_image, flow = res['warped_img'], res['flow_unit']
 
             loss_list = []
             r_loss = args.alpha * regular_loss(None, flow)

@@ -135,19 +135,19 @@ class Unet(nn.Module):
             for conv in convs:
                 x = conv(x)
             x_history.append(x)
-            x = self.pooling[level](x)
-            # x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
-            #                   align_corners=True, recompute_scale_factor=False)
+            # x = self.pooling[level](x)
+            x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
+                              align_corners=True, recompute_scale_factor=False)
 
         # decoder forward pass with upsampling and concatenation
         for level, convs in enumerate(self.decoder):
             for conv in convs:
                 x = conv(x)
             if not self.half_res or level < (self.nb_levels - 2):
-                x = self.upsampling[level](x)
+                # x = self.upsampling[level](x)
                 if x.shape[2:] != x_history[-1].shape[2:]:
                     x = F.interpolate(x, x_history[-1].shape[2:], mode='trilinear',
-                                         align_corners=True)
+                                      align_corners=True)
                 x = torch.cat([x, x_history.pop()], dim=1)
 
         # remaining convs at full resolution
@@ -205,7 +205,7 @@ class VxmDense(LoadableModel):
         self.training = True
         self.dim = dim
         # ensure correct dimensionality
-        assert dim==3, 'ndims should be 3. found: %d' % dim
+        assert dim == 3, 'ndims should be 3. found: %d' % dim
 
         # configure core unet model
         self.unet_model = Unet(
@@ -249,9 +249,9 @@ class VxmDense(LoadableModel):
         # configure optional integration layer for diffeomorphic warp
         # down_shape = [int(dim / int_downsize) for dim in inshape]
         # self.integrate = layers.VecInt(down_shape, int_steps) if int_steps > 0 else None
-        self.integrate = layers.VecInt(None,int_steps) if int_steps > 0 else None
+        self.integrate = layers.VecInt(None, int_steps) if int_steps > 0 else None
         # configure transformer
-        # self.transformer = layers.SpatialTransformer(inshape)
+        # self.transformer = layers.SpatialTransformer(self.dim)
         self.transformer = utils.Functions.SpatialTransformer(self.dim)
 
     def forward(self, source, target, registration=False):
@@ -292,17 +292,18 @@ class VxmDense(LoadableModel):
         if source.shape[2:] != pos_flow.shape[2:]:
             print("warning: source dosent consistence with pos_flow")
             pos_flow = F.interpolate(pos_flow, source.shape[2:], mode='trilinear',
-                                    align_corners=True)
-            
+                                     align_corners=True)
+
         # warp image with flow field
         y_source = self.transformer(source, pos_flow)
         y_target = self.transformer(target, neg_flow) if self.bidir else None
 
         # return non-integrated flow field if training
         if not registration:
-            return {'warped_img':y_source, 'birwarped_img':y_target, 'flow_unit':preint_flow, 'flow':pos_flow} if self.bidir else {'warped_img':y_source, 'flow_unit':preint_flow, 'flow':pos_flow}
+            return {'warped_img': y_source, 'birwarped_img': y_target, 'flow_uint': preint_flow,
+                    'disp': pos_flow} if self.bidir else {'warped_img': y_source, 'flow_unit': preint_flow, 'flow': pos_flow}
         else:
-            return {'warped_img':y_source, 'flow':pos_flow}
+            return {'warped_img': y_source, 'flow': pos_flow}
 
 
 class ConvBlock(nn.Module):
