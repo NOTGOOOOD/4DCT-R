@@ -14,7 +14,8 @@ from utils.utilize import set_seed, save_model, count_parameters, make_dirs
 from utils.metric import MSE
 from utils.Functions import validation_vm, test_dirlab
 from tqdm import tqdm
-from CCECor import CCECoNet
+from voxnet import VoxNet
+from cascade_fusion_net import CascadeFusionNet3d
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_CCENet_single_".format(train_time)
+    model_name = "{}_Dual_noCor_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
@@ -134,5 +135,10 @@ if __name__ == "__main__":
     val_loader = build_dataloader_dirlab(args, 'val')
     test_loader_dirlab = build_dataloader_dirlab(args, 'test')
 
-    model = CCECoNet(dim=3).to(args.device)
+    in_channels = 1
+    conv_size = [8, 16, 16, 32, 32]
+    fpn_dim = [32, 32, 16, 16, 8]
+    backend = VoxNet(in_channels=in_channels, chns=conv_size).to(args.device)
+    model = CascadeFusionNet3d(backend=backend,conv_size=conv_size,fpn_dim=fpn_dim).to(args.device)
+
     train(model)

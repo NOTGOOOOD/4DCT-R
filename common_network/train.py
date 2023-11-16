@@ -18,6 +18,7 @@ from utils.utilize import set_seed, save_model, save_image, count_parameters, lo
 from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC, landmark_loss
 from ResUNet import ResUnetModel
 from CCENet.CCECor import CCECoNet
+from voxelmorph.vmmodel import vmnetwork
 
 @torch.no_grad()
 def validation(args, model, loss_similarity):
@@ -152,6 +153,17 @@ if __name__ == "__main__":
 
     # model = ResUnetModel()
     model = CCECoNet(dim=3)
+
+    # enc_nf = [16, 32, 32, 32]
+    # dec_nf = [32, 32, 32, 32, 32, 16, 16]
+    # model = vmnetwork.VxmDense(
+    #     dim=3,
+    #     nb_unet_features=[enc_nf, dec_nf],
+    #     bidir=args.bidir,
+    #     int_steps=7,
+    #     int_downsize=2
+    # )
+    # print(count_parameters(model))
     model = model.to(device)
-    train_unet(model)
-    # test_unet(model)
+    # train_unet(model)
+    test_unet(model)
