@@ -20,13 +20,18 @@ from cascade_fusion_net import CascadeFusionNet3d
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+def loss_fn(pred_warp, data_fix,loss_si, loss_sm, delta_list):
+    loss_smi = loss_si(pred_warp, data_fix)
+    loss_smooth = 0.05 * sum([ loss_sm(delta) for delta in delta_list ])
+    return loss_smi, loss_smooth
+
 def train(model):
     print("Training CCE_single...")
     device = args.device
 
     print(count_parameters(model))
 
-    loss_similarity = NCC(win=5)
+    loss_similarity = NCC(win=9)
     loss_smooth = smoothloss
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -54,11 +59,13 @@ def train(model):
             input_fixed = fixed_file[0].to(device).float()
             y_true = [input_fixed, input_moving] if args.bidir else [input_fixed, None]
             res = model(input_moving, input_fixed)  # b, c, d, h, w  disp, scale_disp, warped
-            warped_image, flow = res['warped_img'], res['flow']
+            warped_image, flow, delta_list = res['warped_img'], res['flow'], res['delta_list']
 
             loss_list = []
-            r_loss = args.alpha * loss_smooth(flow)
-            sim_loss = loss_similarity(y_true[0], warped_image)
+            # r_loss = args.alpha * loss_smooth(flow)
+            # sim_loss = loss_similarity(y_true[0], warped_image)
+
+            sim_loss, r_loss = loss_fn(warped_image, y_true[0], loss_similarity,loss_smooth,delta_list=delta_list)
 
             loss = r_loss + sim_loss
             loss_list.append(r_loss.item())
@@ -83,8 +90,6 @@ def train(model):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            break
 
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
                                                                                  loss_similarity
