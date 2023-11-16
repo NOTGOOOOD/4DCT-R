@@ -36,7 +36,7 @@ def train(model):
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    model_dir = './ckpt'
+    model_dir = args.checkpoint_path
 
     if not os.path.isdir(model_dir):
         os.makedirs(model_dir)

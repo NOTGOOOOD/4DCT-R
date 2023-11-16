@@ -122,7 +122,7 @@ def train():
                                                 last_epoch=-1)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    model_dir = '../Model'
+    model_dir = args.checkpoint_path
 
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)

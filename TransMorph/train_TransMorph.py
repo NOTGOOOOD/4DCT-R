@@ -329,7 +329,7 @@ if __name__ == '__main__':
                                  landmark_files=landmark_list)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    model_dir = 'model'
+    model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     model_name = "{}_TM_".format(train_time)
     if not os.path.isdir(model_dir):
