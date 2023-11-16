@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from utils.datagenerators import build_dataloader_dirlab
 from utils.config import get_args
 from utils.losses import NCC, gradient_loss as smoothloss
-from utils.scheduler import StopCriterion
+from utils.scheduler import StopCriterion, WarmUpLR
 from utils.utilize import set_seed, save_model, count_parameters, make_dirs
 from utils.metric import MSE
 from utils.Functions import validation_vm, test_dirlab
@@ -26,7 +26,7 @@ def loss_fn(pred_warp, data_fix,loss_si, loss_sm, delta_list):
     return loss_smi, loss_smooth
 
 def train(model):
-    print("Training CCE_single...")
+    print("Training DualCCE...")
     device = args.device
 
     print(count_parameters(model))
@@ -35,7 +35,10 @@ def train(model):
     loss_smooth = smoothloss
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+    warm_epoch = 5
+    warmup_scheduler = WarmUpLR(optimizer, len(train_loader) * warm_epoch)
+
     model_dir = args.checkpoint_path
 
     if not os.path.isdir(model_dir):
@@ -90,6 +93,8 @@ def train(model):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if i <= warm_epoch:
+                warmup_scheduler.step()
 
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
                                                                                  loss_similarity
