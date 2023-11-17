@@ -27,8 +27,8 @@ class UNet_Encoder(nn.Module):
     def __init__(self, in_channel, enc_features, max_pool=2, ndims=3):
         super(UNet_Encoder, self).__init__()
         nb_levels = len(enc_features) + 1
-        if isinstance(max_pool, int):
-            max_pool = [max_pool] * nb_levels
+        # if isinstance(max_pool, int):
+        #     max_pool = [max_pool] * nb_levels
 
         # cache downsampling / upsampling operations
         # MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
