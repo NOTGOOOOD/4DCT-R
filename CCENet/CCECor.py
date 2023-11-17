@@ -95,6 +95,7 @@ class UNet_Decoder(nn.Module):
 
     def forward(self, fea, x_history):
         # decoder forward pass with upsampling and concatenation
+        fea_list = []
         for level, convs in enumerate(self.decoder):
             for conv in convs:
                 fea = conv(fea)
@@ -103,13 +104,15 @@ class UNet_Decoder(nn.Module):
             if fea.shape[2:] != x_history[-1].shape[2:]:
                 fea = F.interpolate(fea, x_history[-1].shape[2:], mode='trilinear',
                                   align_corners=True)
+
+            fea_list.append(fea)
             fea = torch.cat([fea, x_history.pop()], dim=1)
 
         # remaining convs at full resolution
         for conv in self.remaining:
             fea = conv(fea)
 
-        return fea
+        return fea, fea_list
 
 class Dual_Unet(nn.Module):
     """
@@ -208,16 +211,56 @@ class Dual_Unet(nn.Module):
         return x
 
 
+class FlowNet(nn.Module):
+    def __init__(self, in_channels, out_channels=3):
+        super(FlowNet, self).__init__()
+        med_channels = int(in_channels/2)
+        # med_channels = 27
+        # self.corr_layer = Correlation(pad_size=3, kernel_size=1, max_displacement=3, stride1=1, stride2=2, corr_multiply=1)
+        # self.conv = nn.Sequential(
+        #         nn.Conv3d(27, 8, kernel_size=3, padding=1),
+        #         nn.ReLU(inplace=True),
+        #     )
+        self.conv_layer = nn.Sequential(
+                # nn.Conv3d(27+in_channels, med_channels, kernel_size=3, padding=1),
+                nn.Conv3d(in_channels, med_channels, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+                nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+            )
+        self.resblock_layer_1 = nn.Sequential(
+                nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+                nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+            )
+        # self.resblock_layer_2 = nn.Sequential(
+        #         nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
+        #         nn.ReLU(inplace=True),
+        #         nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
+        #         nn.ReLU(inplace=True),
+        #     )
+        self.offset_layer = nn.Conv3d(med_channels, out_channels, kernel_size=3, padding=1)
+
+    def forward(self, x1, x2):
+        # x3 = self.corr_layer(x1, x2)
+        # x = torch.cat([x1, x2, x3], dim=1)
+        x = torch.cat([x1, x2], dim=1)
+        x = self.conv_layer(x)
+        x = x + self.resblock_layer_1(x)
+        x = self.offset_layer(x)
+        return x
+
 class CCECoNet(nn.Module):
     def __init__(self, dim):
         super(CCECoNet, self).__init__()
 
-        enc_nf = [16, 32, 32, 32]
-        dec_nf = [32, 32, 32, 32]
-        final_nf = [32, 16, 16]
+        self.enc_nf = [16, 32, 32, 32]
+        self.dec_nf = [32, 32, 32, 32]
+        self.final_nf = [32, 16, 16]
 
-        self.unet_encoder = UNet_Encoder(in_channel=2, enc_features=enc_nf)
-        self.unet_decoder = UNet_Decoder(enc_features=enc_nf, dec_features=dec_nf, final_convs=final_nf)
+        self.unet_encoder = UNet_Encoder(in_channel=2, enc_features=self.enc_nf)
+        self.unet_decoder = UNet_Decoder(enc_features=self.enc_nf, dec_features=self.dec_nf, final_convs=self.final_nf)
         # nb_unet_features = [enc_nf, dec_nf]
         # self.dual_stream_model = Dual_Unet(
         #     dim=dim,
@@ -233,11 +276,78 @@ class CCECoNet(nn.Module):
         x = torch.cat([source, target], dim=1)
 
         fea, x_history = self.unet_encoder(x)
-        x = self.unet_decoder(fea, x_history)
+        x, flow_list = self.unet_decoder(fea, x_history)
 
         # transform into flow field
         flow_field = self.flow(x)
 
+        if source.shape[2:] != flow_field.shape[2:]:
+            print("warning: source dosent consistence with pos_flow")
+            flow_field = F.interpolate(flow_field, source.shape[2:], mode='trilinear',
+                                     align_corners=True)
+
+        # warp image with flow field
+        y_source = self.transform(source, flow_field)
+
+        # return non-integrated flow field if training
+        return {'warped_img': y_source, 'flow': flow_field}
+
+class CCECoNetDual(CCECoNet):
+    def __init__(self,dim):
+        super(CCECoNetDual, self).__init__(dim=dim)
+        self.conv_size = [16, 16, 16, 16]
+        self.offset = []
+        for i in range(len(self.enc_nf)):
+            # fusion
+            offset_layer = FlowNet(self.conv_size[-i-1]*2)
+            # cascade
+            self.offset.append(offset_layer)
+        self.offset = nn.ModuleList(self.offset)
+
+    def forward(self, source, target, istrain=False):
+        # concatenate inputs and propagate unet
+        x = torch.cat([source, target], dim=1)
+
+        fea, x_history = self.unet_encoder(x)
+        x, fea_list = self.unet_decoder(fea, x_history)
+
+        fea_moving = []
+        fea_fix = []
+        shape_list = []
+        delta_list = []
+        self.keep_delta = True
+
+        for i, feature in enumerate(fea_list):
+            fea_moving.append(feature[:, : int(self.dec_nf[-1-i]/2), ...])
+            fea_fix.append(feature[:,  int(self.dec_nf[-1-i]/2):, ...])
+            shape_list.append(feature.shape[2:])
+
+        last_flow = None
+        for lvl, (x_warp, x_fix) in enumerate(zip(fea_moving, fea_fix)):
+            # apply flow
+            if last_flow is not None:
+                x_warp = self.transform(x_warp, last_flow.detach())
+
+            # fusion
+            flow = self.offset[lvl](x_warp, x_fix)
+            # cascade
+            if self.keep_delta:
+                delta_list.append(flow)
+
+            if last_flow is not None:
+                flow += last_flow
+
+            if lvl < len(fea_list)-1:
+                # last_flow = F.interpolate(flow, scale_factor=2, mode=self.interp_mode)
+                last_flow = F.interpolate(flow, size=shape_list[lvl+1], mode='trilinear', align_corners=True)
+            else:
+                last_flow = flow
+
+        # fusion
+        flow_field = self.flow(x)
+        flow_field += last_flow
+
+        # transform into flow field
         if source.shape[2:] != flow_field.shape[2:]:
             print("warning: source dosent consistence with pos_flow")
             flow_field = F.interpolate(flow_field, source.shape[2:], mode='trilinear',

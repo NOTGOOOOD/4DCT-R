@@ -217,7 +217,7 @@ if __name__ == "__main__":
     model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_unet_lr{}_".format(train_time, args.lr)
+    model_name = "{}_unet_lr{}".format(train_time, args.lr)
 
     set_seed(42)
     make_dirs(args)

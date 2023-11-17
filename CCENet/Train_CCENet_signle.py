@@ -14,7 +14,7 @@ from utils.utilize import set_seed, save_model, count_parameters, make_dirs
 from utils.metric import MSE
 from utils.Functions import validation_vm, test_dirlab
 from tqdm import tqdm
-from CCECor import CCECoNet
+from CCECor import CCECoNet, CCECoNetDual
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -83,11 +83,8 @@ def train(model):
             loss.backward()
             optimizer.step()
 
-            break
 
-        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model,
-                                                                                 loss_similarity
-                                                                                 )
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_vm(args, model, loss_similarity)
         if val_total_loss <= best_loss:
             best_loss = val_total_loss
             # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
@@ -119,7 +116,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_CCENet_single_".format(train_time)
+    model_name = "{}_CCENet_single_lr{}".format(train_time, args.lr)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
@@ -134,5 +131,5 @@ if __name__ == "__main__":
     val_loader = build_dataloader_dirlab(args, 'val')
     test_loader_dirlab = build_dataloader_dirlab(args, 'test')
 
-    model = CCECoNet(dim=3).to(args.device)
+    model = CCECoNetDual(dim=3).to(args.device)
     train(model)

@@ -35,7 +35,7 @@ def train(model):
     loss_smooth = smoothloss
 
     # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
     warm_epoch = 5
     warmup_scheduler = WarmUpLR(optimizer, len(train_loader) * warm_epoch)
 
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_Dual_noCor_".format(train_time)
+    model_name = "{}_Dual_noCor_lr{}".format(train_time, args.lr)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
