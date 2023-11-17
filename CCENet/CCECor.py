@@ -31,8 +31,8 @@ class UNet_Encoder(nn.Module):
             max_pool = [max_pool] * nb_levels
 
         # cache downsampling / upsampling operations
-        MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
-        self.pooling = [MaxPooling(s) for s in max_pool]
+        # MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
+        # self.pooling = [MaxPooling(s) for s in max_pool]
 
         # configure encoder (down-sampling path)
         prev_nf = in_channel
@@ -53,7 +53,9 @@ class UNet_Encoder(nn.Module):
                 x = conv(x)
 
             x_history.append(x)
-            x = self.pooling[level](x)
+            # x = self.pooling[level](x)
+            x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
+                              align_corners=True, recompute_scale_factor=False)
 
         return x, x_history
 
@@ -69,8 +71,6 @@ class UNet_Decoder(nn.Module):
             max_pool = [max_pool] * nb_levels
 
         # cache downsampling / upsampling operations
-        MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
-        self.pooling = [MaxPooling(s) for s in max_pool]
         self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
 
         prev_nf = enc_features[-1]
