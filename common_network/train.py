@@ -163,7 +163,7 @@ if __name__ == "__main__":
     #     int_steps=7,
     #     int_downsize=2
     # )
-    # print(count_parameters(model))
+    print(count_parameters(model))
     model = model.to(device)
     # train_unet(model)
     test_unet(model)

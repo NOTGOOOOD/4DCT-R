@@ -88,9 +88,9 @@ class Unet(nn.Module):
             max_pool = [max_pool] * self.nb_levels
 
         # cache downsampling / upsampling operations
-        MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
-        self.pooling = [MaxPooling(s) for s in max_pool]
-        self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
+        # MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
+        # self.pooling = [MaxPooling(s) for s in max_pool]
+        # self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
 
         # configure encoder (down-sampling path)
         prev_nf = infeats

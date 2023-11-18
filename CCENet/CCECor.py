@@ -27,12 +27,10 @@ class UNet_Encoder(nn.Module):
     def __init__(self, in_channel, enc_features, max_pool=2, ndims=3):
         super(UNet_Encoder, self).__init__()
         nb_levels = len(enc_features) + 1
-        # if isinstance(max_pool, int):
-        #     max_pool = [max_pool] * nb_levels
-
-        # cache downsampling / upsampling operations
-        # MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
-        # self.pooling = [MaxPooling(s) for s in max_pool]
+        if isinstance(max_pool, int):
+            max_pool = [max_pool] * nb_levels
+        MaxPooling = getattr(nn, 'MaxPool%dd' % ndims)
+        self.pooling = [MaxPooling(s) for s in max_pool]
 
         # configure encoder (down-sampling path)
         prev_nf = in_channel
@@ -53,9 +51,9 @@ class UNet_Encoder(nn.Module):
                 x = conv(x)
 
             x_history.append(x)
-            # x = self.pooling[level](x)
-            x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
-                              align_corners=True, recompute_scale_factor=False)
+            x = self.pooling[level](x)
+            # x = F.interpolate(x, scale_factor=0.5, mode='trilinear',
+            #                   align_corners=True, recompute_scale_factor=False)
 
         return x, x_history
 
@@ -71,7 +69,7 @@ class UNet_Decoder(nn.Module):
             max_pool = [max_pool] * nb_levels
 
         # cache downsampling / upsampling operations
-        self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
+        # self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
 
         prev_nf = enc_features[-1]
         encoder_nfs = np.flip(enc_features)
@@ -100,7 +98,7 @@ class UNet_Decoder(nn.Module):
             for conv in convs:
                 fea = conv(fea)
 
-            fea = self.upsampling[level](fea)
+            # fea = self.upsampling[level](fea)
             if fea.shape[2:] != x_history[-1].shape[2:]:
                 fea = F.interpolate(fea, x_history[-1].shape[2:], mode='trilinear',
                                   align_corners=True)
