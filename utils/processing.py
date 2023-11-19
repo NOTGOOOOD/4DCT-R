@@ -717,6 +717,7 @@ def NLST_processing(fixed_path, moving_path, **cfg):
         target_path = moving_path
         file = os.path.join(nlst_path, file_name)
         # exp -> fixed insp -> moving
+        # 0 fixed 1 moving
         file_prefix = file_name[:9]
         file_suffix = file_name.split('_')[2]
 
@@ -1035,15 +1036,15 @@ if __name__ == '__main__':
     # learn2reg_lungct_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                             spacing=spacing)
     #
-    # # Learn2Reg NLST
-    # target_fixed_path = r'E:\datasets\registration\NLST_144_192_160\fixed'
-    # target_moving_path = r'E:\datasets\registration\NLST_144_192_160\moving'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-    #
-    # clamp = [-1100, 500]
-    # crop = None
-    # spacing = [1, 1, 1]
-    #
-    # NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                 spacing=spacing)
+    # Learn2Reg NLST
+    target_fixed_path = r'E:\datasets\registration\NLST_\fixed'
+    target_moving_path = r'E:\datasets\registration\NLST_\moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+
+    clamp = [-1000, 500]
+    crop = None
+    spacing = None
+    resize = []
+    NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                    spacing=spacing)
