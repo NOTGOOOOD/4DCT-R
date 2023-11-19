@@ -19,6 +19,21 @@ from CCECor import CCECoNet, CCECoNetDual
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+def test(model):
+    prefix = '2023-04-21-17-47-16'
+    model_dir = args.checkpoint_path
+
+    if args.checkpoint_name is not None:
+        model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
+        test_dirlab(args, model, test_loader_dirlab, is_train=False)
+        # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
+    else:
+        checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
+        for checkpoint in checkpoint_list:
+            print(checkpoint)
+            model.load_state_dict(torch.load(checkpoint)['model'])
+            test_dirlab(args, model, test_loader_dirlab, is_train=False)
+
 def train(model):
     print("Training CCE_single...")
     device = args.device
@@ -133,3 +148,4 @@ if __name__ == "__main__":
 
     model = CCECoNetDual(dim=3).to(args.device)
     train(model)
+    # test(model)
