@@ -226,9 +226,10 @@ def validation_midir(args, model, imgshape, loss_similarity):
     val_dataset = Dataset(moving_files=m_img_file_list, fixed_files=f_img_file_list)
     val_loader = Data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    transform = CubicBSplineFFDTransform(ndim=3, img_size=imgshape, cps=(4, 4, 4), svf=True
-                                         , svf_steps=7
-                                         , svf_scale=1)
+    # transform = CubicBSplineFFDTransform(ndim=3, img_size=imgshape, cps=(4, 4, 4), svf=True
+    #                                      , svf_steps=7
+    #                                      , svf_scale=1)
+    transform = SpatialTransformer()
     reg_weight = 0.1
     with torch.no_grad():
         model.eval()  # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
@@ -237,22 +238,16 @@ def validation_midir(args, model, imgshape, loss_similarity):
             input_moving = moving[0].to('cuda').float()
             input_fixed = fixed[0].to('cuda').float()
 
-            svf = model(input_fixed, input_moving)
-            flow, disp = transform(svf)
-            wapred_x = warp(input_moving, disp)
-
+            disp = model(input_fixed, input_moving)
+            # flow, disp = transform(svf)
+            # wapred_x = warp(input_moving, disp)
+            wapred_x = transform(input_moving, disp)
             mse_loss = MSE(wapred_x, input_fixed)
             loss_ncc = loss_similarity(wapred_x, input_fixed)
             loss_reg = l2reg_loss(disp)
 
-            grid = generate_grid(imgshape)
-            grid = torch.from_numpy(np.reshape(grid, (1,) + grid.shape)).cuda().float()
-
-            loss_Jacobian = neg_Jdet_loss(disp.permute(0, 2, 3, 4, 1), grid)
-
             loss = loss_ncc + loss_reg * reg_weight
-
-            losses.append([loss_ncc.item(), mse_loss.item(), loss_Jacobian.item(), loss.item()])
+            losses.append([loss_ncc.item(), mse_loss.item(), loss_reg.item(), loss.item()])
 
         mean_loss = np.mean(losses, 0)
         return mean_loss[0], mean_loss[1], mean_loss[2], mean_loss[3]

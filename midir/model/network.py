@@ -97,7 +97,7 @@ class UNet(nn.Module):
             )
 
         # upsampler
-        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        # self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
         # (optional) conv layers before prediction
         if conv_before_out:
@@ -136,7 +136,9 @@ class UNet(nn.Module):
         dec_out = fm_enc[-1]
         for i, dec in enumerate(self.dec):
             dec_out = dec(dec_out)
-            dec_out = self.upsample(dec_out)
+            # dec_out = self.upsample(dec_out)
+            dec_out = F.interpolate(dec_out, size=fm_enc[-2-i].shape[2:], mode='trilinear',
+                                  align_corners=True)
             dec_out = torch.cat([dec_out, fm_enc[-2-i]], dim=1)
 
         # further convs and prediction
@@ -163,16 +165,17 @@ class CubicBSplineNet(UNet):
                                               conv_before_out=False)
 
         # determine and set output control point sizes from image size and control point spacing
-        for i, c in enumerate(cps):
-            if c > 8 or c < 2:
-                raise ValueError(f"Control point spacing ({c}) at dim ({i}) not supported, must be within [1, 8]")
-        self.output_size = tuple([int(math.ceil((imsz-1) / c) + 1 + 2)
-                                  for imsz, c in zip(img_size, cps)])
+        # for i, c in enumerate(cps):
+        #     if c > 8 or c < 2:
+        #         raise ValueError(f"Control point spacing ({c}) at dim ({i}) not supported, must be within [1, 8]")
+        # self.output_size = tuple([int(math.ceil((imsz-1) / c) + 1 + 2)
+        #                           for imsz, c in zip(img_size, cps)])
 
         # Network:
         # encoder: same u-net encoder
         # decoder: number of decoder layers / times of upsampling by 2 is decided by cps
-        num_dec_layers = 4 - int(math.ceil(math.log2(min(cps))))
+        # num_dec_layers = 4 - int(math.ceil(math.log2(min(cps))))
+        num_dec_layers = 4
         self.dec = self.dec[:num_dec_layers]
 
         # conv layers following resizing
@@ -192,6 +195,7 @@ class CubicBSplineNet(UNet):
         # final prediction layer
         delattr(self, 'out_layers')  # remove u-net output layers
         self.out_layer = convNd(ndim, resize_channels[-1], ndim)
+        self.conv_last = convNd(ndim, 48, 64)
 
     def forward(self, tar, src):
         x = torch.cat((tar, src), dim=1)
@@ -213,8 +217,9 @@ class CubicBSplineNet(UNet):
             dec_out = fm_enc
 
         # resize output of encoder-decoder
-        x = interpolate_(dec_out, size=self.output_size)
-
+        # x = interpolate_(dec_out, size=self.output_size)
+        x = dec_out
+        x = self.conv_last(x)
         # layers after resize
         for resize_layer in self.resize_conv:
             x = resize_layer(x)

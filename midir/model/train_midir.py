@@ -18,9 +18,11 @@ set_seed(20)
 from network import CubicBSplineNet
 from loss import LNCCLoss, l2reg_loss
 from utils.datagenerators import Dataset, DirLabDataset
-from utils.Functions import validation_midir, generate_grid
+from utils.Functions import validation_midir, generate_grid, SpatialTransformer
 from utils.losses import NCC, neg_Jdet_loss, MILossGaussian
+from utils.metric import NCC as mtNCC, MSE, SSIM, jacobian_determinant
 from transformation import CubicBSplineFFDTransform, warp
+
 
 args = get_args()
 
@@ -36,9 +38,11 @@ def test_dirlab(args, checkpoint, is_save=False):
 
             img_shape = fixed_img.shape[2:]
 
-            transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
-                                                   , svf_steps=7
-                                                   , svf_scale=1)
+            # transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
+            #                                        , svf_steps=7
+            #                                        , svf_scale=1)
+            transformer = SpatialTransformer()
+
             model = CubicBSplineNet(ndim=3,
                                     img_size=img_shape,
                                     cps=(4, 4, 4)).to(args.device)
@@ -46,8 +50,10 @@ def test_dirlab(args, checkpoint, is_save=False):
             model.load_state_dict(torch.load(checkpoint)['model'])
             model.eval()
 
-            svf = model(fixed_img, moving_img)  # b,c,d,h,w
-            flow, disp = transformer(svf)
+            disp = model(fixed_img, moving_img)  # b,c,d,h,w
+            warped_img = transformer(moving_img, disp)
+            # flow, disp = transformer(svf)
+
             # wapred_x = warp(moving_img, disp)
             # ncc = NCC(fixed_img.cpu().detach().numpy(), wapred_x.cpu().detach().numpy())
             # jac = jacobian_determinant(disp[0].cpu().detach().numpy())
@@ -56,6 +62,14 @@ def test_dirlab(args, checkpoint, is_save=False):
             # _mse = MSE(fixed_img, wapred_x)
             # # SSIM
             # _ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], wapred_x.cpu().detach().numpy()[0, 0])
+
+            ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
+
+            # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
+            jac = jacobian_determinant(warped_img[0].cpu().detach().numpy())
+
+            # SSIM
+            ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], warped_img.cpu().detach().numpy()[0, 0])
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
             # TRE
@@ -67,13 +81,17 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'],
                                         fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
-            losses.append([_mean.item(), _std.item()])
+            losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
     mean_std = mean_total[1]
+    mean_ncc = mean_total[2]
+    mean_ssim = mean_total[3]
+    mean_jac = mean_total[4]
+
     # print('mean TRE=%.2f+-%.2f MSE=%.3f Jac=%.6f' % (mean_tre, mean_std, mean_mse, mean_jac))
-    print('mean TRE=%.2f+-%.2f' % (mean_tre, mean_std))
+    print('mean TRE=%.2f+-%.2f ncc=%.5f ssim=%.5f jac=%.7f' % (mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac))
 
 def make_dirs():
     if not os.path.exists(args.checkpoint_path):
@@ -101,25 +119,25 @@ def train():
         model.load_state_dict(torch.load(model_path)['model'])
 
     # loss_similarity = LNCCLoss(window_size=7)
-    # loss_similarity = NCC(win=7)
-    loss_similarity = MILossGaussian()
-    transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
-                                           , svf_steps=7
-                                           , svf_scale=1)
-
+    loss_similarity = NCC(win=9)
+    # loss_similarity = MILossGaussian()
+    # transformer = CubicBSplineFFDTransform(ndim=3, img_size=img_shape, cps=(4, 4, 4), svf=True
+    #                                        , svf_steps=7
+    #                                        , svf_scale=1)
+    transformer = SpatialTransformer()
     # weight for l2 reg
     reg_weight = 0.1
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.9)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.9)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
     #                                             step_size=100,
     #                                             gamma=0.1,
     #                                             last_epoch=-1)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-                                                step_size=50,
-                                                gamma=0.1,
-                                                last_epoch=-1)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+    #                                             step_size=50,
+    #                                             gamma=0.1,
+    #                                             last_epoch=-1)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     model_dir = args.checkpoint_path
@@ -144,9 +162,10 @@ def train():
             Y = fixed[0].to(device).float()
 
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
-            svf = model(Y, X)  # b,c,d,h,w
-            flow, disp = transformer(svf)
-            wapred_x = warp(X, disp)
+            disp = model(Y, X)  # b,c,d,h,w
+            wapred_x = transformer(X, disp)
+            # flow, disp = transformer(svf)
+            # wapred_x = warp(X, disp)
 
             loss_ncc = loss_similarity(wapred_x, Y)
             loss_reg = l2reg_loss(disp)
@@ -180,7 +199,7 @@ def train():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_midir(args, model, img_shape,
                                                                                     loss_similarity)
-        scheduler.step()
+        # scheduler.step()
 
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(

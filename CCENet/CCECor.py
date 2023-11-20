@@ -65,9 +65,8 @@ class UNet_Decoder(nn.Module):
         # enc_nf, dec_nf = nb_features
         nb_levels = len(enc_features) + 1
 
-        if isinstance(max_pool, int):
-            max_pool = [max_pool] * nb_levels
-
+        # if isinstance(max_pool, int):
+        #     max_pool = [max_pool] * nb_levels
         # cache downsampling / upsampling operations
         # self.upsampling = [nn.Upsample(scale_factor=s, mode='nearest') for s in max_pool]
 
