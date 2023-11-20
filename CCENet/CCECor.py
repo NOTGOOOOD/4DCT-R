@@ -213,7 +213,7 @@ class FlowNet(nn.Module):
         super(FlowNet, self).__init__()
         med_channels = int(in_channels/2)
         # med_channels = 27
-        self.corr_layer = Correlation(pad_size=3, kernel_size=1, max_displacement=3, stride1=1, stride2=2, corr_multiply=1)
+        self.corr_layer = Correlation()
 
         self.conv_layer = nn.Sequential(
                 nn.Conv3d(27+in_channels, med_channels, kernel_size=3, padding=1),

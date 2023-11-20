@@ -131,7 +131,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_CCENet_single_lr{}".format(train_time, args.lr)
+    model_name = "{}_CCENet_dual_co_lr{}".format(train_time, args.lr)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',

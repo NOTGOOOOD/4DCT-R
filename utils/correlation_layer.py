@@ -47,7 +47,7 @@ class CorrTorch(nn.Module):
 
     def forward(self, in1, in2):
         b, c, depth, hei, wid = in1.shape
-        conv = nn.Conv3d(kernel_size=1, in_channels=b*c*27, out_channels=27, stride=1, padding=0)
+        conv = nn.Conv3d(kernel_size=1, in_channels=b*c*27, out_channels=27, stride=1, padding=0).cuda()
         in1 = in1.view(-1, depth, hei, wid)
         in2 = in2.view(-1, depth, hei, wid)
 
@@ -60,7 +60,7 @@ class CorrTorch(nn.Module):
         sum = []
         for dz, dx, dy in zip(offsetz.reshape(-1), offsetx.reshape(-1), offsety.reshape(-1)):
             sum.append(in1 * in2_pad[:, dz:dz + depth, dy:dy + hei, dx:dx + wid] / torch.sqrt(torch.tensor(c).float()))
-        output = torch.cat(sum, 0)
+        output = torch.cat(sum, 0).unsqueeze(0)
 
         return conv(output)
 
