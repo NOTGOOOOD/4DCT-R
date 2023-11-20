@@ -38,7 +38,20 @@ def test_dirlab(args, checkpoint, is_save=False):
                                                                 range_flow=range_flow, model_lvl2=model_lvl2,
                                                                 grid=grid_class).cuda()
 
-            model.load_state_dict(torch.load(checkpoint)['model'])
+            model_state = model.state_dict()
+            loaded_state = torch.load(os.path.join(checkpoint))["model"]
+            for loaded_key in loaded_state:
+                if loaded_key in model_state:
+                    if model_state[loaded_key].shape != loaded_state[loaded_key].shape:
+                        print("{}: model_state_shape: {}, loaded_state_shape: {}".format(
+                            loaded_key, model_state[loaded_key].shape, loaded_state[loaded_key].shape))
+                        continue
+                    else:
+                        model_state[loaded_key].copy_(loaded_state[loaded_key])
+                # else:
+                #     print("{}: In checkpoint but not in model".format(loaded_key))
+
+            # model.load_state_dict(torch.load(checkpoint)['model'])
             # model.load_state_dict(torch.load(checkpoint))
             model.eval()
 
@@ -50,15 +63,6 @@ def test_dirlab(args, checkpoint, is_save=False):
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
 
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-
-            # TRE
-            # _mean, _std = calc_tre(F_X_Y[0], landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-            #                        torch.tensor(landmarks['disp_00_50']).squeeze(),
-            #                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
-            # _mean, _std = calc_tre(flow_hr, landmarks00 - torch.tensor(
-            #     [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 1, 3).cuda(),
-            #                        landmarks['disp_affine'].squeeze(), args.dirlab_cfg[index]['pixel_spacing'])
 
             # MSE
             ncc = NCC(fixed_img.cpu().detach().numpy(), lv3_out.cpu().detach().numpy())
@@ -79,26 +83,28 @@ def test_dirlab(args, checkpoint, is_save=False):
                                         fixed_img.cpu().detach().numpy()[0, 0], is_save)
 
             losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
-
             if is_save:
-                # Save DVF
-                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-                m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
-                save_image(torch.permute(F_X_Y_cpu, (1, 2, 3, 0)), fixed_img[0], args.output_dir,
-                           m2f_name)
-
-                # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
-                # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-                # save_image(X_Y, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
-                save_image(lv1_out, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-                save_image(lv2_out, fixed_img, args.output_dir, m_name)
-
-                m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
-                save_image(lv3_out, fixed_img, args.output_dir, m_name)
+                print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                    batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+            # if is_save:
+            #     # Save DVF
+            #     # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+            #     m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
+            #     save_image(F_X_Y_cpu.permute(1,2,3,0), fixed_img[0], args.output_dir,
+            #                m2f_name)
+            #
+            #     # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
+            #     # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
+            #     # save_image(X_Y, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
+            #     save_image(lv1_out, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
+            #     save_image(lv2_out, fixed_img, args.output_dir, m_name)
+            #
+            #     m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
+            #     save_image(lv3_out, fixed_img, args.output_dir, m_name)
 
         mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 
@@ -214,7 +220,7 @@ if __name__ == '__main__':
     test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
                                           num_workers=0)
 
-    prefix = '2023-05-19-19-49-12'
+    prefix = '2023-05-24-18-26-12'
     model_dir = args.checkpoint_path
 
     if args.checkpoint_name is not None:
