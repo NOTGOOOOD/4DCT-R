@@ -17,7 +17,7 @@ from utils.scheduler import StopCriterion
 from utils.utilize import set_seed, save_model, save_image, count_parameters, load_landmarks, make_dirs
 from utils.metric import MSE, jacobian_determinant, SSIM, NCC as calc_NCC, landmark_loss
 from ResUNet import ResUnetModel
-from CCENet.CCECor import CCECoNet
+from CCENet.CCECor import CCECoNet, CCECoNetDual
 from voxelmorph.vmmodel import vmnetwork
 
 @torch.no_grad()
@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     # model = ResUnetModel()
     model = CCECoNet(dim=3)
-
+    # model = CCECoNetDual(dim=3)
     # enc_nf = [16, 32, 32, 32]
     # dec_nf = [32, 32, 32, 32, 32, 16, 16]
     # model = vmnetwork.VxmDense(
