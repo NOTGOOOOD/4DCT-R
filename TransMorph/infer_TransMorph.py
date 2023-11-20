@@ -43,8 +43,8 @@ def test_dirlab(args, checkpoint, is_save=False):
                                                                                                                   3).cuda(),
                                         args.dirlab_cfg[batch + 1]['pixel_spacing'])
             losses.append([_mean.item(), _std.item(), mse.item(), jac, ncc.item(), ssim.item()])
-            # print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
-            #     batch + 1, _mean.item(), _std.item(), mse.item(), jac, ncc.item(), ssim.item()))
+            print('case=%d after warped, TRE=%.2f+-%.2f MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                batch + 1, _mean.item(), _std.item(), mse.item(), jac, ncc.item(), ssim.item()))
 
             if is_save:
                 # Save DVF

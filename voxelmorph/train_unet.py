@@ -115,11 +115,6 @@ def train_unet(model):
     image_loss_func = NCC(win=args.win_size)
     reg_loss = Grad('l2', loss_mult=2).loss
 
-    # load data
-    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
-    print("Number of training images: ", len(train_dataset))
-    train_loader = Data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    # test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     stop_criterion = StopCriterion(min_epoch=300)
     best_loss = 99.
     # Training
@@ -233,6 +228,6 @@ if __name__ == "__main__":
     model = model.to(device)
     print(count_parameters(model.unet))
 
-    # train_unet()
-    test_unet(model)
+    train_unet(model)
+    # test_unet(model)
 
