@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from utils.Functions import SpatialTransformer
-
+from utils.correlation_layer import CorrTorch as Correlation
 
 class ConvBlock(nn.Module):
     """
@@ -214,14 +214,11 @@ class FlowNet(nn.Module):
         super(FlowNet, self).__init__()
         med_channels = int(in_channels/2)
         # med_channels = 27
-        # self.corr_layer = Correlation(pad_size=3, kernel_size=1, max_displacement=3, stride1=1, stride2=2, corr_multiply=1)
-        # self.conv = nn.Sequential(
-        #         nn.Conv3d(27, 8, kernel_size=3, padding=1),
-        #         nn.ReLU(inplace=True),
-        #     )
+        self.corr_layer = Correlation(pad_size=3, kernel_size=1, max_displacement=3, stride1=1, stride2=2, corr_multiply=1)
+
         self.conv_layer = nn.Sequential(
-                # nn.Conv3d(27+in_channels, med_channels, kernel_size=3, padding=1),
-                nn.Conv3d(in_channels, med_channels, kernel_size=3, padding=1),
+                nn.Conv3d(27+in_channels, med_channels, kernel_size=3, padding=1),
+                # nn.Conv3d(in_channels, med_channels, kernel_size=3, padding=1),
                 nn.LeakyReLU(0.2),
                 nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
                 nn.LeakyReLU(0.2),
@@ -232,18 +229,13 @@ class FlowNet(nn.Module):
                 nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
                 nn.LeakyReLU(0.2),
             )
-        # self.resblock_layer_2 = nn.Sequential(
-        #         nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
-        #         nn.ReLU(inplace=True),
-        #         nn.Conv3d(med_channels, med_channels, kernel_size=3, padding=1),
-        #         nn.ReLU(inplace=True),
-        #     )
+
         self.offset_layer = nn.Conv3d(med_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, x1, x2):
-        # x3 = self.corr_layer(x1, x2)
-        # x = torch.cat([x1, x2, x3], dim=1)
-        x = torch.cat([x1, x2], dim=1)
+        x3 = self.corr_layer(x1, x2)
+        x = torch.cat([x1, x2, x3], dim=1)
+        # x = torch.cat([x1, x2], dim=1)
         x = self.conv_layer(x)
         x = x + self.resblock_layer_1(x)
         x = self.offset_layer(x)
