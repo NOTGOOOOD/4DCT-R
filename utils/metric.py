@@ -97,13 +97,13 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing=None, fixed_img=None, 
     for i in range(300):
         # point before warped
         f_point = f_landmarks[i].int()
-        # m_point = m_landmarks[i].int()
         # point at flow
         move = flow[:, f_point[2], f_point[1], f_point[0]]
         # point after warped
         ori_point = torch.round(f_point + move)
         dist = ori_point - m_landmarks[i]
 
+        # visualize
         # if is_save:
         #     ax.scatter([m_landmarks[i][0].cpu().detach().item()], [m_landmarks[i][1].cpu().detach().item()], 10,
         #                color='red')
@@ -117,9 +117,9 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing=None, fixed_img=None, 
     #     plt.show()
 
     all_dist = torch.stack(all_dist)
-    pt_errs_phys = torch.sqrt(torch.sum(all_dist * all_dist, 1))
+    tre = torch.sqrt(torch.sum(all_dist * all_dist, 1))
 
-    return torch.mean(pt_errs_phys), torch.std(pt_errs_phys)
+    return torch.mean(tre), torch.std(tre)
 
     #     ref_lmk = landmark_50.copy()
     #     for i in range(300):

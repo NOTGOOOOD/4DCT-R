@@ -88,11 +88,11 @@ def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, spaci
 
 
 def data_standardization_0_n(range, img):
-    return img / 1250.
-    # if torch.is_tensor(img):
-    #     return range * (img - torch.min(img)) / (torch.max(img) - torch.min(img))
-    # else:
-    #     return range * (img - np.min(img)) / (np.max(img) - np.min(img))
+    # return img / 1250.
+    if torch.is_tensor(img):
+        return range * (img - torch.min(img)) / (torch.max(img) - torch.min(img))
+    else:
+        return range * (img - np.min(img)) / (np.max(img) - np.min(img))
 
 
 def data_standardization_mean_std(img):
@@ -329,6 +329,29 @@ def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resiz
 
         sitk.WriteImage(img, target_file_path)
 
+def dirlab_test_copy(file_folder, m_path, f_path, case):
+    for file_name in os.listdir(file_folder):
+        if 'T00' in file_name:
+            target_path = m_path
+
+        # T50 = fixed image
+        elif 'T50' in file_name:
+            target_path = f_path
+
+        else:
+            continue
+
+        if case < 10:
+            new_name = f'dirlab_case0{case}.nii.gz'
+        else:
+            new_name = f'dirlab_case{case}.nii.gz'
+
+        file_path = os.path.join(file_folder, file_name)
+        target_path = os.path.join(target_path, new_name)
+
+        # move file to targe path
+        shutil.copyfile(file_path, target_path)
+        print("copy {} to {}".format(file_path, target_path))
 
 def dirlab_test(args, file_folder, m_path, f_path, datatype, shape, case):
     for file_name in os.listdir(file_folder):
@@ -738,26 +761,19 @@ def NLST_processing(fixed_path, moving_path, **cfg):
         sitk.WriteImage(img, target_filepath)
         print('case{} done'.format(file_prefix))
 
+def construct_dirlab_test():
+    print("dirlab: ")
+    target_test_fixed_path = 'D:/xxf/test_ori_resample/fixed'
+    target_test_moving_path = 'D:/xxf/test_ori_resample/moving'
+    make_dir(target_test_moving_path)
+    make_dir(target_test_fixed_path)
+    for item in dirlab_case_cfg.items():
+        case = item[0]
+        img_path = f'D:/xxf/dirlab_nii/case{case}'
+        dirlab_test_copy(case=case, m_path=target_test_moving_path, f_path=target_test_fixed_path, file_folder=img_path)
 
-if __name__ == '__main__':
-    project_folder = get_project_path("4DCT").split("4DCT-R")[0]
-    resize = [144, 192, 160]  # z y x
-    # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
-    # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-
-    # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
-    # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-
-    # target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
-    # target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
-    # make_dir(target_test_moving_path)
-    # make_dir(target_test_fixed_path)
-
-    args = get_args()
-
-    # ================Augment=================
+def do_augment():
+    pass
     # aug_moving_path = '/home/cqut/project/xxf/val_144/moving'
     # aug_fixed_path = '/home/cqut/project/xxf/val_144/fixed'
     # aug_fixed_path = r'D:\xxf\val_144_192_160_large\fixed'
@@ -771,7 +787,7 @@ if __name__ == '__main__':
     # make_dir(save_path)
     # aug(aug_moving_path, save_path)
 
-    #  test landmarks
+    ##  test landmarks
     # # load image
     # import SimpleITK as sitk
     #
@@ -843,72 +859,51 @@ if __name__ == '__main__':
     #     disp_00_50 = (ref_lmk - landmark_00).astype(np.float)
     #     torch.save(disp_00_50, os.path.join(flow_path, 'case%02d_disp_affine.pt' % case))
     #
-    #
 
-    # ===================== adjust all registration image=================================
-    # size = [144, 144, 144]
-    # fixed_path = '/home/cqut/project/xxf/test_ori/fixed'
-    # moving_path = '/home/cqut/project/xxf/test_ori/moving'
-    # # fixed_path = r'G:\datasets\registration\train_256\fixed'
-    # # moving_path = r'G:\datasets\registration\train_256\moving'
-    #
-    # target_path = target_test_fixed_path
-    # for f_file_name in os.listdir(fixed_path):
-    #     file = os.path.join(fixed_path, f_file_name)
-    #     sitk_img = sitk.ReadImage(file)
-    #     img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
-    #     sitk.WriteImage(img, os.path.join(target_path, f_file_name))
-    #
-    # print('fixed done!')
-    #
-    # target_path = target_test_moving_path
-    # for m_file_name in os.listdir(moving_path):
-    #     file = os.path.join(moving_path, m_file_name)
-    #     sitk_img = sitk.ReadImage(file)
-    #     img = crop_resampling_resize_clamp(sitk_img, size, None, None, None)
-    #     sitk.WriteImage(img, os.path.join(target_path, m_file_name))
-    #
-    # print('moving done!')
-    # # %%====================================================================================
 
-    # target_test_fixed_path = f'E:/datasets/registration/test_ori/fixed'
-    # target_test_moving_path = f'E:/datasets/registration/test_ori/moving'
-    # make_dir(target_test_fixed_path)
-    # make_dir(target_test_moving_path)
-
-    # dirlab train
-    data_path = r'D:\xxf\dirlab_train_resample_144'
-    make_dir(data_path)
+def construct_dirlab_train():
+    target_path = r'D:\xxf\dirlab_flip'
+    make_dir(target_path)
     for item in dirlab_case_cfg.items():
         case = item[0]
         shape = item[1]
-        save_path = os.path.join(data_path, 'case%02d' % case)
+        save_path = os.path.join(target_path, 'case%02d' % case)
         make_dir(save_path)
-        img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
 
         # crop, resample,resize
-        dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=[96, 144, 144])
+        img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
+        dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=None)
 
         # make a train set
-        m_path = os.path.join(data_path, 'moving')
-        f_path = os.path.join(data_path, 'fixed')
+        m_path = os.path.join(target_path, 'moving')
+        f_path = os.path.join(target_path, 'fixed')
         make_dir(m_path)
         make_dir(f_path)
-        file_folder = os.path.join(data_path, 'case%02d' % case)
+        file_folder = os.path.join(target_path, 'case%02d' % case)
         dirlab_train(file_folder, m_path, f_path)
         print('case %02d done!' % case)
 
-    # # dirlab for test
-    # print("dirlab: ")
-    # target_test_fixed_path = f'd:/xxf/test_ori_resample/fixed'
-    # target_test_moving_path = f'd:/xxf/test_ori_resample/moving'
+if __name__ == '__main__':
+    project_folder = get_project_path("4DCT").split("4DCT")[0]
+    # resize = [144, 192, 160]  # z y x
+    # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
+    # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
+
+    # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
+    # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
+    # make_dir(target_moving_path)
+    # make_dir(target_fixed_path)
+
+    # target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
+    # target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
     # make_dir(target_test_moving_path)
     # make_dir(target_test_fixed_path)
-    # for item in dirlab_case_cfg.items():
-    #     case = item[0]
-    #     shape = item[1]
-    #     img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
-    #     dirlab_test(args, img_path, target_test_moving_path, target_test_fixed_path, np.int16, shape, case)
+
+    args = get_args()
+    construct_dirlab_test()
+    # aug
+    # do_augment()
+
 
     # # COPD数据集img转nii.gz
     # print("copd: ")
@@ -1036,15 +1031,15 @@ if __name__ == '__main__':
     # learn2reg_lungct_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                             spacing=spacing)
     #
-    # Learn2Reg NLST
-    target_fixed_path = r'E:\datasets\registration\NLST_\fixed'
-    target_moving_path = r'E:\datasets\registration\NLST_\moving'
-    make_dir(target_moving_path)
-    make_dir(target_fixed_path)
-
-    clamp = [-1000, 500]
-    crop = None
-    spacing = None
-    resize = []
-    NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-                    spacing=spacing)
+    # # Learn2Reg NLST
+    # target_fixed_path = r'E:\datasets\registration\NLST_\fixed'
+    # target_moving_path = r'E:\datasets\registration\NLST_\moving'
+    # make_dir(target_moving_path)
+    # make_dir(target_fixed_path)
+    #
+    # clamp = [-1000, 500]
+    # crop = None
+    # spacing = None
+    # resize = []
+    # NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+    #                 spacing=spacing)
