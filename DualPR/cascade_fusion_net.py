@@ -3,6 +3,7 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.correlation_layer import CorrTorch as Correlation
 
 def apply_offset(offset):
     '''
@@ -177,12 +178,7 @@ class FlowNet(nn.Module):
     def __init__(self, in_channels, out_channels=3):
         super(FlowNet, self).__init__()
         med_channels = int(in_channels/2)
-        # med_channels = 27
-        # self.corr_layer = Correlation(pad_size=3, kernel_size=1, max_displacement=3, stride1=1, stride2=2, corr_multiply=1)
-        # self.conv = nn.Sequential(
-        #         nn.Conv3d(27, 8, kernel_size=3, padding=1),
-        #         nn.ReLU(inplace=True),
-        #     )
+        self.corr_layer = Correlation()
         self.conv_layer = nn.Sequential(
                 # nn.Conv3d(27+in_channels, med_channels, kernel_size=3, padding=1),
                 nn.Conv3d(in_channels, med_channels, kernel_size=3, padding=1),
