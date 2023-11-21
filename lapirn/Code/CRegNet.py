@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from utils.Functions import generate_grid_unit, Grid, AdaptiveSpatialTransformer
 from utils.losses import NCC
+from utils.Attention import across_attention_multi as across_atn
 
 
 def resblock_seq(in_channels, bias_opt=False):
@@ -143,7 +144,9 @@ class CRegNet_lv1(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel+3, self.start_channel * 4, bias=bias_opt) if model_lv0 is not None else input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4,
+                                                        bias=bias_opt) if model_lv0 is not None else input_feature_extract(
+            self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
@@ -183,14 +186,14 @@ class CRegNet_lv1(nn.Module):
             pred = self.model_lv0(x, y)
             lvl0_disp, warpped_inputx_lvl0_out, lvl0_embedding = pred['flow'], pred['warped_img'], pred['embedding']
             lvl0_disp_up = F.interpolate(lvl0_disp, size=down_x.shape[2:], mode='trilinear', align_corners=True)
-            warpped_x = self.transform(down_x, lvl0_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
+            warpped_x = self.transform(down_x, lvl0_disp_up.permute(0, 2, 3, 4, 1),
+                                       self.grid_1.get_grid(down_x.shape[2:], True))
             cat_input_lvl1 = torch.cat((warpped_x, down_y, lvl0_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
         e0 = self.down_conv(fea_e0)
 
         if self.model_lv0 is not None:
-
             e0 = e0 + lvl0_embedding
 
         e0 = self.resblock_group_lvl1(e0)
@@ -234,7 +237,9 @@ class CRegNet_lv2(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4,
+                                                        bias=bias_opt) if model_lvl1 is not None else input_feature_extract(
+            self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
@@ -273,26 +278,28 @@ class CRegNet_lv2(nn.Module):
             param.requires_grad = True
 
     def forward(self, x, y):
-        # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
-        pred = self.model_lvl1(x, y)
-        lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['flow'], pred['warped_img'], pred['embedding']
-
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
+        cat_input_lvl2 = torch.cat((x_down, y_down), 1)
+        # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
+        if self.model_lvl1 is not None:
+            pred = self.model_lvl1(x, y)
+            lvl1_disp, warpped_inputx_lvl1_out, lvl1_embedding = pred['flow'], pred['warped_img'], pred['embedding']
+            # lvl1_disp_up = self.up_tri(lvl1_disp)
+            lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
+                                         mode='trilinear',
+                                         align_corners=True)
+            warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1),
+                                       self.grid_1.get_grid(x_down.shape[2:], True))
 
-        # lvl1_disp_up = self.up_tri(lvl1_disp)
-        lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:],
-                                     mode='trilinear',
-                                     align_corners=True)
-
-        warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1),
-                                   self.grid_1.get_grid(x_down.shape[2:], True))
-
-        cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
+            cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
         e0 = self.down_conv(fea_e0)
-        e0 = e0 + lvl1_embedding
+
+        if self.model_lvl1 is not None:
+            e0 = e0 + lvl1_embedding
+
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
         if e0.shape[2:] != fea_e0.shape[2:]:
@@ -305,7 +312,11 @@ class CRegNet_lv2(nn.Module):
         decoder = x1 + x2
 
         output_disp_e0_v = self.output_lvl2(decoder) * self.range_flow
-        compose_field_e0_lvl2 = lvl1_disp_up + output_disp_e0_v
+        if self.model_lvl1 is not None:
+            compose_field_e0_lvl2 = output_disp_e0_v + lvl1_disp_up
+        else:
+            compose_field_e0_lvl2 = output_disp_e0_v
+
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x_down.shape[2:], True))
 
@@ -336,7 +347,9 @@ class CRegNet_lv3(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4,
+                                                        bias=bias_opt) if model_lvl2 is not None else input_feature_extract(
+            self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
@@ -348,7 +361,7 @@ class CRegNet_lv3(nn.Module):
                                      padding=0, output_padding=0, bias=bias_opt)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        self.ca_module = across_atn(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -373,24 +386,27 @@ class CRegNet_lv3(nn.Module):
             param.requires_grad = True
 
     def forward(self, x, y):
-        # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
-        pred = self.model_lvl2(x, y)
-        lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
-        # lvl2_disp_up = self.up_tri(lvl2_disp)
+        cat_input = torch.cat((x, y), 1)
+        if self.model_lvl2 is not None:
+            # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
+            pred = self.model_lvl2(x, y)
+            lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
+            # lvl2_disp_up = self.up_tri(lvl2_disp)
+            lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+                                         mode='trilinear',
+                                         align_corners=True)
 
-        lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
-                                     mode='trilinear',
-                                     align_corners=True)
+            warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
 
-        warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
-
-        cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+            cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
         # cat_input = torch.cat((y, lvl2_disp_up), 1)
 
         fea_e0 = self.input_encoder_lvl1(cat_input)
         e0 = self.down_conv(fea_e0)
 
-        e0 = e0 + lvl2_embedding
+        if self.model_lvl2 is not None:
+            e0 = e0 + lvl2_embedding
+
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
         if e0.shape[2:] != fea_e0.shape[2:]:
@@ -403,8 +419,12 @@ class CRegNet_lv3(nn.Module):
         decoder = x1 + x2
 
         output_disp_e0_v = self.output_lvl3(decoder) * self.range_flow
+        if self.model_lvl2 is not None:
+            compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
+        else:
+            compose_field_e0_lvl1 = output_disp_e0_v
 
-        compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
+        compose_field_e0_lvl1 += self.ca_module(fea_e0, lvl2_embedding, output_disp_e0_v)
 
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x.shape[2:], True))

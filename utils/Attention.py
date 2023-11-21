@@ -206,10 +206,10 @@ class Cross_attention_2(nn.Module):
 
 
 # cross
-class Cross_attention_multi(nn.Module):
+class across_attention_multi(nn.Module):
     """ Self attention Layer"""
 
-    def __init__(self, in_dim1, in_dim2, out_dim):
+    def __init__(self, in_dim1, in_dim2, out_dim=3):
         super().__init__()
 
         self.in_dim1 = in_dim1
@@ -281,8 +281,6 @@ class Cross_attention_multi(nn.Module):
 
             att = torch.matmul(unfold_img, unfold_feamap)
 
-
-
             att = torch.unsqueeze(att, 1)
             # unfold_decoder_out = torch.unsqueeze(unfold_decoder_out, 1)
 
@@ -351,9 +349,9 @@ class Cross_head(nn.Module):
 
         # x = correction * decoder_reshape + decoder_reshape
         # x = self.activation(x)
-        x = self.activation(correction) * decoder_reshape + decoder_reshape
-
-        return x.reshape(decoder.shape[0], decoder.shape[1], decoder.shape[2], decoder.shape[3], decoder.shape[4])
+        x = (self.activation(correction) * decoder_reshape).reshape(decoder.shape[0], decoder.shape[1], decoder.shape[2], decoder.shape[3], decoder.shape[4])
+        x += decoder
+        return x
 
 
 class Cross_head_bak(nn.Module):

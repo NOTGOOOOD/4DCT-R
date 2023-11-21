@@ -2,16 +2,16 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as Data
-from thop import profile
+
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from CRegNet import CRegNet_lv1, \
-    CRegNet_lv2, CRegNet_lv3, CRegNet
+# from CRegNet import CRegNet_lv1, \
+#     CRegNet_lv2, CRegNet_lv3, CRegNet_lv0
 
 # from CCENet_single import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
 #     CCRegNet_planB_lvl3 as CRegNet_lv3
 
-# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
-#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0,Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
 from utils.utilize import load_landmarks, save_image, count_parameters
 from utils.config import get_args
@@ -212,11 +212,19 @@ if __name__ == '__main__':
     prefix = '2023-04-26-13-17-59' # CCENet
 
     model_dir = args.checkpoint_path
-    model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
+
+    model_lvl0 = CRegNet_lv0(2, 3, args.initial_channels, is_train=True,
                              range_flow=range_flow, grid=grid_class).cuda()
+    model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
+                             range_flow=range_flow, grid=grid_class, model_lvl0=model_lvl0).cuda()
     model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
-                             range_flow=range_flow,
-                             model_lvl1=model_lvl1, grid=grid_class).cuda()
+                             range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).cuda()
+    model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
+                        range_flow=range_flow, model_lvl2=model_lvl2,
+                        grid=grid_class).cuda()
+
+    for param in model_lvl0.parameters():
+        param.requires_grad = False
 
     for param in model_lvl1.parameters():
         param.requires_grad = False
@@ -224,18 +232,19 @@ if __name__ == '__main__':
     for param in model_lvl2.parameters():
         param.requires_grad = False
 
-    model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
-                        range_flow=range_flow, model_lvl2=model_lvl2,
-                        grid=grid_class).cuda()
     print(count_parameters(model))
 
-    model = CRegNet(2, 3, args.initial_channels, is_train=False,
-                        range_flow=range_flow, grid=grid_class).cuda()
-    # flops, params = stat(model, [(1,1,96,144,144),(1,1,96,144,144)])
+    from thop import profile
     tensor = (torch.randn(1,1,96,144,144).cuda().float(), torch.randn(1,1,96,144,144).cuda().float(),)
-
     flops, params = profile(model, tensor)
+    # (407800656.0, 288708.0)
+    # (6964150608.0, 660996.0)  (6485806080.0, 370020.0)
+    # (59410968912.0, 1033284.0)    (58932624384.0, 742308.0)   (51882467328.0, 370020.0)
+    # (478981534032.0, 1405572.0)   (478503189504.0, 1114596.0) (471453032448.0, 742308.0)  (415055757312.0, 370020.0)
 
+    # attenion
+    #
+    # lv2=(471641895936.0, 742482.0)
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
         test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False)
