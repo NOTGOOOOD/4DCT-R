@@ -5,12 +5,12 @@ import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
 
-# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
-#     Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
-from CCENet_single import CCRegNet_planB_lv1 as Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
-    CCRegNet_planB_lv2 as Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
-    CCRegNet_planB_lvl3 as Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+# from CCENet_single import CCRegNet_planB_lv1 as Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
+#     CCRegNet_planB_lv2 as Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
+#     CCRegNet_planB_lvl3 as Miccai2020_LDR_laplacian_unit_disp_add_lvl3
 
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
@@ -55,8 +55,8 @@ def test_dirlab(args, checkpoint, is_save=False):
             # model.load_state_dict(torch.load(checkpoint))
             model.eval()
 
-            F_X_Y, lv1_out, lv2_out, lv3_out = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
-
+            res = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
+            F_X_Y, lv3_out = res['flow'], res['warped_img']
             # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
 
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]

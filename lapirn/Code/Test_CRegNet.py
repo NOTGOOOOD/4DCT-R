@@ -2,12 +2,10 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as Data
-
+from thop import profile
 from utils.Functions import transform_unit_flow_to_flow, Grid
-# from CRegNet import CRegNet_lv1, \
-#     CRegNet_lv2, CRegNet_lv3
-from CCRegNet_planB import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
-    CCRegNet_planB_lvl3 as CRegNet_lv3
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3, CRegNet
 
 # from CCENet_single import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
 #     CCRegNet_planB_lvl3 as CRegNet_lv3
@@ -15,7 +13,7 @@ from CCRegNet_planB import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2
 # from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
 #     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
-from utils.utilize import load_landmarks, save_image
+from utils.utilize import load_landmarks, save_image, count_parameters
 from utils.config import get_args
 from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
 from utils.losses import neg_Jdet_loss
@@ -220,9 +218,23 @@ if __name__ == '__main__':
                              range_flow=range_flow,
                              model_lvl1=model_lvl1, grid=grid_class).cuda()
 
+    for param in model_lvl1.parameters():
+        param.requires_grad = False
+
+    for param in model_lvl2.parameters():
+        param.requires_grad = False
+
     model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
                         range_flow=range_flow, model_lvl2=model_lvl2,
                         grid=grid_class).cuda()
+    print(count_parameters(model))
+
+    model = CRegNet(2, 3, args.initial_channels, is_train=False,
+                        range_flow=range_flow, grid=grid_class).cuda()
+    # flops, params = stat(model, [(1,1,96,144,144),(1,1,96,144,144)])
+    tensor = (torch.randn(1,1,96,144,144).cuda().float(), torch.randn(1,1,96,144,144).cuda().float(),)
+
+    flops, params = profile(model, tensor)
 
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
