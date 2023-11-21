@@ -147,5 +147,9 @@ if __name__ == "__main__":
     test_loader_dirlab = build_dataloader_dirlab(args, 'test')
 
     model = CCECoNetDual(dim=3).to(args.device)
+    # from thop import profile
+    # tensor = (torch.randn(1,1,96,144,144).cuda().float(), torch.randn(1,1,96,144,144).cuda().float(),)
+    # flops, params = profile(model, tensor)
+
     train(model)
     # test(model)

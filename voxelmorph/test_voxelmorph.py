@@ -3,13 +3,12 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 
-from voxelmorph.vmmodel import vmnetwork
-
 from utils.utilize import save_image, load_landmarks
 from utils.config import get_args
 from utils.metric import MSE, SSIM, NCC, jacobian_determinant, landmark_loss
 from utils.datagenerators import PatientDataset, DirLabDataset, build_dataloader_dirlab
 from utils.Functions import test_dirlab
+from voxelmorph.vmmodel import vmnetwork
 
 
 def test_patient(args, checkpoint, is_save=False):
@@ -83,6 +82,11 @@ if __name__ == '__main__':
         int_downsize=2
     )
     model.to(device)
+
+    # from thop import profile
+    # tensor = (torch.randn(1,1,96,144,144).cuda().float(), torch.randn(1,1,96,144,144).cuda().float(),)
+    # flops, params = profile(model, tensor)
+
     model_dir = args.checkpoint_path
     prefix = '2023-04-21-17-47-16'
     if args.checkpoint_name is not None:

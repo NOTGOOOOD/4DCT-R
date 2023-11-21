@@ -11,10 +11,10 @@ from utils.utilize import set_seed, save_model, load_landmarks, count_parameters
 
 set_seed(1024)
 
-# from CRegNet import CRegNet_lv1, \
-#     CRegNet_lv2, CRegNet_lv3
-from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
+from CRegNet import CRegNet_lv0, CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3
+# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
+#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
 from utils.datagenerators import Dataset, DirLabDataset, build_dataloader_dirlab
 from utils.config import get_args
@@ -79,20 +79,32 @@ def make_dirs():
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-
 def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
+    mode_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow, grid=grid_class).to(device)
+    model_list = []
+    for f in os.listdir('../Model/Stage'):
+        if model_name + "stagelvl0" in f:
+            model_list.append(os.path.join('../Model/Stage', f))
+    model_path = sorted(model_list)[-1]
+
+    mode_lvl0.load_state_dict(torch.load(model_path)['model'])
+    print("Loading weight for model_lvl0...", model_path)
+
+    # Freeze model_lvl1 weight
+    for param in mode_lvl0.parameters():
+        param.requires_grad = False
+
     model = CRegNet_lv1(2, 3, start_channel, is_train=True,
-                        range_flow=range_flow, grid=grid_class).to(device)
+                        range_flow=range_flow, grid=grid_class, model_lv0=mode_lvl0).to(device)
     print(count_parameters(model))
-    loss_similarity = NCC(win=3)
+    loss_similarity = multi_resolution_NCC(win=5, scale=1)
     loss_Jdet = neg_Jdet_loss
     loss_smooth = smoothloss
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     model_dir = '../Model/Stage'
 
     if not os.path.isdir(model_dir):
@@ -309,8 +321,10 @@ def train_lvl3():
 
     model = CRegNet_lv3(2, 3, start_channel, is_train=True,
                         range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
+
+
     print(count_parameters(model) - count_parameters(model_lvl2))
-    loss_similarity = multi_resolution_NCC(win=7, scale=3)
+    loss_similarity = multi_resolution_NCC(win=9, scale=3)
     loss_smooth = smoothloss
     loss_Jdet = neg_Jdet_loss
 
@@ -416,15 +430,109 @@ def train_lvl3():
             break
 
 
+def train_lvl0():
+    print("Training lvl0...")
+    device = args.device
+
+    model = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow, grid=grid_class).to(device)
+    loss_similarity = multi_resolution_NCC(win=5, scale=1)
+    loss_smooth = smoothloss
+    loss_Jdet = neg_Jdet_loss
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model_dir = '../Model/Stage'
+
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
+
+    stop_criterion = StopCriterion()
+    step = 0
+    best_loss = 99.
+
+    while step <= iteration_lvl3:
+        lossall = []
+        model.train()
+        for batch, (moving, fixed) in enumerate(train_loader):
+            X = moving[0].to(device).float()
+            Y = fixed[0].to(device).float()
+
+            # compose_field_e0_lvl1, warpped_inputx_lvl1_out,warpped_inputx_lvl2_out,warpped_inputx_lvl3_out, y, output_disp_e0_v, lvl1_v, lvl2_v, e0
+            pred = model(X, Y)
+            F_X_Y, X_Y, Y_4x = pred['flow'], pred['warped_img'], pred['down_y']
+
+            loss_multiNCC, loss_Jacobian, loss_regulation = get_loss(grid_class, loss_similarity, loss_Jdet,
+                                                                     loss_smooth, F_X_Y,
+                                                                     X_Y, Y_4x)
+
+            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+
+            optimizer.zero_grad()  # clear gradients for this training step
+            loss.backward()  # backpropagation, compute gradients
+            optimizer.step()  # apply gradients
+
+            # lossall[:, step] = np.array(
+            #     [loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()])
+            lossall.append([loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()])
+
+            sys.stdout.write(
+                "\r" + 'lv0:step:batch "{0}:{1}" -> training loss "{2:.4f}" - sim_NCC "{3:4f}" - Jdet "{4:.10f}" -smo "{5:.4f}"'.format(
+                    step, batch, loss.item(), loss_multiNCC.item(), loss_Jacobian.item(), loss_regulation.item()))
+            sys.stdout.flush()
+
+            logging.info("img_name:{}".format(moving[1][0]))
+            logging.info("modelv0, iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
+                step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
+
+            break
+            # if batch == 0:
+            #     m_name = 'l3_' + str(step) + 'moving_' + moving[1][0]
+            #     save_image(X_Y, Y, args.output_dir, m_name)
+            #     m_name = 'l3_' + str(step) + 'fixed_' + moving[1][0]
+            #     save_image(Y_4x, Y, args.output_dir, m_name)
+
+        # validation
+        val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
+                                                                                       grid_class, 4)
+
+        mean_loss = np.mean(np.array(lossall), 0)[0]
+        print(
+            "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
+                mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
+
+        stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
+
+        # save model
+        if val_total_loss <= best_loss:
+            best_loss = val_total_loss
+            # modelname = model_dir + '/' + model_name + "{:.4f}_stagelvl3_".format(best_loss) + str(step) + '.pth'
+            modelname = model_dir + '/' + model_name + "stagelvl0" + '_{:03d}_'.format(step) + '{:.4f}best.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+        else:
+            modelname = model_dir + '/' + model_name + "stagelvl0" + '_{:03d}_'.format(step) + '{:.4f}.pth'.format(
+                val_total_loss)
+            logging.info("save model:{}".format(modelname))
+            save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
+                       stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
+
+        if stop_criterion.stop():
+            break
+
+        step += 1
+        if step > iteration_lvl3:
+            break
+
+        break
+
 if __name__ == "__main__":
     args = get_args()
 
     lr = args.lr
     start_channel = args.initial_channels
     antifold = args.antifold
-    # n_checkpoint = args.n_save_iter
     smooth = args.smooth
-    # datapath = opt.datapath
     freeze_step = args.freeze_step
 
     iteration_lvl1 = args.iteration_lvl1
@@ -448,6 +556,8 @@ if __name__ == "__main__":
 
     grid_class = Grid()
     range_flow = 0.4
+
+    train_lvl0()
     train_lvl1()
     train_lvl2()
     train_lvl3()

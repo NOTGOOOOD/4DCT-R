@@ -49,14 +49,14 @@ def outputs(in_channels, out_channels, kernel_size=3, stride=1, padding=0,
         layer = nn.Sequential(
             # nn.Conv3d(in_channels, int(in_channels / 2), kernel_size, stride=stride, padding=padding, bias=bias),
             # nn.LeakyReLU(0.2),
-            nn.Conv3d(int(in_channels / 2), out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=bias),
             nn.Softsign())
     return layer
 
 
-class CRegNet_lv1(nn.Module):
+class CRegNet_lv0(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
-        super(CRegNet_lv1, self).__init__()
+        super(CRegNet_lv0, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
@@ -69,7 +69,81 @@ class CRegNet_lv1(nn.Module):
 
         bias_opt = False
 
-        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
+        self.input_encoder = input_feature_extract(self.in_channel, self.start_channel * 2, bias=bias_opt)
+
+        self.down_conv = nn.Conv3d(self.start_channel * 2, self.start_channel * 4, 3, stride=2, padding=1,
+                                   bias=bias_opt)
+
+        self.resblock = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
+
+        self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 4, 2, stride=2,
+                                     padding=0, output_padding=0, bias=bias_opt)
+
+        self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
+
+        # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 6, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 2, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 2, self.start_channel * 2, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 2, self.start_channel * 2, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output = outputs(self.start_channel * 2, self.n_classes, kernel_size=3, stride=1, padding=1,
+                              bias=False)
+
+    def forward(self, x, y):
+        # x: moving y:fixed  b,c,d,h,w
+        cat_input = torch.cat((x, y), 1)
+        cat_input_lvl0 = self.down_avg(self.down_avg(self.down_avg(cat_input)))
+        down_x = cat_input_lvl0[:, 0:1, :, :, :]
+        down_y = cat_input_lvl0[:, 1:2, :, :, :]
+
+        fea_e0 = self.input_encoder(cat_input_lvl0)  # b,start_channel * 2, d/8,h/8,w/8
+        e0 = self.down_conv(fea_e0)  # b,start_channel * 4, d/16,h/16,w/16
+        e0 = self.resblock(e0)
+        e0 = self.up(e0)  # b,start_channel * 2, d/8,h/8,w/8
+
+        if e0.shape[2:] != fea_e0.shape[2:]:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+
+        decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))  # b,start_channel * 2, d/8,h/8,w/8
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        decoder = x1 + x2
+
+        output_disp = self.output(decoder) * self.range_flow
+        warpped_input = self.transform(down_x, output_disp.permute(0, 2, 3, 4, 1),
+                                       self.grid_1.get_grid(down_x.shape[2:], True))
+
+        if self.is_train is True:
+            return {'flow': output_disp, 'warped_img': warpped_input, 'down_y': down_y, 'embedding': e0}
+        else:
+            return {'flow': output_disp, 'warped_img': warpped_input}
+
+
+class CRegNet_lv1(nn.Module):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None, model_lv0=None):
+        super(CRegNet_lv1, self).__init__()
+        self.in_channel = in_channel
+        self.n_classes = n_classes
+        self.start_channel = start_channel
+        self.model_lv0 = model_lv0
+        self.range_flow = range_flow
+        self.is_train = is_train
+
+        self.grid_1 = grid
+        self.transform = AdaptiveSpatialTransformer()
+
+        bias_opt = False
+
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel+3, self.start_channel * 4, bias=bias_opt) if model_lv0 is not None else input_feature_extract(self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
                                    bias=bias_opt)
@@ -94,7 +168,7 @@ class CRegNet_lv1(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl1 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl1 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
     def forward(self, x, y):
@@ -102,13 +176,23 @@ class CRegNet_lv1(nn.Module):
         cat_input = torch.cat((x, y), 1)
         cat_input = self.down_avg(cat_input)
         cat_input_lvl1 = self.down_avg(cat_input)
-
         down_x = cat_input_lvl1[:, 0:1, :, :, :]
         down_y = cat_input_lvl1[:, 1:2, :, :, :]
 
-        fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
+        if self.model_lv0 is not None:
+            pred = self.model_lv0(x, y)
+            lvl0_disp, warpped_inputx_lvl0_out, lvl0_embedding = pred['flow'], pred['warped_img'], pred['embedding']
+            lvl0_disp_up = F.interpolate(lvl0_disp, size=down_x.shape[2:], mode='trilinear', align_corners=True)
+            warpped_x = self.transform(down_x, lvl0_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(down_x.shape[2:], True))
+            cat_input_lvl1 = torch.cat((warpped_x, down_y, lvl0_disp_up), 1)
 
+        fea_e0 = self.input_encoder_lvl1(cat_input_lvl1)
         e0 = self.down_conv(fea_e0)
+
+        if self.model_lv0 is not None:
+
+            e0 = e0 + lvl0_embedding
+
         e0 = self.resblock_group_lvl1(e0)
         e0 = self.up(e0)
 
@@ -176,7 +260,7 @@ class CRegNet_lv2(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl2 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl2 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -227,7 +311,8 @@ class CRegNet_lv2(nn.Module):
 
         if self.is_train is True:
             # return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
-            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
+            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down,
+                    'embedding': e0}
         else:
             return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
 
@@ -275,7 +360,7 @@ class CRegNet_lv3(nn.Module):
             nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU(0.2))
 
-        self.output_lvl3 = outputs(self.start_channel * 8, self.n_classes, kernel_size=3, stride=1, padding=1,
+        self.output_lvl3 = outputs(self.start_channel * 4, self.n_classes, kernel_size=3, stride=1, padding=1,
                                    bias=False)
 
         # self.cor_conv = nn.Sequential(nn.Conv3d(in_channels=2, out_channels=3, kernel_size=3, stride=1, padding=1),
@@ -324,7 +409,7 @@ class CRegNet_lv3(nn.Module):
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x.shape[2:], True))
 
-        return {'flow':compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
+        return {'flow': compose_field_e0_lvl1, 'warped_img': warpped_inputx_lvl3_out}
 
 
 class PreActBlock(nn.Module):
@@ -353,55 +438,81 @@ class PreActBlock(nn.Module):
         return out
 
 
-class NCC_bak(torch.nn.Module):
-    """
-    local (over window) normalized cross correlation
-    """
+class CRegNet(nn.Module):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None):
+        super(CRegNet, self).__init__()
+        self.in_channel = in_channel
+        self.n_classes = n_classes
+        self.start_channel = start_channel
 
-    def __init__(self, win=5, eps=1e-8):
-        super(NCC_bak, self).__init__()
-        self.win = win
-        self.eps = eps
-        self.w_temp = win
+        self.range_flow = range_flow
+        self.is_train = is_train
 
-    def forward(self, I, J):
-        ndims = 3
-        win_size = self.w_temp
+        self.grid_1 = grid
 
-        # set window size
-        if self.win is None:
-            self.win = [5] * ndims
-        else:
-            self.win = [self.w_temp] * ndims
+        self.transform = AdaptiveSpatialTransformer()
 
-        weight_win_size = self.w_temp
-        weight = torch.ones((1, 1, weight_win_size, weight_win_size, weight_win_size), device=I.device,
-                            requires_grad=False)
-        conv_fn = F.conv3d
+        bias_opt = False
 
-        # compute CC squares
-        I2 = I * I
-        J2 = J * J
-        IJ = I * J
+        self.input_encoder_lvl1 = input_feature_extract(self.in_channel, self.start_channel * 2, bias=bias_opt)
 
-        # compute filters
-        # compute local sums via convolution
-        I_sum = conv_fn(I, weight, padding=int(win_size / 2))
-        J_sum = conv_fn(J, weight, padding=int(win_size / 2))
-        I2_sum = conv_fn(I2, weight, padding=int(win_size / 2))
-        J2_sum = conv_fn(J2, weight, padding=int(win_size / 2))
-        IJ_sum = conv_fn(IJ, weight, padding=int(win_size / 2))
+        self.down_conv = nn.Conv3d(self.start_channel * 2, self.start_channel * 4, 3, stride=2, padding=1,
+                                   bias=bias_opt)
 
-        # compute cross correlation
-        win_size = np.prod(self.win)
-        u_I = I_sum / win_size
-        u_J = J_sum / win_size
+        self.resblock_group_lvl1 = resblock_seq(self.start_channel * 4, bias_opt=bias_opt)
 
-        cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
-        I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
-        J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
+        # self.up_tri = torch.nn.Upsample(scale_factor=2, mode="trilinear")
+        # self.up = nn.ConvTranspose3d(self.start_channel * 4, self.start_channel * 2, 2, stride=2,
+        #                              padding=0, output_padding=0, bias=bias_opt)
+        self.conv_up = nn.Conv3d(self.start_channel * 4, self.start_channel * 2, kernel_size=1)
 
-        cc = cross * cross / (I_var * J_var + self.eps)
+        # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
+        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
 
-        # return negative cc.
-        return -1.0 * torch.mean(cc)
+        self.decoder = nn.Sequential(
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(self.start_channel * 4, self.start_channel * 2, kernel_size=3, stride=1, padding=1))
+
+        self.conv_block = nn.Sequential(
+            nn.Conv3d(self.start_channel * 2, self.start_channel * 2, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(self.start_channel * 2, self.start_channel * 2, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.2))
+
+        self.output_lvl3 = outputs(self.start_channel * 2, self.n_classes, kernel_size=3, stride=1, padding=1,
+                                   bias=False)
+
+    def forward(self, x, y):
+        # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
+        # pred = self.model_lvl2(x, y)
+        # lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
+        # # lvl2_disp_up = self.up_tri(lvl2_disp)
+        #
+        # lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
+        #                              mode='trilinear',
+        #                              align_corners=True)
+        #
+        # warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
+
+        # cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+        cat_input = torch.cat((x, y), 1)
+        fea_e0 = self.input_encoder_lvl1(cat_input)
+        e0 = self.down_conv(fea_e0)
+        e0 = self.resblock_group_lvl1(e0)
+        # e0 = self.up(e0)
+        e0 = self.conv_up(e0)
+        if e0.shape[2:] != fea_e0.shape[2:]:
+            e0 = F.interpolate(e0, size=fea_e0.shape[2:], mode='trilinear', align_corners=True)
+
+        decoder = self.decoder(torch.cat([e0, fea_e0], dim=1))
+        x1 = self.conv_block(decoder)
+        x2 = self.conv_block(x1 + decoder)
+
+        decoder = x1 + x2
+
+        output_disp_e0_v = self.output_lvl3(decoder) * self.range_flow
+
+        warpped_inputx_lvl3_out = self.transform(x, output_disp_e0_v.permute(0, 2, 3, 4, 1),
+                                                 self.grid_1.get_grid(x.shape[2:], True))
+
+        return {'flow': output_disp_e0_v, 'warped_img': warpped_inputx_lvl3_out}
