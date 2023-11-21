@@ -11,10 +11,10 @@ from utils.utilize import set_seed, save_model, load_landmarks, count_parameters
 
 set_seed(1024)
 
-from CRegNet import CRegNet_lv0, CRegNet_lv1, \
-    CRegNet_lv2, CRegNet_lv3
-# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
-#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
+# from CRegNet import CRegNet_lv0, CRegNet_lv1, \
+#     CRegNet_lv2, CRegNet_lv3
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0, Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
 from utils.datagenerators import Dataset, DirLabDataset, build_dataloader_dirlab
 from utils.config import get_args
@@ -98,7 +98,7 @@ def train_lvl1():
         param.requires_grad = False
 
     model = CRegNet_lv1(2, 3, start_channel, is_train=True,
-                        range_flow=range_flow, grid=grid_class, model_lv0=mode_lvl0).to(device)
+                        range_flow=range_flow, grid=grid_class, model_lvl0=mode_lvl0).to(device)
     print(count_parameters(model))
     loss_similarity = multi_resolution_NCC(win=5, scale=1)
     loss_Jdet = neg_Jdet_loss
@@ -180,14 +180,15 @@ def train_lvl1():
         step += 1
         if step > iteration_lvl1:
             break
-        break
+
 
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
-
+    model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                             grid=grid_class,).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                             grid=grid_class).to(device)
+                             grid=grid_class, model_lvl0=model_lvl0).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
@@ -256,7 +257,6 @@ def train_lvl2():
             logging.info("img_name:{}".format(moving[1][0]))
             logging.info("modelv2, iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
-
             # if batch == 0:
             #     m_name = str(step) + 'warped_' + moving[1][0]
             #     save_image(X_Y, Y, args.output_dir, m_name)
@@ -293,14 +293,15 @@ def train_lvl2():
         step += 1
         if step > iteration_lvl2:
             break
-        break
+
 
 def train_lvl3():
     print("Training lvl3...")
     device = args.device
-
+    model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
+                             grid=grid_class, ).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True,
-                             range_flow=range_flow, grid=grid_class).to(device)
+                             range_flow=range_flow, grid=grid_class,model_lvl0=model_lvl0).to(device)
     model_lvl2 = CRegNet_lv2(2, 3, start_channel, is_train=True,
                              range_flow=range_flow, model_lvl1=model_lvl1,
                              grid=grid_class).to(device)
@@ -483,7 +484,6 @@ def train_lvl0():
             logging.info("modelv0, iter: %d batch: %d  loss: %.4f  sim: %.4f  grad: %.4f" % (
                 step, batch, loss.item(), loss_multiNCC.item(), loss_regulation.item()))
 
-            break
             # if batch == 0:
             #     m_name = 'l3_' + str(step) + 'moving_' + moving[1][0]
             #     save_image(X_Y, Y, args.output_dir, m_name)
@@ -524,7 +524,6 @@ def train_lvl0():
         if step > iteration_lvl3:
             break
 
-        break
 
 if __name__ == "__main__":
     args = get_args()
