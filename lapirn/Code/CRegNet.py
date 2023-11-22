@@ -130,12 +130,12 @@ class CRegNet_lv0(nn.Module):
 
 
 class CRegNet_lv1(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None, model_lv0=None):
+    def __init__(self, in_channel, n_classes, start_channel, is_train=True, range_flow=0.4, grid=None, model_lvl0=None):
         super(CRegNet_lv1, self).__init__()
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
-        self.model_lv0 = model_lv0
+        self.model_lv0 = model_lvl0
         self.range_flow = range_flow
         self.is_train = is_train
 
@@ -145,7 +145,7 @@ class CRegNet_lv1(nn.Module):
         bias_opt = False
 
         self.input_encoder_lvl1 = input_feature_extract(self.in_channel + 3, self.start_channel * 4,
-                                                        bias=bias_opt) if model_lv0 is not None else input_feature_extract(
+                                                        bias=bias_opt) if model_lvl0 is not None else input_feature_extract(
             self.in_channel, self.start_channel * 4, bias=bias_opt)
 
         self.down_conv = nn.Conv3d(self.start_channel * 4, self.start_channel * 4, 3, stride=2, padding=1,
@@ -159,7 +159,8 @@ class CRegNet_lv1(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        if model_lvl0 is not None:
+            self.ca_module = across_atn(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -209,6 +210,9 @@ class CRegNet_lv1(nn.Module):
         decoder = x1 + x2
 
         output_disp_e0_v = self.output_lvl1(decoder) * self.range_flow
+        if self.model_lv0 is not None:
+            output_disp_e0_v += lvl0_disp_up
+            output_disp_e0_v += self.ca_module(fea_e0, lvl0_embedding, output_disp_e0_v)
         warpped_inputx_lvl1_out = self.transform(down_x, output_disp_e0_v.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(down_x.shape[2:], True))
 
@@ -253,7 +257,8 @@ class CRegNet_lv2(nn.Module):
         self.down_avg = nn.AvgPool3d(kernel_size=3, stride=2, padding=1, count_include_pad=False)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        # self.ca_module = Cross_attention(self.start_channel * 4, self.start_channel * 4)
+        if model_lvl1 is not None:
+            self.ca_module = across_atn(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -314,6 +319,7 @@ class CRegNet_lv2(nn.Module):
         output_disp_e0_v = self.output_lvl2(decoder) * self.range_flow
         if self.model_lvl1 is not None:
             compose_field_e0_lvl2 = output_disp_e0_v + lvl1_disp_up
+            compose_field_e0_lvl2 += self.ca_module(fea_e0, lvl1_embedding, output_disp_e0_v)
         else:
             compose_field_e0_lvl2 = output_disp_e0_v
 
@@ -361,7 +367,8 @@ class CRegNet_lv3(nn.Module):
                                      padding=0, output_padding=0, bias=bias_opt)
 
         # self.sa_module = Self_Attn(self.start_channel * 8, self.start_channel * 8)
-        self.ca_module = across_atn(self.start_channel * 4, self.start_channel * 4)
+        if model_lvl2 is not None:
+            self.ca_module = across_atn(self.start_channel * 4, self.start_channel * 4)
 
         self.decoder = nn.Sequential(
             nn.Conv3d(self.start_channel * 8, self.start_channel * 4, kernel_size=3, stride=1, padding=1),
@@ -421,10 +428,9 @@ class CRegNet_lv3(nn.Module):
         output_disp_e0_v = self.output_lvl3(decoder) * self.range_flow
         if self.model_lvl2 is not None:
             compose_field_e0_lvl1 = output_disp_e0_v + lvl2_disp_up
+            compose_field_e0_lvl1 += self.ca_module(fea_e0, lvl2_embedding, output_disp_e0_v)
         else:
             compose_field_e0_lvl1 = output_disp_e0_v
-
-        compose_field_e0_lvl1 += self.ca_module(fea_e0, lvl2_embedding, output_disp_e0_v)
 
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0_lvl1.permute(0, 2, 3, 4, 1),
                                                  self.grid_1.get_grid(x.shape[2:], True))

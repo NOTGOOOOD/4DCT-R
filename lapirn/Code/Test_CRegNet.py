@@ -4,14 +4,14 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-# from CRegNet import CRegNet_lv1, \
-#     CRegNet_lv2, CRegNet_lv3, CRegNet_lv0
+from CRegNet import CRegNet_lv1, \
+    CRegNet_lv2, CRegNet_lv3, CRegNet_lv0
 
 # from CCENet_single import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
 #     CCRegNet_planB_lvl3 as CRegNet_lv3
 
-from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0,Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
+# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0,Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
+#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
 from utils.utilize import load_landmarks, save_image, count_parameters
 from utils.config import get_args
@@ -234,17 +234,19 @@ if __name__ == '__main__':
 
     print(count_parameters(model))
 
-    from thop import profile
-    tensor = (torch.randn(1,1,96,144,144).cuda().float(), torch.randn(1,1,96,144,144).cuda().float(),)
-    flops, params = profile(model, tensor)
+    # from thop import profile
+    # tensor = (torch.randn(1,1,96,256,256).cuda().float(), torch.randn(1,1,96,256,256).cuda().float(),)
+    # flops, params = profile(model, tensor)
     # (407800656.0, 288708.0)
     # (6964150608.0, 660996.0)  (6485806080.0, 370020.0)
     # (59410968912.0, 1033284.0)    (58932624384.0, 742308.0)   (51882467328.0, 370020.0)
     # (478981534032.0, 1405572.0)   (478503189504.0, 1114596.0) (471453032448.0, 742308.0)  (415055757312.0, 370020.0)
 
     # attenion
-    #
+    # lv1=(415055757312.0, 370020.0)
     # lv2=(471641895936.0, 742482.0)
+    # lv3=(478715660928.0, 1114944.0)
+    # lv4=(479196956448.0, 1406094.0)
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
         test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False)
