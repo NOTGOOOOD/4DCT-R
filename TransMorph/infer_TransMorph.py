@@ -50,11 +50,11 @@ def test_dirlab(args, checkpoint, is_save=False):
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
                 m2f_name = img_name[0][:13] + '_flow_TM.nii.gz'
-                save_image(flow[0].permute(1, 2, 3, 0), y[0], args.output_dir,
+                save_image(flow[0].permute(1, 2, 3, 0), args.output_dir,
                            m2f_name)
 
                 m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
-                save_image(x_def, y, args.output_dir, m_name)
+                save_image(x_def, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]

@@ -72,7 +72,7 @@ def do_test(args):
             # save warped image0
             m_name = "{}_warped.nii.gz".format(moving[1][0][:13])
             # m_name = "{}_affine.nii.gz".format(moving[1][0][:13])
-            save_image(warped_image, input_fixed, args.output_dir, m_name)
+            save_image(warped_image, args.output_dir, m_name)
             print("warped images have saved.")
 
             # # Save DVF

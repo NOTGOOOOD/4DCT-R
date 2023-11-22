@@ -389,6 +389,7 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
     model.eval()
     losses = []
     for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+        spacing = args.dirlab_cfg[batch+1]['pixel_spacing']
         moving_img = moving.to(args.device).float()
         fixed_img = fixed.to(args.device).float()
         landmarks00 = landmarks['landmark_00'].squeeze().cuda()
@@ -430,10 +431,10 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
             # Save DVF
             # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
             m2f_name = '{}_warpped_flow_{}.nii.gz'.format(img_name[0][:13], suffix)
-            save_image(flow[0].permute((1, 2, 3, 0)), fixed_img[0], args.output_dir, m2f_name)
+            save_image(flow[0].permute((1, 2, 3, 0)), args.output_dir, m2f_name, spacing=spacing)
 
             m_name = '{}_warpped_img_{}.nii.gz'.format(img_name[0][:13], suffix)
-            save_image(warped_img, fixed_img, args.output_dir, m_name)
+            save_image(warped_img.squeeze(), args.output_dir, m_name, spacing=spacing)
 
     mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 

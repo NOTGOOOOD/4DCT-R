@@ -20,6 +20,7 @@ def test_dirlab(args, checkpoint, is_save=False):
     with torch.no_grad():
         losses = []
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
+            spacing = args.dirlab_cfg[batch+1]['pixel_spacing']
             moving_img = moving.to(args.device).float()
             fixed_img = fixed.to(args.device).float()
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
@@ -84,16 +85,16 @@ def test_dirlab(args, checkpoint, is_save=False):
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
                 m2f_name = img_name[0][:13] + '_warpped_flow_lap.nii.gz'
-                save_image(F_X_Y_cpu.permute(1,2,3,0), fixed_img[0], args.output_dir,
-                           m2f_name)
+                save_image(F_X_Y_cpu.permute(1,2,3,0), args.output_dir,
+                           m2f_name,spacing=spacing)
                 m_name = "{}_warped_lv1_lap.nii.gz".format(img_name[0][:13])
-                save_image(lv1_out, fixed_img, args.output_dir, m_name)
+                save_image(lv1_out.squeeze(), args.output_dir, m_name,spacing=spacing)
 
                 m_name = "{}_warped_lv2_lap.nii.gz".format(img_name[0][:13])
-                save_image(lv2_out, fixed_img, args.output_dir, m_name)
+                save_image(lv2_out.squeeze(),args.output_dir, m_name,spacing=spacing)
 
                 m_name = "{}_warped_lv3_lap.nii.gz".format(img_name[0][:13])
-                save_image(lv3_out, fixed_img, args.output_dir, m_name)
+                save_image(lv3_out.squeeze(), args.output_dir, m_name,spacing=spacing)
 
         mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 
@@ -158,13 +159,13 @@ def test_patient(args, checkpoint, is_save=False):
                 # save_image(X_Y, fixed_img, args.output_dir, m_name)
 
                 m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
-                save_image(lv1_out, fixed_img, args.output_dir, m_name)
+                save_image(lv1_out, args.output_dir, m_name)
 
                 m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-                save_image(lv2_out, fixed_img, args.output_dir, m_name)
+                save_image(lv2_out, args.output_dir, m_name)
 
                 m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
-                save_image(lv3_out, fixed_img, args.output_dir, m_name)
+                save_image(lv3_out, args.output_dir, m_name)
 
     mean_total = np.mean(losses, 0)
     mean_mse = mean_total[0]

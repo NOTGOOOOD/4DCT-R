@@ -70,15 +70,15 @@ def save_model(save_path, model, total_loss, simi_loss, reg_loss, train_loss, op
     print("Saved model checkpoint to [DIR: {}]".format(model_checkpoint))
 
 
-def save_image(img, ref_img, save_path, save_name):
+def save_image(img, save_path, save_name, spacing=None):
     make_dir(save_path)
-
     img = sitk.GetImageFromArray(img.cpu().detach().numpy())
-    ref_img = sitk.GetImageFromArray(ref_img.cpu().detach().numpy())
-
-    img.SetOrigin(ref_img.GetOrigin())
-    img.SetDirection(ref_img.GetDirection())
-    img.SetSpacing(ref_img.GetSpacing())
+    # img.SetOrigin(ref_img.GetOrigin())
+    # img.SetDirection(ref_img.GetDirection())
+    if spacing is not None:
+        if not isinstance(spacing, list):
+            spacing = list(spacing.astype('float'))
+        img.SetSpacing(spacing)
     sitk.WriteImage(img, os.path.join(save_path, save_name))
 
 
