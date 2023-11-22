@@ -673,6 +673,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
         return layer
 
     def forward(self, x, y):
+        res = {}
         x_down = self.down_avg(x)
         y_down = self.down_avg(y)
         # output_disp_e0, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, e0
@@ -685,6 +686,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
             lvl1_disp_up = F.interpolate(lvl1_disp, size=x_down.shape[2:], mode='trilinear', align_corners=True)
             warpped_x = self.transform(x_down, lvl1_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
             cat_input_lvl2 = torch.cat((warpped_x, y_down, lvl1_disp_up), 1)
+            res.update({'warped_imglv1': warpped_inputx_lvl1_out})
 
         fea_e0 = self.input_encoder_lvl1(cat_input_lvl2)
         e0 = self.down_conv(fea_e0)
@@ -711,11 +713,11 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl2(nn.Module):
 
         warpped_inputx_lvl2_out = self.transform(x_down, compose_field_e0_lvl2.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x_down.shape[2:], True))
 
+        res.update({'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out})
         if self.is_train is True:
-            # return compose_field_e0_lvl2, warpped_inputx_lvl1_out, warpped_inputx_lvl2_out, y_down, output_disp_e0_v, lvl1_v, e0
-            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out, 'down_y': y_down, 'embedding': e0}
-        else:
-            return {'flow': compose_field_e0_lvl2, 'warped_img': warpped_inputx_lvl2_out}
+            res.update({'down_y': y_down, 'embedding': e0})
+
+        return res
 
 
 class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
@@ -809,6 +811,7 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
         return layer
 
     def forward(self, x, y):
+        res = {}
         cat_input = torch.cat((x, y), 1)
         if self.model_lvl2 is not None:
             # compose_field_e0_lvl1, warpped_inputx_lvl1_out, down_y, output_disp_e0_v, lvl1_v, e0
@@ -816,13 +819,15 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             #     x, y)
             pred = self.model_lvl2(x, y)
             lvl2_disp, warpped_inputx_lvl2_out, lvl2_embedding = pred['flow'], pred['warped_img'], pred['embedding']
+            if 'warped_imglv1' in pred.keys():
+                res.update({'warped_imglv1': pred['warped_imglv1']})
 
             lvl2_disp_up = F.interpolate(lvl2_disp, size=x.shape[2:],
                                          mode='trilinear',
                                          align_corners=True)
             warpped_x = self.transform(x, lvl2_disp_up.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
-
             cat_input = torch.cat((warpped_x, y, lvl2_disp_up), 1)
+            res.update({'warped_imglv2': warpped_inputx_lvl2_out})
 
         fea_e0 = self.input_encoder_lvl1(cat_input)
         e0 = self.down_conv(fea_e0)
@@ -845,8 +850,9 @@ class Miccai2020_LDR_laplacian_unit_disp_add_lvl3(nn.Module):
             compose_field_e0 = output_disp_e0_v
 
         warpped_inputx_lvl3_out = self.transform(x, compose_field_e0.permute(0, 2, 3, 4, 1), self.grid_1.get_grid(x.shape[2:], True))
+        res.update({'flow':compose_field_e0, 'warped_img': warpped_inputx_lvl3_out})
 
-        return {'flow':compose_field_e0, 'warped_img': warpped_inputx_lvl3_out}
+        return res
 
 
 class PreActBlock(nn.Module):

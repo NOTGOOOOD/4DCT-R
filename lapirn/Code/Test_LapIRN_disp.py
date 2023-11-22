@@ -3,20 +3,17 @@ import numpy as np
 import torch
 import torch.utils.data as Data
 
-from utils.Functions import transform_unit_flow_to_flow, Grid
-
 from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
     Miccai2020_LDR_laplacian_unit_disp_add_lvl3
-
 # from CCENet_single import CCRegNet_planB_lv1 as Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
 #     CCRegNet_planB_lv2 as Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
 #     CCRegNet_planB_lvl3 as Miccai2020_LDR_laplacian_unit_disp_add_lvl3
-
 from utils.utilize import load_landmarks, save_image
 from utils.config import get_args
 from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
 from utils.losses import neg_Jdet_loss
 from utils.datagenerators import DirLabDataset, PatientDataset
+from utils.Functions import transform_unit_flow_to_flow, Grid
 
 
 def test_dirlab(args, checkpoint, is_save=False):
@@ -48,20 +45,17 @@ def test_dirlab(args, checkpoint, is_save=False):
                         continue
                     else:
                         model_state[loaded_key].copy_(loaded_state[loaded_key])
-                # else:
-                #     print("{}: In checkpoint but not in model".format(loaded_key))
+                else:
+                    print("{}: In checkpoint but not in model".format(loaded_key))
 
             # model.load_state_dict(torch.load(checkpoint)['model'])
             # model.load_state_dict(torch.load(checkpoint))
             model.eval()
-
             res = model(moving_img, fixed_img)  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
-            F_X_Y, lv3_out = res['flow'], res['warped_img']
+            F_X_Y, lv1_out, lv2_out, lv3_out = res['flow'], res['warped_imglv1'], res['warped_imglv2'] ,res['warped_img']
             # X_Y = transform(moving_img, F_X_Y.permute(0, 2, 3, 4, 1), grid)
-
             F_X_Y_cpu = F_X_Y[0, :, :, :, :]
             F_X_Y_cpu = transform_unit_flow_to_flow(F_X_Y_cpu)
-
             crop_range = args.dirlab_cfg[batch + 1]['crop_range']
 
             # MSE
@@ -86,25 +80,20 @@ def test_dirlab(args, checkpoint, is_save=False):
             if is_save:
                 print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
                     batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
-            # if is_save:
-            #     # Save DVF
-            #     # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-            #     m2f_name = img_name[0][:13] + '_warpped_flow.nii.gz'
-            #     save_image(F_X_Y_cpu.permute(1,2,3,0), fixed_img[0], args.output_dir,
-            #                m2f_name)
-            #
-            #     # m_name = "{}_warped_lapirn.nii.gz".format(img_name[0][:13])
-            #     # # save_img(X_Y, args.output_dir + '/' + file_name + '_warpped_moving.nii.gz')
-            #     # save_image(X_Y, fixed_img, args.output_dir, m_name)
-            #
-            #     m_name = "{}_warped_lv1.nii.gz".format(img_name[0][:13])
-            #     save_image(lv1_out, fixed_img, args.output_dir, m_name)
-            #
-            #     m_name = "{}_warped_lv2.nii.gz".format(img_name[0][:13])
-            #     save_image(lv2_out, fixed_img, args.output_dir, m_name)
-            #
-            #     m_name = "{}_warped_lv3.nii.gz".format(img_name[0][:13])
-            #     save_image(lv3_out, fixed_img, args.output_dir, m_name)
+            if is_save:
+                # Save DVF
+                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+                m2f_name = img_name[0][:13] + '_warpped_flow_lap.nii.gz'
+                save_image(F_X_Y_cpu.permute(1,2,3,0), fixed_img[0], args.output_dir,
+                           m2f_name)
+                m_name = "{}_warped_lv1_lap.nii.gz".format(img_name[0][:13])
+                save_image(lv1_out, fixed_img, args.output_dir, m_name)
+
+                m_name = "{}_warped_lv2_lap.nii.gz".format(img_name[0][:13])
+                save_image(lv2_out, fixed_img, args.output_dir, m_name)
+
+                m_name = "{}_warped_lv3_lap.nii.gz".format(img_name[0][:13])
+                save_image(lv3_out, fixed_img, args.output_dir, m_name)
 
         mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 

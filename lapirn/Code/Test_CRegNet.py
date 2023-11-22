@@ -216,7 +216,7 @@ if __name__ == '__main__':
     model_lvl0 = CRegNet_lv0(2, 3, args.initial_channels, is_train=True,
                              range_flow=range_flow, grid=grid_class).cuda()
     model_lvl1 = CRegNet_lv1(2, 3, args.initial_channels, is_train=True,
-                             range_flow=range_flow, grid=grid_class, model_lvl0=model_lvl0).cuda()
+                             range_flow=range_flow, grid=grid_class, model_lvl0=None).cuda()
     model_lvl2 = CRegNet_lv2(2, 3, args.initial_channels, is_train=True,
                              range_flow=range_flow, model_lvl1=model_lvl1, grid=grid_class).cuda()
     model = CRegNet_lv3(2, 3, args.initial_channels, is_train=False,
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     # lv4=(479196956448.0, 1406094.0)
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False)
+        test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False, is_save=True, suffix='cce_nocor')
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])

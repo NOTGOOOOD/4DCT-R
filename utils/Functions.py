@@ -14,6 +14,7 @@ from midir.model.transformation import CubicBSplineFFDTransform, warp
 from utils.datagenerators import Dataset, build_dataloader_dirlab
 from utils.losses import smoothloss, neg_Jdet_loss, bending_energy_loss, Grad
 from utils.metric import MSE, jacobian_determinant, landmark_loss, NCC as mtNCC, SSIM
+from utils.utilize import save_image
 
 
 def generate_grid(imgshape):
@@ -384,7 +385,7 @@ class Grid():
         return grid
 
 @torch.no_grad()
-def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logging=None):
+def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logging=None, is_save=False, suffix=''):
     model.eval()
     losses = []
     for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
@@ -424,6 +425,15 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
         if not is_train:
             print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
                 batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+
+        if is_save:
+            # Save DVF
+            # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+            m2f_name = '{}_warpped_flow_{}.nii.gz'.format(img_name[0][:13], suffix)
+            save_image(flow[0].permute((1, 2, 3, 0)), fixed_img[0], args.output_dir, m2f_name)
+
+            m_name = '{}_warpped_img_{}.nii.gz'.format(img_name[0][:13], suffix)
+            save_image(warped_img, fixed_img, args.output_dir, m_name)
 
     mean_tre, mean_std, mean_ncc, mean_ssim, mean_jac = np.mean(losses, 0)
 
