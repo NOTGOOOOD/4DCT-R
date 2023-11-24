@@ -12,7 +12,7 @@ plot_dpi = 300
 import numpy as np
 import logging, tqdm
 from scipy import interpolate
-from utils.utilize import save_image, get_project_path, make_dir, count_parameters
+from utils.utilize import save_image, get_project_path, make_dir, count_parameters,make_dirs
 from utils.config import get_args
 from GDIR.model.regnet import SpatialTransformer
 
@@ -82,10 +82,10 @@ config = dict(
     cyclic_reg=1e-2,
     ncc_window_size=5,
     load=None,
-    load_optimizer=True,
+    load_optimizer=False,
     group_index_list=None,
     pair_disp_indexes=[0, 5],
-    pair_disp_calc_interval=20,
+    pair_disp_calc_interval=10,
     stop_std=0.0007,
     stop_query_len=200,
 )
@@ -99,6 +99,7 @@ def train(case=1):
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
     set_seed()
     states_folder = args.checkpoint_path
+    make_dirs(args)
     # log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径
     # warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
@@ -129,7 +130,7 @@ def train(case=1):
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
 
     # file
-    data_folder = 'D:/xxf/dirlabcase1-10/case%02d' % case
+    data_folder = 'D:/xxf/dirlab_1250/case%02d' % case
     image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('.gz')])
     image_list = []
     for file_name in image_file_list:
@@ -232,25 +233,9 @@ def train(case=1):
     diff_ori = (np.sum((landmark_disp * args.dirlab_cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
     print("\ncase{0}配准前 diff: {1}({2})".format(case, np.mean(diff_ori), np.std(diff_ori)))
 
+    best_tre = 99.
     for i in pbar:
         res = regnet(input_image)
-        # # 保存前六个阶段图片
-        # if i % 10 == 0:
-        #     for j in (0, 5):
-        #         utils.utilize.plotorsave_ct_scan(res['warped_input_image'][j, 0, :, :, :], "save",
-        #                                          epoch=i,
-        #                                          head="warped",
-        #                                          case=case,
-        #                                          phase=j * 10,
-        #                                          path=f"../result/general_reg/dirlab/warped_image")
-        #
-        #     utils.utilize.plotorsave_ct_scan(res['template'][0, 0, :, :, :], "save",
-        #                                      epoch=i,
-        #                                      head="tem",
-        #                                      case=case,
-        #                                      phase=50,
-        #                                      path=f"../result/general_reg/dirlab/template_image")
-
         total_loss = 0.
         if 'disp_i2t' in res:
             simi_loss = (ncc_loss(res['warped_input_image'], res['template']) + ncc_loss(input_image,
@@ -295,13 +280,7 @@ def train(case=1):
         pbar.set_description(
             f'{i}, totalloss {total_loss:.6f}, simi loss {simi_loss.item():.6f}, smooth loss {smooth_loss_item:.3f}, cyclic loss {cyclic_loss_item:.3f}')
 
-        # save logfile
-        # log_index = len([file for file in os.listdir(log_folder) if file.endswith('.log')])
-
         if i % config.pair_disp_calc_interval == 0:
-            # for name, param in regnet.named_parameters():
-            #     logger.info("case{0}_iter{1}\n{2}\n{3}".format(case, i, name, param))
-
             if 'disp_i2t' in res:
                 disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
             else:
@@ -312,70 +291,153 @@ def train(case=1):
                                           args.dirlab_cfg[case]['pixel_spacing'])
             diff_stats.append([i, mean, std])
             # save_warp(args, np.expand_dims(compse_disp[0, 1], 0), input_image[0].unsqueeze(0), 'case1', 'gdir', spacing=args.dirlab_cfg[case]['pixel_spacing'])
-            ncc = mtNCC(res['warped_input_image'].cpu().detach().numpy(), res['template'].cpu().detach().numpy())
-            jac = jacobian_determinant(res['disp_t2i'][0].cpu().detach().numpy())
-            ssim = SSIM(res['warped_input_image'].cpu().detach().numpy()[0, 0], res['template'].cpu().detach().numpy()[0, 0])
-            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
-        #
-        #     # Save images
-        #     phase = 0
-        #     warped_name = str(i) + f"_case{case}_T{phase}0_warped.nii.gz"
-        #     save_image(res['warped_input_image'][phase, 0, :, :, :], input_image[5],
-        #                warp_case_path + f'/epoch{i}', warped_name)
-        #
-        #     m2f_name = f"case{case}_temp.nii.gz"
-        #     save_image(res['template'][0, 0, :, :, :], input_image[5], temp_case_path + f'/epoch{i}', m2f_name)
-        #
-        #     # Save DVF
-        #     # n,3,d,h,w-> w,h,d,3
-        #     save_image(torch.permute(disp_i2t[0], (3, 2, 1, 0)), input_image[5], dvf_path + f'/epoch{i}',
-        #                f'case{case}dvf.nii')
 
+            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+
+            if mean < best_tre:
+                best_tre = mean
+                states = {'config': config, 'model': regnet.state_dict(), 'optimizer': None,
+                          'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
+                states_file = f'reg_dirlab_case{case}_{mean:.2f}({std:.2f}).pth'
+                save_path = os.path.join(states_folder, states_file)
+                torch.save(states, save_path)
+                print(f'save model {states_file} in path:{save_path}')
+
+
+def test(case=1, is_save=False):
+    args = get_args()
+    set_seed()
+    states_folder = args.checkpoint_path
+    make_dirs(args)
+
+    # d,h,w
+    crop_range0 = args.dirlab_cfg[case]["crop_range"][0]
+    crop_range1 = args.dirlab_cfg[case]["crop_range"][1]
+    crop_range2 = args.dirlab_cfg[case]["crop_range"][2]
+    crop_range0_start = crop_range0.start
+    crop_range1_start = crop_range1.start
+    crop_range2_start = crop_range2.start
+
+    # landmark
+    landmark_file = os.path.join(project_path, 'data/dirlab/Case%02d_300_00_50.pt' % (case) )
+    landmark_info = torch.load(landmark_file)
+    landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
+    landmark_00 = landmark_info['landmark_00']
+    landmark_50 = landmark_info['landmark_50']
+
+    landmark_00_converted = np.flip(landmark_00, axis=1) - np.array(
+        [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
+
+    landmark_50_converted = np.flip(landmark_50, axis=1) - np.array(
+        [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
+
+    # file
+    data_folder = 'D:/xxf/dirlab_1250/case%02d' % case
+    image_file_list = sorted([file_name for file_name in os.listdir(data_folder) if file_name.lower().endswith('.gz')])
+    image_list = []
+    for file_name in image_file_list:
+        # xyz W H D
+        img_sitk = sitk.ReadImage(os.path.join(data_folder, file_name))
+        # zyx D H W
+        stkimg = sitk.GetArrayFromImage(img_sitk)
+
+        image_list.append(stkimg)
+
+    input_image = torch.stack([torch.from_numpy(image)[None] for image in image_list], 0)
+    input_image = input_image.float()
+
+    if config.group_index_list is not None:
+        input_image = input_image[config.group_index_list]
+
+    # normalize [0,1]
+    input_image = data_standardization_0_n(1, input_image)
+
+    image_shape = np.array(input_image.shape[2:])  # (d, h, w) z y x
+    num_image = input_image.shape[0]  # number of image in the group
+    regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
+                                             initial_channels=config.initial_channels,
+                                             normalization=config.normalization)
+
+    ncc_loss = GDIR.model.loss.NCC(config.dim, config.ncc_window_size)
+    regnet = regnet.to(device)
+    input_image = input_image.to(device)
+    ncc_loss = ncc_loss.to(device)
+    optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
+    calcdisp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
+
+
+    state_file = os.path.join(states_folder, config.load)
+    if os.path.exists(state_file):
+        state_file = os.path.join(states_folder, config.load)
+        states = torch.load(state_file, map_location=device)
+        regnet.load_state_dict(states['model'])
+        if config.load_optimizer:
+            optimizer.load_state_dict(states['optimizer'])
+
+    grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
+    diff_stats = []
+
+    diff_ori = (np.sum((landmark_disp * args.dirlab_cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
+    print("\ncase{0}配准前 diff: {1}({2})".format(case, np.mean(diff_ori), np.std(diff_ori)))
+
+
+    res = regnet(input_image)
     if 'disp_i2t' in res:
         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
     else:
         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
+    mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                            grid_tuple, landmark_00_converted, landmark_disp,
+                                            args.dirlab_cfg[case]['pixel_spacing'])
 
-    mean, std, diff, composed_dis_np = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                                grid_tuple, landmark_00_converted, landmark_disp,
-                                                args.dirlab_cfg[case]['pixel_spacing'])
+    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save)
 
-    diff_stats.append([i, mean, std])
-    print(f'\n case{case} diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
-    diff_stats = np.array(diff_stats)
-    #
-    # # mse = MSE()
-    #
-    # res['composed_disp_np'] = composed_dis_np
-    states = {'config': config, 'model': regnet.state_dict(), 'optimizer':None,
-              'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
-    index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
-    states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
-    save_path = os.path.join(states_folder, states_file)
-    torch.save(states, save_path)
-    print(f'save model {states_file} in path:{save_path}')
-    #
-    # plt.figure(dpi=plot_dpi)
-    # plt.plot(stop_criterion.loss_list, label='simi')
-    # plt.title('similarity loss vs iteration')
-    #
-    # plt.show()
+    ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
+    jac = jacobian_determinant(disp[0].cpu().detach().numpy())
+    ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
+    print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
 
-    # save_warp(args, compse_disp[0, 1], input_image[0, 0]., 'case1', 'gdir')
 
-def save_warp(args, disp, moving, prefix, suffix, spacing):
+
+def get_flow50_00(args, res, input_image, spacing, is_save=False):
+    """
+
+    Parameters
+    ----------
+    args: dict
+    res: dict
+    input_image: torch.Tensor :moving image.shape(c,d,h,w)
+
+    Returns
+    -------
+    torch.Tensor: disp[n,c,d,h,w],
+    ndarray: warped[d,h,w]
+    """
+    calc_disp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
+    disp_50_t = calc_disp.inverse_disp(res['disp_t2i'][5:6])
+    disp50_00 = calc_disp.compose_disp(disp_50_t, res['disp_t2i'][0:1], mode = 'corr')
+
+    wapred_img = get_warp(args, disp50_00, input_image, 'case1', 'gdir', spacing, is_save)
+    return disp50_00, wapred_img
+
+
+def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
     if type(disp) != torch.Tensor:
         disp = torch.tensor(disp).cuda()
-
     warped = spatial_transform(moving, disp).detach().cpu().numpy()
-    # Save DVF
-    # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
-    m2f_name = '{}_warpped_flow_{}.nii.gz'.format(prefix, suffix)
-    save_image(disp[0].permute((1, 2, 3, 0)), args.output_dir, m2f_name, spacing=spacing)
 
-    m_name = '{}_warpped_img_{}.nii.gz'.format(prefix, suffix)
-    save_image(warped.squeeze(), args.output_dir, m_name, spacing=spacing)
+    if is_save:
+        # Save DVF
+        # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+        m2f_name = '{}_warpped_flow_{}.nii.gz'.format(prefix, suffix)
+        save_image(disp[0].permute((1, 2, 3, 0)), args.output_dir, m2f_name, spacing=spacing)
+
+        m_name = '{}_warpped_img_{}.nii.gz'.format(prefix, suffix)
+        save_image(warped.squeeze(), args.output_dir, m_name, spacing=spacing)
+
+    return warped.squeeze()
 
 
 if __name__ == '__main__':
-    train(1)
+    # train(1)
+    test(1, True)
