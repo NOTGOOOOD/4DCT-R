@@ -19,6 +19,7 @@ def test_dirlab(args, checkpoint, is_save=False):
         losses = []
         model.eval()
         for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
+            spacing = args.dirlab_cfg[batch+1]['pixel_spacing']
             x = moving.to(args.device).float()
             y = fixed.to(args.device).float()
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
@@ -50,11 +51,10 @@ def test_dirlab(args, checkpoint, is_save=False):
                 # Save DVF
                 # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
                 m2f_name = img_name[0][:13] + '_flow_TM.nii.gz'
-                save_image(flow[0].permute(1, 2, 3, 0), args.output_dir,
-                           m2f_name)
+                save_image(flow[0].permute(1, 2, 3, 0), args.output_dir,m2f_name, spacing=spacing)
 
                 m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
-                save_image(x_def, args.output_dir, m_name)
+                save_image(x_def.squeeze(), args.output_dir, m_name, spacing=spacing)
 
     mean_total = np.mean(losses, 0)
     mean_tre = mean_total[0]
@@ -70,6 +70,48 @@ def csv_writter(line, name):
     with open(name+'.csv', 'a') as file:
         file.write(line)
         file.write('\n')
+
+def test_patient(args, checkpoint, is_save=False):
+    model.load_state_dict(torch.load(checkpoint)['model'])
+
+    with torch.no_grad():
+        losses = []
+        model.eval()
+        for batch, (moving, fixed, img_name) in enumerate(test_loader):
+            spacing = args.dirlab_cfg[batch+1]['pixel_spacing']
+            x = moving.to(args.device).float()
+            y = fixed.to(args.device).float()
+
+            x_in = torch.cat((x, y), dim=1)
+            flow = model(x_in, True)  # warped,DVF
+
+            x_def = STN(x, flow)
+
+            ncc = NCC(y.cpu().detach().numpy(), x_def.cpu().detach().numpy())
+            jac = jacobian_determinant(flow.squeeze().cpu().detach().numpy())
+            mse = MSE(y, x_def)
+            ssim = SSIM(y.cpu().detach().numpy()[0, 0], x_def.cpu().detach().numpy()[0, 0])
+
+            losses.append([mse.item(), jac, ncc.item(), ssim.item()])
+            print('case=%d after warped, MSE=%.5f Jac=%.6f ncc=%.6f ssim=%.6f' % (
+                batch + 1,mse.item(), jac, ncc.item(), ssim.item()))
+
+            if is_save:
+                # Save DVF
+                # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+                m2f_name = img_name[0][:13] + '_flow_TM.nii.gz'
+                save_image(flow[0].permute(1, 2, 3, 0), args.output_dir,m2f_name, spacing=spacing)
+
+                m_name = "{}_warped_TM.nii.gz".format(img_name[0][:13])
+                save_image(x_def.squeeze(), args.output_dir, m_name, spacing=spacing)
+
+    mean_total = np.mean(losses, 0)
+    mean_mse = mean_total[0]
+    mean_jac = mean_total[1]
+    mean_ncc = mean_total[2]
+    mean_ssim = mean_total[3]
+    print('mean MSE=%.3f Jac=%.6f ncc=%.6f ssim=%.6f' % (mean_mse, mean_jac, mean_ncc, mean_ssim))
+
 
 if __name__ == '__main__':
 
@@ -102,7 +144,7 @@ if __name__ == '__main__':
         [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
          file_name.lower().endswith('.gz')])
     test_dataset = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
+                                        landmark_files=None)
     test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     prefix = '2023-08-21-17-27-29'
@@ -113,7 +155,8 @@ if __name__ == '__main__':
     model = model.to(device)
 
     if args.checkpoint_name is not None:
-        test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), False)
+        # test_dirlab(args, os.path.join(model_dir, args.checkpoint_name), True,)
+        test_patient(args, os.path.join(model_dir, args.checkpoint_name))
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
         for checkpoint in checkpoint_list:
