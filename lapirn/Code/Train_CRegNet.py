@@ -83,22 +83,22 @@ def train_lvl1():
     print("Training lvl1...")
     device = args.device
 
-    mode_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow, grid=grid_class).to(device)
-    model_list = []
-    for f in os.listdir('../Model/Stage'):
-        if model_name + "stagelvl0" in f:
-            model_list.append(os.path.join('../Model/Stage', f))
-    model_path = sorted(model_list)[-1]
-
-    mode_lvl0.load_state_dict(torch.load(model_path)['model'])
-    print("Loading weight for model_lvl0...", model_path)
-
-    # Freeze model_lvl1 weight
-    for param in mode_lvl0.parameters():
-        param.requires_grad = False
+    # mode_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow, grid=grid_class).to(device)
+    # model_list = []
+    # for f in os.listdir('../Model/Stage'):
+    #     if model_name + "stagelvl0" in f:
+    #         model_list.append(os.path.join('../Model/Stage', f))
+    # model_path = sorted(model_list)[-1]
+    #
+    # mode_lvl0.load_state_dict(torch.load(model_path)['model'])
+    # print("Loading weight for model_lvl0...", model_path)
+    #
+    # # Freeze model_lvl1 weight
+    # for param in mode_lvl0.parameters():
+    #     param.requires_grad = False
 
     model = CRegNet_lv1(2, 3, start_channel, is_train=True,
-                        range_flow=range_flow, grid=grid_class, model_lvl0=mode_lvl0).to(device)
+                        range_flow=range_flow, grid=grid_class, model_lvl0=None).to(device)
     print(count_parameters(model))
     loss_similarity = multi_resolution_NCC(win=5, scale=1)
     loss_Jdet = neg_Jdet_loss
@@ -137,8 +137,8 @@ def train_lvl1():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
-            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-
+            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -157,7 +157,7 @@ def train_lvl1():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 4)
-
+        val_total_loss = val_ncc_loss
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
@@ -188,7 +188,7 @@ def train_lvl2():
     model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
                              grid=grid_class,).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                             grid=grid_class, model_lvl0=model_lvl0).to(device)
+                             grid=grid_class, model_lvl0=None).to(device)
 
     # model_path = r'D:\xxf\4DCT-R\lapirn\Model\Stage\2023-02-19-17-18-31_NCC_reg_disp_stagelvl1_057_-0.4263.pth'
     model_list = []
@@ -240,8 +240,8 @@ def train_lvl2():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
-            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-
+            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -267,7 +267,7 @@ def train_lvl2():
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 2)
 
-
+        val_total_loss = val_ncc_loss
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
@@ -301,7 +301,7 @@ def train_lvl3():
     model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
                              grid=grid_class, ).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True,
-                             range_flow=range_flow, grid=grid_class,model_lvl0=model_lvl0).to(device)
+                             range_flow=range_flow, grid=grid_class,model_lvl0=None).to(device)
     model_lvl2 = CRegNet_lv2(2, 3, start_channel, is_train=True,
                              range_flow=range_flow, model_lvl1=model_lvl1,
                              grid=grid_class).to(device)
@@ -366,8 +366,8 @@ def train_lvl3():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y)
 
-            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-
+            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -394,7 +394,7 @@ def train_lvl3():
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 1)
-
+        val_total_loss = val_ncc_loss
         mean_loss = np.mean(np.array(lossall), 0)[0]
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
@@ -546,7 +546,7 @@ if __name__ == "__main__":
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_CRegNet_".format(train_time)
+    model_name = "{}_lap_noreg_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
@@ -556,7 +556,7 @@ if __name__ == "__main__":
     grid_class = Grid()
     range_flow = 0.4
 
-    train_lvl0()
+    # train_lvl0()
     train_lvl1()
     train_lvl2()
     train_lvl3()

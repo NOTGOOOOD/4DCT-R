@@ -2,9 +2,13 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as Data
+# from CRegNet import CRegNet_lv0 as RegNet_v0, CRegNet_lv1 as RegNet_v1, \
+#     CRegNet_lv2 as RegNet_v2, CRegNet_lv3 as RegNet_v3
 
-from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl1, Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
-    Miccai2020_LDR_laplacian_unit_disp_add_lvl3
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as RegNet_v0,\
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as RegNet_v1, \
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as RegNet_v2, \
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as RegNet_v3
 # from CCENet_single import CCRegNet_planB_lv1 as Miccai2020_LDR_laplacian_unit_disp_add_lvl1, \
 #     CCRegNet_planB_lv2 as Miccai2020_LDR_laplacian_unit_disp_add_lvl2, \
 #     CCRegNet_planB_lvl3 as Miccai2020_LDR_laplacian_unit_disp_add_lvl3
@@ -26,13 +30,14 @@ def test_dirlab(args, checkpoint, is_save=False):
             landmarks00 = landmarks['landmark_00'].squeeze().cuda()
             landmarks50 = landmarks['landmark_50'].squeeze().cuda()
 
-            model_lvl1 = Miccai2020_LDR_laplacian_unit_disp_add_lvl1(2, 3, args.initial_channels, is_train=True,
-                                                                     range_flow=range_flow, grid=grid_class).cuda()
-            model_lvl2 = Miccai2020_LDR_laplacian_unit_disp_add_lvl2(2, 3, args.initial_channels, is_train=True,
+            model_lvl0 = RegNet_v0(2, 3, args.initial_channels, is_train=True, range_flow=range_flow, grid=grid_class).cuda()
+            model_lvl1 = RegNet_v1(2, 3, args.initial_channels, is_train=True,
+                                                                     range_flow=range_flow, grid=grid_class, model_lvl0=None).cuda()
+            model_lvl2 = RegNet_v2(2, 3, args.initial_channels, is_train=True,
                                                                      range_flow=range_flow,
                                                                      model_lvl1=model_lvl1, grid=grid_class).cuda()
 
-            model = Miccai2020_LDR_laplacian_unit_disp_add_lvl3(2, 3, args.initial_channels, is_train=False,
+            model = RegNet_v3(2, 3, args.initial_channels, is_train=False,
                                                                 range_flow=range_flow, model_lvl2=model_lvl2,
                                                                 grid=grid_class).cuda()
 
