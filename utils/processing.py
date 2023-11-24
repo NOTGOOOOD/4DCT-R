@@ -763,13 +763,17 @@ def NLST_processing(fixed_path, moving_path, **cfg):
 
 def construct_dirlab_test():
     print("dirlab: ")
-    target_test_fixed_path = 'D:/xxf/test_ori_resample/fixed'
-    target_test_moving_path = 'D:/xxf/test_ori_resample/moving'
+    img_folder = f'D:/xxf/dirlab_-1000-500'
+    target_test_fixed_path = 'D:/xxf/test_ori_-1000_500/fixed'
+    target_test_moving_path = 'D:/xxf/test_ori_-1000_500/moving'
     make_dir(target_test_moving_path)
     make_dir(target_test_fixed_path)
     for item in dirlab_case_cfg.items():
         case = item[0]
-        img_path = f'D:/xxf/dirlab_nii/case{case}'
+        if case < 10:
+            img_path = img_folder + f'/case0{case}'
+        else:
+            img_path = img_folder + f'/case{case}'
         dirlab_test_copy(case=case, m_path=target_test_moving_path, f_path=target_test_fixed_path, file_folder=img_path)
 
 def do_augment():
