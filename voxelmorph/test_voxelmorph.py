@@ -91,7 +91,7 @@ if __name__ == '__main__':
     prefix = '2023-04-21-17-47-16'
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, is_train=False)
+        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=True, suffix='vm')
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
