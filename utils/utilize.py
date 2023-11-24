@@ -72,7 +72,10 @@ def save_model(save_path, model, total_loss, simi_loss, reg_loss, train_loss, op
 
 def save_image(img, save_path, save_name, spacing=None):
     make_dir(save_path)
-    img = sitk.GetImageFromArray(img.cpu().detach().numpy())
+    if type(img) == torch.Tensor:
+        img = img.cpu().detach().numpy()
+
+    img = sitk.GetImageFromArray(img)
     # img.SetOrigin(ref_img.GetOrigin())
     # img.SetDirection(ref_img.GetDirection())
     if spacing is not None:
