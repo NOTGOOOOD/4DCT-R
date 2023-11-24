@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from GDIR.process.processing import data_standardization_0_n, imgTomhd, data_standardization_min_max
 import random
-from utils.metric import SSIM, NCC as mtNCC, jacobian_determinant
+from utils.metric import SSIM, NCC as mtNCC, jacobian_determinant, landmark_loss
 
 plot_dpi = 300
 import numpy as np
@@ -72,7 +72,7 @@ def set_seed(seed=1024):
 
 config = dict(
     dim=3,  # dimension of the input image
-    scale=0.3,
+    scale=0.8,
     initial_channels=32,
     depth=4,
     max_num_iteration=300,
@@ -298,18 +298,18 @@ def train(case=1):
                 best_tre = mean
                 states = {'config': config, 'model': regnet.state_dict(), 'optimizer': None,
                           'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
-                states_file = f'reg_dirlab_case{case}_{mean:.2f}({std:.2f}).pth'
+                states_file = f'reg_dirlab_case{case}_{mean:.2f}({std:.2f})_scale{config.scale}.pth'
                 save_path = os.path.join(states_folder, states_file)
                 torch.save(states, save_path)
                 print(f'save model {states_file} in path:{save_path}')
 
 
-def test(case=1, is_save=False):
+def test(case=1, is_save=False, state_file=''):
     args = get_args()
     set_seed()
     states_folder = args.checkpoint_path
     make_dirs(args)
-
+    config.load = state_file
     # d,h,w
     crop_range0 = args.dirlab_cfg[case]["crop_range"][0]
     crop_range1 = args.dirlab_cfg[case]["crop_range"][1]
@@ -371,6 +371,7 @@ def test(case=1, is_save=False):
         state_file = os.path.join(states_folder, config.load)
         states = torch.load(state_file, map_location=device)
         regnet.load_state_dict(states['model'])
+        print("load state {}".format(state_file))
         if config.load_optimizer:
             optimizer.load_state_dict(states['optimizer'])
 
@@ -386,20 +387,23 @@ def test(case=1, is_save=False):
         disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
     else:
         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
-    mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                            grid_tuple, landmark_00_converted, landmark_disp,
-                                            args.dirlab_cfg[case]['pixel_spacing'])
 
-    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save)
+    # mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+    #                                         grid_tuple, landmark_00_converted, landmark_disp,
+    #                                         args.dirlab_cfg[case]['pixel_spacing'])
+
+    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}')
+    _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
+                                torch.tensor(landmark_50_converted).flip(1).cuda(),
+                                args.dirlab_cfg[case]['pixel_spacing'])
 
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
-    print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    print(f'\n diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
 
 
-
-def get_flow50_00(args, res, input_image, spacing, is_save=False):
+def get_flow50_00(args, res, input_image, spacing, is_save=False, prefix='', suffix=''):
     """
 
     Parameters
@@ -417,7 +421,7 @@ def get_flow50_00(args, res, input_image, spacing, is_save=False):
     disp_50_t = calc_disp.inverse_disp(res['disp_t2i'][5:6])
     disp50_00 = calc_disp.compose_disp(disp_50_t, res['disp_t2i'][0:1], mode = 'corr')
 
-    wapred_img = get_warp(args, disp50_00, input_image, 'case1', 'gdir', spacing, is_save)
+    wapred_img = get_warp(args, disp50_00, input_image, prefix, suffix, spacing, is_save)
     return disp50_00, wapred_img
 
 
@@ -440,4 +444,4 @@ def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
 
 if __name__ == '__main__':
     # train(1)
-    test(1, True)
+    test(1, True,'reg_dirlab_case1_1.04(0.55)_scale0.8.pth')
