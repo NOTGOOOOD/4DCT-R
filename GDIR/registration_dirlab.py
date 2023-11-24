@@ -14,6 +14,7 @@ import logging, tqdm
 from scipy import interpolate
 from utils.utilize import save_image, get_project_path, make_dir, count_parameters
 from utils.config import get_args
+from GDIR.model.regnet import SpatialTransformer
 
 
 def calc_tre(calcdisp, disp_i2t, disp_t2i, grid_tuple, landmark_00_converted, landmark_disp, spacing):
@@ -90,15 +91,14 @@ config = dict(
 )
 config = utils.structure.Struct(**config)
 project_path = get_project_path("4DCT")
-states_folder = os.path.join(project_path, f'result/general_reg/dirlab/')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+spatial_transform = SpatialTransformer(3)
 
 def train(case=1):
     args = get_args()
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
     set_seed()
-
+    states_folder = args.checkpoint_path
     # log_folder = os.path.join('log/', f'case{case}')
     # 保存固定图像和扭曲图像路径
     # warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
@@ -116,7 +116,7 @@ def train(case=1):
     crop_range2_start = crop_range2.start
 
     # landmark
-    landmark_file = os.path.join(project_path, 'data/dirlab/Case{%02d}_300_00_50.pt' % (case) )
+    landmark_file = os.path.join(project_path, 'data/dirlab/Case%02d_300_00_50.pt' % (case) )
     landmark_info = torch.load(landmark_file)
     landmark_disp = landmark_info['disp_00_50']  # w, h, d  x,y,z
     landmark_00 = landmark_info['landmark_00']
@@ -127,7 +127,6 @@ def train(case=1):
 
     landmark_50_converted = np.flip(landmark_50, axis=1) - np.array(
         [crop_range0_start, crop_range1_start, crop_range2_start], dtype=np.float32)
-
 
     # file
     data_folder = 'D:/xxf/dirlabcase1-10/case%02d' % case
@@ -308,16 +307,15 @@ def train(case=1):
             else:
                 disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
 
-            mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+            mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
                                           grid_tuple, landmark_00_converted, landmark_disp,
                                           args.dirlab_cfg[case]['pixel_spacing'])
             diff_stats.append([i, mean, std])
-
-
+            # save_warp(args, np.expand_dims(compse_disp[0, 1], 0), input_image[0].unsqueeze(0), 'case1', 'gdir', spacing=args.dirlab_cfg[case]['pixel_spacing'])
             ncc = mtNCC(res['warped_input_image'].cpu().detach().numpy(), res['template'].cpu().detach().numpy())
             jac = jacobian_determinant(res['disp_t2i'][0].cpu().detach().numpy())
             ssim = SSIM(res['warped_input_image'].cpu().detach().numpy()[0, 0], res['template'].cpu().detach().numpy()[0, 0])
-            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.5f} ssim {ssim:.4f}')
+            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f}) ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
         #
         #     # Save images
         #     phase = 0
@@ -349,13 +347,13 @@ def train(case=1):
     # # mse = MSE()
     #
     # res['composed_disp_np'] = composed_dis_np
-    states = {'config': config, 'model': regnet.state_dict(), 'optimizer': optimizer.state_dict(),
+    states = {'config': config, 'model': regnet.state_dict(), 'optimizer':None,
               'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
     index = len([file for file in os.listdir(states_folder) if file.endswith('pth')])
     states_file = f'reg_dirlab_case{case}_{index:03d}_{mean:.2f}({std:.2f}).pth'
-    torch.save(states, os.path.join(states_folder, states_file))
-
-    # logging.info(f'save model and optimizer state {states_file}')
+    save_path = os.path.join(states_folder, states_file)
+    torch.save(states, save_path)
+    print(f'save model {states_file} in path:{save_path}')
     #
     # plt.figure(dpi=plot_dpi)
     # plt.plot(stop_criterion.loss_list, label='simi')
@@ -363,6 +361,21 @@ def train(case=1):
     #
     # plt.show()
 
+    # save_warp(args, compse_disp[0, 1], input_image[0, 0]., 'case1', 'gdir')
+
+def save_warp(args, disp, moving, prefix, suffix, spacing):
+    if type(disp) != torch.Tensor:
+        disp = torch.tensor(disp).cuda()
+
+    warped = spatial_transform(moving, disp).detach().cpu().numpy()
+    # Save DVF
+    # b,3,d,h,w-> d,h,w,3    (dhw or whd) depend on the shape of image
+    m2f_name = '{}_warpped_flow_{}.nii.gz'.format(prefix, suffix)
+    save_image(disp[0].permute((1, 2, 3, 0)), args.output_dir, m2f_name, spacing=spacing)
+
+    m_name = '{}_warpped_img_{}.nii.gz'.format(prefix, suffix)
+    save_image(warped.squeeze(), args.output_dir, m_name, spacing=spacing)
+
 
 if __name__ == '__main__':
-    train(10)
+    train(1)
