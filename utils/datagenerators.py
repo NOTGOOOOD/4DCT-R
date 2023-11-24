@@ -74,7 +74,10 @@ class DirLabDataset(Data.Dataset):
             print("=================================================")
             raise ValueError
 
-        return [m_img, f_img, self.landmark_files[index], m_name]
+        if self.landmark_files is not None:
+            return [m_img, f_img, self.landmark_files[index], m_name]
+        else:
+            return [m_img, f_img, m_name]
 
 
 class PatientDataset(Data.Dataset):
