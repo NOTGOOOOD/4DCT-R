@@ -72,8 +72,8 @@ def set_seed(seed=1024):
 
 config = dict(
     dim=3,  # dimension of the input image
-    scale=0.8,
-    initial_channels=32,
+    scale=0.5,
+    initial_channels=32, # 4 8 16 32
     depth=4,
     max_num_iteration=300,
     normalization=True,  # whether use normalization layer
@@ -303,6 +303,16 @@ def train(case=1):
                 torch.save(states, save_path)
                 print(f'save model {states_file} in path:{save_path}')
 
+    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],
+                                 is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
+    _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
+                                torch.tensor(landmark_50_converted).flip(1).cuda(),
+                                args.dirlab_cfg[case]['pixel_spacing'])
+
+    ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
+    jac = jacobian_determinant(disp[0].cpu().detach().numpy())
+    ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
+    print(f'\n finally, case{case} diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
 
 def test(case=1, is_save=False, state_file=''):
     args = get_args()
@@ -357,14 +367,13 @@ def test(case=1, is_save=False, state_file=''):
     regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
                                              initial_channels=config.initial_channels,
                                              normalization=config.normalization)
-
-    ncc_loss = GDIR.model.loss.NCC(config.dim, config.ncc_window_size)
     regnet = regnet.to(device)
     input_image = input_image.to(device)
-    ncc_loss = ncc_loss.to(device)
-    optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
     calcdisp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
 
+    # from thop import profile
+    # tensor = (torch.randn(input_image.shape).cuda().float(), )
+    # flops, params = profile(regnet, tensor)
 
     state_file = os.path.join(states_folder, config.load)
     if os.path.exists(state_file):
@@ -388,11 +397,11 @@ def test(case=1, is_save=False, state_file=''):
     else:
         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
 
-    # mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-    #                                         grid_tuple, landmark_00_converted, landmark_disp,
-    #                                         args.dirlab_cfg[case]['pixel_spacing'])
+    mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                            grid_tuple, landmark_00_converted, landmark_disp,
+                                            args.dirlab_cfg[case]['pixel_spacing'])
 
-    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}')
+    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
     _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
                                 torch.tensor(landmark_50_converted).flip(1).cuda(),
                                 args.dirlab_cfg[case]['pixel_spacing'])
@@ -400,7 +409,8 @@ def test(case=1, is_save=False, state_file=''):
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
-    print(f'\n diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    print(f'\n case{case} diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    return _mean.item(),_std.item(),ncc.item(),jac,ssim
 
 
 def get_flow50_00(args, res, input_image, spacing, is_save=False, prefix='', suffix=''):
@@ -443,5 +453,73 @@ def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
 
 
 if __name__ == '__main__':
-    # train(1)
-    test(1, True,'reg_dirlab_case1_1.04(0.55)_scale0.8.pth')
+    # for i in range(1, 11):
+    # train(4)
+    ckpt_32_list = ['',
+                       'reg_dirlab_case1_1.26(0.66)_scale0.5.pth',
+                       'reg_dirlab_case2_1.16(0.55)_scale0.5.pth',
+                       'reg_dirlab_case3_1.41(0.85)_scale0.5.pth',
+                       'reg_dirlab_case4_1.76(1.19)_scale0.5.pth',
+                       'reg_dirlab_case5_2.14(1.38)_scale0.5.pth',
+                       'reg_dirlab_case6_4.70(4.16)_scale0.5.pth',
+                       'reg_dirlab_case7_2.40(1.37)_scale0.5.pth',
+                       'reg_dirlab_case8_5.57(4.22)_scale0.5.pth',
+                       'reg_dirlab_case9_2.02(1.12)_scale0.5.pth',
+                       'reg_dirlab_case10_2.85(2.46)_scale0.5.pth']
+
+    ckpt_64_list=['',
+                  'reg_dirlab_case1_1.07(0.54)_scale0.5.pth',
+                  'reg_dirlab_case2_1.08(0.52)_scale0.5.pth',
+                  'reg_dirlab_case3_1.26(0.72)_scale0.5.pth',
+                  'reg_dirlab_case4_1.47(0.95)_scale0.5.pth',
+                  'reg_dirlab_case5_2.15(1.40)_scale0.5.pth',
+                  'reg_dirlab_case6_2.85(2.25)_scale0.5.pth',
+                  'reg_dirlab_case7_2.11(1.13)_scale0.5.pth',
+                  'reg_dirlab_case8_2.13(2.36)_scale0.5.pth',
+                  'reg_dirlab_case9_1.51(0.80)_scale0.5.pth',
+                  'reg_dirlab_case10_1.84(1.52)_scale0.5.pth']
+
+    ckpt_128_list=['',
+                  'reg_dirlab_case1_1.03(0.52)_scale0.5.pth',
+                  'reg_dirlab_case2_1.04(0.50)_scale0.5.pth',
+                  'reg_dirlab_case3_1.28(0.74)_scale0.5.pth',
+                  'reg_dirlab_case4_1.39(0.91)_scale0.5.pth',
+                  'reg_dirlab_case5_1.68(1.33)_scale0.5.pth',
+                  'reg_dirlab_case6_2.00(1.14)_scale0.5.pth',
+                  'reg_dirlab_case7_1.59(0.97)_scale0.5.pth',
+                  'reg_dirlab_case8_1.72(1.59)_scale0.5.pth',
+                  'reg_dirlab_case9_1.46(0.80)_scale0.5.pth',
+                  'reg_dirlab_case10_1.57(1.22)_scale0.5.pth']
+
+    ckpt_256_list=['',
+                  'reg_dirlab_case1_1.02_scale0.5.pth',
+                  'reg_dirlab_case2_1.07(0.53)_scale0.5.pth',
+                  'reg_dirlab_case3_1.36(0.81)_scale0.5.pth',
+                  'reg_dirlab_case4_1.45(0.92)_scale0.5.pth',
+                  'reg_dirlab_case5_1.71(1.35)_scale0.5.pth',
+                  'reg_dirlab_case6_1.78(1.07)_scale0.5.pth',
+                  'reg_dirlab_case7_1.59(0.94)_scale0.5.pth',
+                  'reg_dirlab_case8_1.63(1.23)_scale0.5.pth',
+                  'reg_dirlab_case9_1.53(0.78)_scale0.5.pth',
+                  'reg_dirlab_case10_1.52(1.16)_scale0.5.pth']
+
+    mean_tre_list = []
+    mean_std_list = []
+    ncc_list = []
+    jac_list = []
+    ssim_list = []
+    for i in range(1, 11):
+        mean_tre,mean_std, ncc, jac, ssim = test(i, False, ckpt_256_list[i])
+        mean_tre_list.append(mean_tre)
+        mean_std_list.append(mean_std)
+        ncc_list.append(ncc)
+        jac_list.append(jac)
+        ssim_list.append(ssim)
+
+    tre = np.array(mean_tre_list).sum()/10
+    std = np.array(mean_std_list).sum() / 10
+    ncc = np.array(ncc_list).sum() / 10
+    jac = np.array(jac_list).sum() / 10
+    ssim = np.array(ssim_list).sum() / 10
+
+    print(f'\n mean diff: {tre:.2f}+-{std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
