@@ -12,7 +12,7 @@ plot_dpi = 300
 import numpy as np
 import logging, tqdm
 from scipy import interpolate
-from utils.utilize import save_image, get_project_path, make_dir, count_parameters,make_dirs
+from utils.utilize import save_image, get_project_path, make_dir, count_parameters,make_dirs, save_model
 from utils.config import get_args
 from GDIR.model.regnet import SpatialTransformer
 
@@ -67,13 +67,13 @@ def set_seed(seed=1024):
     torch.cuda.manual_seed(seed)
     # torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
     torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.deterministic = False
 
 
 config = dict(
     dim=3,  # dimension of the input image
     scale=0.5,
-    initial_channels=32, # 4 8 16 32
+    initial_channels=16, # 4 8 16 32
     depth=4,
     max_num_iteration=300,
     normalization=True,  # whether use normalization layer
@@ -94,19 +94,10 @@ project_path = get_project_path("4DCT")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 spatial_transform = SpatialTransformer(3)
 
-def train(case=1):
-    args = get_args()
+def train(args, case=1):
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
-    set_seed()
     states_folder = args.checkpoint_path
     make_dirs(args)
-    # log_folder = os.path.join('log/', f'case{case}')
-    # 保存固定图像和扭曲图像路径
-    # warp_case_path = os.path.join("../result/general_reg/dirlab/warped_image", f"Case{case}")
-    # temp_case_path = os.path.join("../result/general_reg/dirlab/template_image", f"Case{case}")
-    # make_dir(warp_case_path)
-    # make_dir(temp_case_path)
-    # make_dir(log_folder)
 
     # d,h,w
     crop_range0 = args.dirlab_cfg[case]["crop_range"][0]
@@ -150,22 +141,11 @@ def train(case=1):
     # normalize [0,1]
     input_image = data_standardization_0_n(1, input_image)
 
-    # crop
-    # input_image = input_image[:, :, crop_range0, crop_range1, crop_range2]
-
     image_shape = np.array(input_image.shape[2:])  # (d, h, w) z y x
     num_image = input_image.shape[0]  # number of image in the group
     regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
                                              initial_channels=config.initial_channels,
                                              normalization=config.normalization)
-    # 使用tensorboard
-    # from torch.utils.tensorboard import SummaryWriter
-    # test_images = torch.randn(10, 1, 94, 256, 256)
-    # writer = SummaryWriter('runs/GDIR')
-    # writer.add_graph(regnet, test_images,use_strict_trace=False)
-    # writer.close()
-    #
-    # print("模型参数：", count_parameters(regnet.unet))
 
     # n = 5
     ncc_loss = GDIR.model.loss.NCC(config.dim, config.ncc_window_size)
@@ -173,8 +153,6 @@ def train(case=1):
     input_image = input_image.to(device)
     ncc_loss = ncc_loss.to(device)
     optimizer = torch.optim.Adam(regnet.parameters(), lr=config.learning_rate)
-    # optimizer = torch.optim.SGD(regnet.parameters(), lr=config.learning_rate)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=5e-5)
     calcdisp = GDIR.model.util.CalcDisp(dim=config.dim, calc_device='cuda')
 
     if config.load:
@@ -294,17 +272,12 @@ def train(case=1):
 
             print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
 
-            if mean < best_tre:
-                best_tre = mean
-                states = {'config': config, 'model': regnet.state_dict(), 'optimizer': None,
-                          'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
-                states_file = f'reg_dirlab_case{case}_{mean:.2f}({std:.2f})_scale{config.scale}.pth'
-                save_path = os.path.join(states_folder, states_file)
-                torch.save(states, save_path)
-                print(f'save model {states_file} in path:{save_path}')
+            states_file = f'{train_time}_case{case}_{mean:.2f}_scale{config.scale}.pth'
+            save_path = os.path.join(states_folder, states_file)
+            save_model(save_path,regnet,total_loss=total_loss.item(),simi_loss=simi_loss.item(),reg_loss=smooth_loss_item,train_loss=cyclic_loss_item,optimizer=None)
 
-    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],
-                                 is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
+
+    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
     _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
                                 torch.tensor(landmark_50_converted).flip(1).cuda(),
                                 args.dirlab_cfg[case]['pixel_spacing'])
@@ -314,9 +287,14 @@ def train(case=1):
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
     print(f'\n finally, case{case} diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
 
-def test(case=1, is_save=False, state_file=''):
-    args = get_args()
-    set_seed()
+    states = {'config': config, 'model': regnet.state_dict(), 'optimizer': None,
+              'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
+    states_file = f'reg_dirlab_case{case}_{mean:.2f}_scale{config.scale}.pth'
+    save_path = os.path.join(states_folder, states_file)
+    torch.save(states, save_path)
+    print(f'save model {states_file} in path:{save_path}')
+
+def test(args, case=1, is_save=False, state_file=''):
     states_folder = args.checkpoint_path
     make_dirs(args)
     config.load = state_file
@@ -387,9 +365,8 @@ def test(case=1, is_save=False, state_file=''):
     grid_tuple = [np.arange(grid_length, dtype=np.float32) for grid_length in image_shape]
     diff_stats = []
 
-    diff_ori = (np.sum((landmark_disp * args.dirlab_cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
-    print("\ncase{0}配准前 diff: {1}({2})".format(case, np.mean(diff_ori), np.std(diff_ori)))
-
+    # diff_ori = (np.sum((landmark_disp * args.dirlab_cfg[case]['pixel_spacing']) ** 2, 1)) ** 0.5
+    # print("\ncase{0}配准前 diff: {1}({2})".format(case, np.mean(diff_ori), np.std(diff_ori)))
 
     res = regnet(input_image)
     if 'disp_i2t' in res:
@@ -453,8 +430,16 @@ def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
 
 
 if __name__ == '__main__':
-    # for i in range(1, 11):
-    # train(4)
+    set_seed(48)
+    args = get_args()
+    train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
+    for i in range(1, 11):
+        train(args,i)
+    # test(args, case=6, is_save=False, state_file='reg_dirlab_case6_1.75(0.97)_scale0.5.pt')
+    # ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case6_' in file]
+    # for i in ckpt:
+    #     test(args, case=6,is_save=False, state_file=i)
+
     ckpt_32_list = ['',
                        'reg_dirlab_case1_1.26(0.66)_scale0.5.pth',
                        'reg_dirlab_case2_1.16(0.55)_scale0.5.pth',
@@ -502,6 +487,18 @@ if __name__ == '__main__':
                   'reg_dirlab_case8_1.63(1.23)_scale0.5.pth',
                   'reg_dirlab_case9_1.53(0.78)_scale0.5.pth',
                   'reg_dirlab_case10_1.52(1.16)_scale0.5.pth']
+
+    ckpt_256_list_reg = ['',
+                     'reg_dirlab_case1_1.02_scale0.5.pth',
+                     'reg_dirlab_case2_1.07(0.53)_scale0.5.pth',
+                     'reg_dirlab_case3_1.36(0.81)_scale0.5.pth',
+                     'reg_dirlab_case4_1.56(0.99)_scale0.5.pth',
+                     'reg_dirlab_case5_1.71(1.35)_scale0.5.pth',
+                     'reg_dirlab_case6_1.78(1.07)_scale0.5.pth',
+                     'reg_dirlab_case7_1.59(0.94)_scale0.5.pth',
+                     'reg_dirlab_case8_1.63(1.23)_scale0.5.pth',
+                     'reg_dirlab_case9_1.53(0.78)_scale0.5.pth',
+                     'reg_dirlab_case10_1.52(1.16)_scale0.5.pth']
 
     mean_tre_list = []
     mean_std_list = []
