@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from GDIR.process.processing import data_standardization_0_n, imgTomhd, data_standardization_min_max
 import random
-from utils.metric import SSIM, NCC as mtNCC, jacobian_determinant, landmark_loss
+from utils.metric import SSIM, NCC as mtNCC, jacobian_determinant, landmark_loss, jacobian_determinant
 
 plot_dpi = 300
 import numpy as np
@@ -69,30 +69,6 @@ def set_seed(seed=1024):
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
 
-
-config = dict(
-    dim=3,  # dimension of the input image
-    scale=0.5,
-    initial_channels=16, # 4 8 16 32
-    depth=4,
-    max_num_iteration=300,
-    normalization=True,  # whether use normalization layer
-    learning_rate=1e-2,
-    smooth_reg=1e-3,
-    cyclic_reg=1e-2,
-    ncc_window_size=5,
-    load=None,
-    load_optimizer=False,
-    group_index_list=None,
-    pair_disp_indexes=[0, 5],
-    pair_disp_calc_interval=10,
-    stop_std=0.0007,
-    stop_query_len=200,
-)
-config = utils.structure.Struct(**config)
-project_path = get_project_path("4DCT")
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-spatial_transform = SpatialTransformer(3)
 
 def train(args, case=1):
     # logger.add('{time:YYYY-MM-DD HHmmss}.log', format="{message}", rotation='5 MB', encoding='utf-8')
@@ -358,7 +334,7 @@ def test(args, case=1, is_save=False, state_file=''):
         state_file = os.path.join(states_folder, config.load)
         states = torch.load(state_file, map_location=device)
         regnet.load_state_dict(states['model'])
-        print("load state {}".format(state_file))
+        print("\nload state {}".format(state_file))
         if config.load_optimizer:
             optimizer.load_state_dict(states['optimizer'])
 
@@ -379,16 +355,16 @@ def test(args, case=1, is_save=False, state_file=''):
                                             args.dirlab_cfg[case]['pixel_spacing'])
 
     disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
-    _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
-                                torch.tensor(landmark_50_converted).flip(1).cuda(),
-                                args.dirlab_cfg[case]['pixel_spacing'])
+    # _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
+    #                             torch.tensor(landmark_50_converted).flip(1).cuda(),
+    #                             args.dirlab_cfg[case]['pixel_spacing'])
 
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
-    print(f'\n case{case} diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
-    return _mean.item(),_std.item(),ncc.item(),jac,ssim
-
+    print(f'\n case{case} diff: {mean:.2f}+-{std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    # return _mean.item(),_std.item(),ncc.item(),jac,ssim
+    return mean, std, ncc.item(), jac,ssim
 
 def get_flow50_00(args, res, input_image, spacing, is_save=False, prefix='', suffix=''):
     """
@@ -430,15 +406,41 @@ def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
 
 
 if __name__ == '__main__':
+    config = dict(
+        dim=3,  # dimension of the input image
+        scale=0.5,
+        initial_channels=16,  # 4 8 16 32
+        depth=4,
+        max_num_iteration=300,
+        normalization=True,  # whether use normalization layer
+        learning_rate=1e-2,
+        smooth_reg=5e-3,
+        cyclic_reg=0,
+        # smooth_reg=1e-3,
+        # cyclic_reg=1e-2,
+        ncc_window_size=5,
+        load=None,
+        load_optimizer=False,
+        group_index_list=None,
+        pair_disp_indexes=[0, 5],
+        pair_disp_calc_interval=5,
+        stop_std=0.0007,
+        stop_query_len=100,
+    )
+    config = utils.structure.Struct(**config)
+    project_path = get_project_path("4DCT")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    spatial_transform = SpatialTransformer(3)
     set_seed(48)
     args = get_args()
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    for i in range(1, 11):
-        train(args,i)
-    # test(args, case=6, is_save=False, state_file='reg_dirlab_case6_1.75(0.97)_scale0.5.pt')
-    # ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case6_' in file]
-    # for i in ckpt:
-    #     test(args, case=6,is_save=False, state_file=i)
+
+    # for i in range(1, 11):
+    # train(args,8)
+
+    ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case8_' in file]
+    for i in ckpt:
+        test(args, case=8,is_save=False, state_file=i)
 
     ckpt_32_list = ['',
                        'reg_dirlab_case1_1.26(0.66)_scale0.5.pth',
@@ -465,16 +467,28 @@ if __name__ == '__main__':
                   'reg_dirlab_case10_1.84(1.52)_scale0.5.pth']
 
     ckpt_128_list=['',
-                  'reg_dirlab_case1_1.03(0.52)_scale0.5.pth',
-                  'reg_dirlab_case2_1.04(0.50)_scale0.5.pth',
-                  'reg_dirlab_case3_1.28(0.74)_scale0.5.pth',
-                  'reg_dirlab_case4_1.39(0.91)_scale0.5.pth',
-                  'reg_dirlab_case5_1.68(1.33)_scale0.5.pth',
-                  'reg_dirlab_case6_2.00(1.14)_scale0.5.pth',
-                  'reg_dirlab_case7_1.59(0.97)_scale0.5.pth',
-                  'reg_dirlab_case8_1.72(1.59)_scale0.5.pth',
-                  'reg_dirlab_case9_1.46(0.80)_scale0.5.pth',
-                  'reg_dirlab_case10_1.57(1.22)_scale0.5.pth']
+                  '2023-11-25-15-26-01_case1_1.07_scale0.5.pth',#0.99+-1.02 ncc 0.9924 jac 0.00000000 ssim 0.9014
+                  '2023-11-25-15-26-01_case2_1.01_scale0.5.pth',#1.00+-1.01 ncc 0.9921 jac 0.00005819 ssim 0.8915
+                  '2023-11-25-15-26-01_case3_1.36_scale0.5.pth',#1.43+-1.20 ncc 0.9923 jac 0.00039385 ssim 0.8908
+                  '2023-11-25-15-26-01_case4_1.61_scale0.5.pth',#1.62+-1.29 ncc 0.9869 jac 0.00055153 ssim 0.8200
+                  '2023-11-25-15-26-01_case5_1.95_scale0.5.pth',#2.11+-1.51 ncc 0.9844 jac 0.00021430 ssim 0.8319
+                  '2023-11-25-15-26-01_case6_1.69_scale0.5.pth',#1.85+-1.23 ncc 0.9821 jac 0.00004328 ssim 0.7264
+                  '2023-11-25-15-26-01_case7_1.66_scale0.5.pth',# 1.65+-0.97 ncc 0.9822 jac 0.00427638 ssim 0.7493
+                  '2023-11-25-15-26-01_case8_1.84_scale0.5.pth',#2.01+-1.73 ncc 0.9692 jac 0.00692394 ssim 0.6433
+                  '2023-11-25-15-26-01_case9_1.86_scale0.5.pth',#1.81+-0.94 ncc 0.9765 jac 0.00002052 ssim 0.7634
+                  '2023-11-25-15-26-01_case10_1.58_scale0.5.pth']#1.61+-1.30 ncc 0.9792 jac 0.00006889 ssim 0.7774
+
+    ckpt_128reg_list = ['',
+                     '2023-11-25-15-26-01_case1_1.08_scale0.5.pth',#1.03+-1.02 ncc 0.9927 jac 0.00000000 ssim 0.9019
+                     '2023-11-25-15-26-01_case2_1.03_scale0.5.pth',#0.91+-0.99 ncc 0.9924 jac 0.00004028 ssim 0.8936
+                     '2023-11-25-15-26-01_case3_1.42_scale0.5.pth',#1.41+-1.19 ncc 0.9915 jac 0.00000487 ssim 0.8845
+                     '2023-11-25-15-26-01_case4_1.54_scale0.5.pth',#1.57+-1.29 ncc 0.9864 jac 0.00022269 ssim 0.8147
+                     '2023-11-25-15-26-01_case5_1.92_scale0.5.pth',#2.06+-1.53 ncc 0.9847 jac 0.00003058 ssim 0.8356
+                     '2023-11-25-15-26-01_case6_1.71_scale0.5.pth',#1.81+-1.19 ncc 0.9818 jac 0.00003167 ssim 0.7241
+                     '2023-11-25-15-26-01_case7_1.58_scale0.5.pth',#1.57+-0.93 ncc 0.9827 jac 0.00445687 ssim 0.7517
+                     '2023-11-25-15-26-01_case8_1.77_scale0.5.pth',#1.87+-1.51 ncc 0.9707 jac 0.00687485 ssim 0.6504
+                     '2023-11-25-15-26-01_case9_1.83_scale0.5.pth',#1.78+-0.92 ncc 0.9775 jac 0.00000000 ssim 0.7686
+                     '2023-11-25-15-26-01_case10_1.59_scale0.5.pth']#1.62+-1.33 ncc 0.9797 jac 0.00000678 ssim 0.7767
 
     ckpt_256_list=['',
                   'reg_dirlab_case1_1.02_scale0.5.pth',
@@ -506,7 +520,7 @@ if __name__ == '__main__':
     jac_list = []
     ssim_list = []
     for i in range(1, 11):
-        mean_tre,mean_std, ncc, jac, ssim = test(i, False, ckpt_256_list[i])
+        mean_tre,mean_std, ncc, jac, ssim = test(args, i, False, ckpt_128_list[i])
         mean_tre_list.append(mean_tre)
         mean_std_list.append(mean_std)
         ncc_list.append(ncc)

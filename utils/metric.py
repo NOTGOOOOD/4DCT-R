@@ -175,6 +175,38 @@ def dice(y_pred, y_true):
 
 
 def jacobian_determinant(disp):
+    disp = disp.transpose(1, 2, 3, 0)
+    imgshape = disp.shape[:-1]
+    x = np.arange(imgshape[0])
+    y = np.arange(imgshape[1])
+    z = np.arange(imgshape[2])
+    grid = np.rollaxis(np.array(np.meshgrid(z, y, x)), 0, 4)
+    grid = np.swapaxes(grid, 0, 2)
+    grid = np.swapaxes(grid, 1, 2)
+
+    grid = np.reshape(grid, grid.shape)
+    J = disp + grid
+    dy = J[1:, :-1, :-1, :] - J[:-1, :-1, :-1, :]
+    dx = J[:-1, 1:, :-1, :] - J[:-1, :-1, :-1, :]
+    dz = J[:-1, :-1, 1:, :] - J[:-1, :-1, :-1, :]
+
+    Jdet0 = dx[:, :, :, 0] * (dy[:, :, :, 1] * dz[:, :, :, 2] - dy[:, :, :, 2] * dz[:, :, :, 1])
+    Jdet1 = dx[:, :, :, 1] * (dy[:, :, :, 0] * dz[:, :, :, 2] - dy[:, :, :, 2] * dz[:, :, :, 0])
+    Jdet2 = dx[:, :, :, 2] * (dy[:, :, :, 0] * dz[:, :, :, 1] - dy[:, :, :, 1] * dz[:, :, :, 0])
+
+    Jdet = Jdet0 - Jdet1 + Jdet2
+
+    d, h, w = Jdet.shape
+    sum = 0
+    for i in range(0, d):
+        for j in range(0, h):
+            for k in range(0, w):
+                if Jdet[i][j][k] < 0:
+                    sum = sum + 1
+
+    return sum / np.float(d * h * w)
+
+def jacobian_determinant_bak(disp):
     """
     jacobian determinant of a displacement field.
     NB: to compute the spatial gradients, we use np.gradient.
