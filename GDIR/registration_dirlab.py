@@ -265,8 +265,8 @@ def train(args, case=1):
                                                 args.dirlab_cfg[case]['pixel_spacing'])
     else:
         disp, warped = res['disp_t2i'], res['template'].squeeze().cpu().detach().numpy()
-        mean, std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
-                                torch.tensor(landmark_50_converted).flip(1).cuda(),
+        mean, std = landmark_loss(disp[0].detach().cpu(), torch.tensor(landmark_00_converted).flip(1).cpu(),
+                                torch.tensor(landmark_50_converted).flip(1).cpu(),
                                 args.dirlab_cfg[case]['pixel_spacing'])
         mean = mean.item()
         std = std.item()
