@@ -83,7 +83,7 @@ def landmark_loss(flow, m_landmarks, f_landmarks, spacing=None, fixed_img=None, 
     # flow + fixed - moving
     spec = 1
     if spacing is not None:
-        spec = torch.tensor(spacing).cuda()
+        spec = torch.tensor(spacing).to(flow.device)
 
     all_dist = []
     # zz, yy, xx = flow[0].shape

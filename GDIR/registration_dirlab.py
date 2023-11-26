@@ -121,7 +121,7 @@ def train(args, case=1):
     num_image = input_image.shape[0]  # number of image in the group
     regnet = GDIR.model.regnet.RegNet_single(dim=config.dim, n=num_image, scale=config.scale, depth=config.depth,
                                              initial_channels=config.initial_channels,
-                                             normalization=config.normalization)
+                                             normalization=config.normalization, implict_tmp=config.Imp_temp)
 
     # n = 5
     ncc_loss = GDIR.model.loss.NCC(config.dim, config.ncc_window_size)
@@ -192,9 +192,7 @@ def train(args, case=1):
         res = regnet(input_image)
         total_loss = 0.
         if 'disp_i2t' in res:
-            simi_loss = (ncc_loss(res['warped_input_image'], res['template']) + ncc_loss(input_image,
-                                                                                         res[
-                                                                                             'warped_template'])) / 2.
+            simi_loss = (ncc_loss(res['warped_input_image'], res['template']) + ncc_loss(input_image, res['warped_template'])) / 2.
         else:
             simi_loss = ncc_loss(res['warped_input_image'], res['template'])
         total_loss += simi_loss
@@ -239,29 +237,44 @@ def train(args, case=1):
                 disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
             else:
                 disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
+            if config.Imp_temp:
+                mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                              grid_tuple, landmark_00_converted, landmark_disp,
+                                              args.dirlab_cfg[case]['pixel_spacing'])
+            else:
+                disp = res['disp_t2i']
+                mean, std = landmark_loss(disp[0].detach().cpu(), torch.tensor(landmark_00_converted).flip(1),
+                                        torch.tensor(landmark_50_converted).flip(1),
+                                        args.dirlab_cfg[case]['pixel_spacing'])
+                mean = mean.item()
+                std = std.item()
 
-            mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                          grid_tuple, landmark_00_converted, landmark_disp,
-                                          args.dirlab_cfg[case]['pixel_spacing'])
             diff_stats.append([i, mean, std])
             # save_warp(args, np.expand_dims(compse_disp[0, 1], 0), input_image[0].unsqueeze(0), 'case1', 'gdir', spacing=args.dirlab_cfg[case]['pixel_spacing'])
 
-            print(f'\n diff: {mean:.2f}+-{std:.2f}({np.max(diff):.2f})')
+            print(f'\n diff: {mean:.2f}+-{std:.2f}')
 
             states_file = f'{train_time}_case{case}_{mean:.2f}_scale{config.scale}.pth'
             save_path = os.path.join(states_folder, states_file)
             save_model(save_path,regnet,total_loss=total_loss.item(),simi_loss=simi_loss.item(),reg_loss=smooth_loss_item,train_loss=cyclic_loss_item,optimizer=None)
 
-
-    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
-    _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
+    if config.Imp_temp:
+        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
+        mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                                grid_tuple, landmark_00_converted, landmark_disp,
+                                                args.dirlab_cfg[case]['pixel_spacing'])
+    else:
+        disp, warped = res['disp_t2i'], res['template'].squeeze().cpu().detach().numpy()
+        mean, std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
                                 torch.tensor(landmark_50_converted).flip(1).cuda(),
                                 args.dirlab_cfg[case]['pixel_spacing'])
+        mean = mean.item()
+        std = std.item()
 
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
-    print(f'\n finally, case{case} diff: {_mean:.2f}+-{_std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    print(f'\n finally, case{case} diff: {mean:.2f}+-{std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
 
     states = {'config': config, 'model': regnet.state_dict(), 'optimizer': None,
               'loss_list': stop_criterion.loss_list, 'diff_stats': diff_stats}
@@ -270,7 +283,7 @@ def train(args, case=1):
     torch.save(states, save_path)
     print(f'save model {states_file} in path:{save_path}')
 
-def test(args, case=1, is_save=False, state_file=''):
+def test(args, case=1, is_save=False, state_file='', logger=None):
     states_folder = args.checkpoint_path
     make_dirs(args)
     config.load = state_file
@@ -334,7 +347,8 @@ def test(args, case=1, is_save=False, state_file=''):
         state_file = os.path.join(states_folder, config.load)
         states = torch.load(state_file, map_location=device)
         regnet.load_state_dict(states['model'])
-        print("\nload state {}".format(state_file))
+        if logger:
+            logger.info("\nload state {}".format(state_file))
         if config.load_optimizer:
             optimizer.load_state_dict(states['optimizer'])
 
@@ -350,18 +364,28 @@ def test(args, case=1, is_save=False, state_file=''):
     else:
         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
 
-    mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                            grid_tuple, landmark_00_converted, landmark_disp,
-                                            args.dirlab_cfg[case]['pixel_spacing'])
+    if config.Imp_temp:
+        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
+        mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                                grid_tuple, landmark_00_converted, landmark_disp,
+                                                args.dirlab_cfg[case]['pixel_spacing'])
+        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],
+                                     is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
+    else:
+        disp, warped = res['disp_t2i'], res['template'].squeeze().cpu().detach().numpy()
+        mean, std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
+                                torch.tensor(landmark_50_converted).flip(1).cuda(),
+                                args.dirlab_cfg[case]['pixel_spacing'])
+        mean = mean.item()
+        std = std.item()
 
-    disp, warped = get_flow50_00(args, res, input_image[0:1],spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
-    # _mean, _std = landmark_loss(disp[0], torch.tensor(landmark_00_converted).flip(1).cuda(),
-    #                             torch.tensor(landmark_50_converted).flip(1).cuda(),
-    #                             args.dirlab_cfg[case]['pixel_spacing'])
 
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
+    if logger:
+        logger.info(f'\n case{case} diff: {mean:.2f}+-{std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
+    print(state_file)
     print(f'\n case{case} diff: {mean:.2f}+-{std:.2f} ncc {ncc:.4f} jac {jac:.8f} ssim {ssim:.4f}')
     # return _mean.item(),_std.item(),ncc.item(),jac,ssim
     return mean, std, ncc.item(), jac,ssim
@@ -414,18 +438,18 @@ if __name__ == '__main__':
         max_num_iteration=300,
         normalization=True,  # whether use normalization layer
         learning_rate=1e-2,
-        smooth_reg=5e-3,
-        cyclic_reg=0,
-        # smooth_reg=1e-3,
+        smooth_reg=1e-3,
         # cyclic_reg=1e-2,
+        cyclic_reg=0,
         ncc_window_size=5,
         load=None,
         load_optimizer=False,
         group_index_list=None,
         pair_disp_indexes=[0, 5],
-        pair_disp_calc_interval=5,
+        pair_disp_calc_interval=3,
         stop_std=0.0007,
         stop_query_len=100,
+        Imp_temp=False
     )
     config = utils.structure.Struct(**config)
     project_path = get_project_path("4DCT")
@@ -435,12 +459,22 @@ if __name__ == '__main__':
     args = get_args()
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
 
+    log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
+    logging.basicConfig(level=logging.INFO,
+                        filename=f'Log/log{log_index}.txt',
+                        filemode='a',
+                        format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
     # for i in range(1, 11):
-    # train(args,8)
+    #     ckpt = [file for file in os.listdir(args.checkpoint_path) if f'case{i}_' in file]
+    #     for file in ckpt:
+    #         test(args, case=i, is_save=False, state_file=file, logger=logging)
+    #
+    for i in range(6, 11):
+        train(args,i)
 
-    ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case8_' in file]
-    for i in ckpt:
-        test(args, case=8,is_save=False, state_file=i)
+    # ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case8_' in file]
+    # for i in ckpt:
+    #     test(args, case=8,is_save=False, state_file=i)
 
     ckpt_32_list = ['',
                        'reg_dirlab_case1_1.26(0.66)_scale0.5.pth',
@@ -453,6 +487,17 @@ if __name__ == '__main__':
                        'reg_dirlab_case8_5.57(4.22)_scale0.5.pth',
                        'reg_dirlab_case9_2.02(1.12)_scale0.5.pth',
                        'reg_dirlab_case10_2.85(2.46)_scale0.5.pth']
+    ckpt_32_list_noreg = ['',
+                    'noreg/reg_dirlab_case1_1.32_scale0.5.pth',
+                    'noreg/reg_dirlab_case2_1.48_scale0.5.pth',
+                    'noreg/reg_dirlab_case3_2.80_scale0.5.pth',
+                    'noreg/reg_dirlab_case4_3.14_scale0.5.pth',
+                    'noreg/reg_dirlab_case5_2.48_scale0.5.pth',
+                    'noreg/reg_dirlab_case6_3.34_scale0.5.pth',
+                    'noreg/reg_dirlab_case7_2.34_scale0.5.pth',
+                    'noreg/reg_dirlab_case8_3.06_scale0.5.pth',
+                    'noreg/reg_dirlab_case9_2.61_scale0.5.pth',
+                    'noreg/reg_dirlab_case10_3.86_scale0.5.pth']
 
     ckpt_64_list=['',
                   'reg_dirlab_case1_1.07(0.54)_scale0.5.pth',
@@ -465,7 +510,17 @@ if __name__ == '__main__':
                   'reg_dirlab_case8_2.13(2.36)_scale0.5.pth',
                   'reg_dirlab_case9_1.51(0.80)_scale0.5.pth',
                   'reg_dirlab_case10_1.84(1.52)_scale0.5.pth']
-
+    ckpt_64_list_noreg = ['',
+                    'noreg/reg_dirlab_case1_1.09_scale0.5.pth',
+                    'noreg/reg_dirlab_case2_1.44_scale0.5.pth',
+                    'noreg/reg_dirlab_case3_2.37_scale0.5.pth',
+                    'noreg/reg_dirlab_case4_1.71_scale0.5.pth',
+                    'noreg/reg_dirlab_case5_1.97_scale0.5.pth',
+                    'noreg/reg_dirlab_case6_2.65_scale0.5.pth',
+                    'noreg/reg_dirlab_case7_2.39_scale0.5.pth',
+                    'noreg/reg_dirlab_case8_2.84_scale0.5.pth',
+                    'noreg/2023-11-26-17-00-49_case9_2.73_scale0.5.pth',
+                    'noreg/2023-11-26-17-00-49_case10_2.25_scale0.5.pth']
     ckpt_128_list=['',
                   '2023-11-25-15-26-01_case1_1.07_scale0.5.pth',#0.99+-1.02 ncc 0.9924 jac 0.00000000 ssim 0.9014
                   '2023-11-25-15-26-01_case2_1.01_scale0.5.pth',#1.00+-1.01 ncc 0.9921 jac 0.00005819 ssim 0.8915
@@ -477,8 +532,7 @@ if __name__ == '__main__':
                   '2023-11-25-15-26-01_case8_1.84_scale0.5.pth',#2.01+-1.73 ncc 0.9692 jac 0.00692394 ssim 0.6433
                   '2023-11-25-15-26-01_case9_1.86_scale0.5.pth',#1.81+-0.94 ncc 0.9765 jac 0.00002052 ssim 0.7634
                   '2023-11-25-15-26-01_case10_1.58_scale0.5.pth']#1.61+-1.30 ncc 0.9792 jac 0.00006889 ssim 0.7774
-
-    ckpt_128reg_list = ['',
+    ckpt_128bak_list = ['',
                      '2023-11-25-15-26-01_case1_1.08_scale0.5.pth',#1.03+-1.02 ncc 0.9927 jac 0.00000000 ssim 0.9019
                      '2023-11-25-15-26-01_case2_1.03_scale0.5.pth',#0.91+-0.99 ncc 0.9924 jac 0.00004028 ssim 0.8936
                      '2023-11-25-15-26-01_case3_1.42_scale0.5.pth',#1.41+-1.19 ncc 0.9915 jac 0.00000487 ssim 0.8845
@@ -489,30 +543,69 @@ if __name__ == '__main__':
                      '2023-11-25-15-26-01_case8_1.77_scale0.5.pth',#1.87+-1.51 ncc 0.9707 jac 0.00687485 ssim 0.6504
                      '2023-11-25-15-26-01_case9_1.83_scale0.5.pth',#1.78+-0.92 ncc 0.9775 jac 0.00000000 ssim 0.7686
                      '2023-11-25-15-26-01_case10_1.59_scale0.5.pth']#1.62+-1.33 ncc 0.9797 jac 0.00000678 ssim 0.7767
+    ckpt_128noreg_list = ['',
+                        'no_reg/2023-11-26-12-28-18_case1_1.07_scale0.5.pth',# 1.09+-0.63 ncc 0.9883 jac 0.00271166 ssim 0.8912
+                        'no_reg/2023-11-26-12-28-18_case2_1.03_scale0.5.pth',# 1.02+-0.54 ncc 0.9879 jac 0.00631040 ssim 0.8721
+                        'no_reg/2023-11-26-12-28-18_case3_1.41_scale0.5.pth',# 1.45+-0.79 ncc 0.9891 jac 0.00241249 ssim 0.8802
+                        'no_reg/2023-11-26-12-28-18_case4_1.80_scale0.5.pth',# 1.77+-1.13 ncc 0.9719 jac 0.00741816 ssim 0.7809
+                        'no_reg/2023-11-26-12-28-18_case5_2.25_scale0.5.pth',#2.27+-1.56 ncc 0.9550 jac 0.01021877 ssim 0.7752
+                        'no_reg/2023-11-26-12-28-18_case6_1.97_scale0.5.pth',#1.98+-1.07 ncc 0.9346 jac 0.01585233 ssim 0.6599
+                        'no_reg/2023-11-26-12-28-18_case7_2.34_scale0.5.pth',#2.33+-1.35 ncc 0.9749 jac 0.00503225 ssim 0.7144
+                        'no_reg/2023-11-26-12-28-18_case8_1.98_scale0.5.pth',#1.95+-1.79 ncc 0.9122 jac 0.02999049 ssim 0.6113
+                        'no_reg/2023-11-26-12-28-18_case9_2.15_scale0.5.pth',#2.16+-1.27 ncc 0.8986 jac 0.02446661 ssim 0.6842
+                        'no_reg/2023-11-26-12-28-18_case10_2.25_scale0.5.pth']  # 2.27+-2.35 ncc 0.8619 jac 0.05846492 ssim
 
-    ckpt_256_list=['',
-                  'reg_dirlab_case1_1.02_scale0.5.pth',
-                  'reg_dirlab_case2_1.07(0.53)_scale0.5.pth',
-                  'reg_dirlab_case3_1.36(0.81)_scale0.5.pth',
-                  'reg_dirlab_case4_1.45(0.92)_scale0.5.pth',
-                  'reg_dirlab_case5_1.71(1.35)_scale0.5.pth',
-                  'reg_dirlab_case6_1.78(1.07)_scale0.5.pth',
-                  'reg_dirlab_case7_1.59(0.94)_scale0.5.pth',
-                  'reg_dirlab_case8_1.63(1.23)_scale0.5.pth',
-                  'reg_dirlab_case9_1.53(0.78)_scale0.5.pth',
-                  'reg_dirlab_case10_1.52(1.16)_scale0.5.pth']
-
+    ckpt_256_list = ['',
+                     '2023-11-25-18-10-16_case1_1.17_scale0.5.pth',  # 1.17+-0.64 ncc 0.9893 jac 0.00000000 ssim 0.8828
+                     '2023-11-25-18-10-16_case2_1.10_scale0.5.pth',  # 1.06+-0.52 ncc 0.9921 jac 0.00000000 ssim 0.8912
+                     '2023-11-25-18-10-16_case3_1.35_scale0.5.pth',  # 1.40+-0.80 ncc 0.9921 jac 0.00000000 ssim 0.8894
+                     '2023-11-25-18-10-16_case4_1.55_scale0.5.pth',  # 1.56+-0.93 ncc 0.9865 jac 0.00000000 ssim 0.8193
+                     '2023-11-25-18-10-16_case5_1.63_scale0.5.pth',  # 1.60+-1.35 ncc 0.9877 jac 0.00000000 ssim 0.8587
+                     '2023-11-25-18-10-16_case6_1.78_scale0.5.pth',  # 1.75+-0.92 ncc 0.9830 jac 0.00000000 ssim 0.7254
+                     '2023-11-25-18-10-16_case7_1.64_scale0.5.pth',  # 1.58+-0.93 ncc 0.9829 jac 0.00000000 ssim 0.7501
+                     '2023-11-25-18-10-16_case8_2.67_scale0.5.pth',  # 2.86+-3.01 ncc 0.9605 jac 0.00024556 ssim 0.6080
+                     '2023-11-25-18-10-16_case9_1.43_scale0.5.pth',  # 1.42+-0.77 ncc 0.9840 jac 0.00000000 ssim 0.7916
+                     '2023-11-25-18-10-16_case10_1.56_scale0.5.pth']  # 1.55+-1.26 ncc 0.9803 jac 0.00000000 ssim 0.7813
     ckpt_256_list_reg = ['',
-                     'reg_dirlab_case1_1.02_scale0.5.pth',
-                     'reg_dirlab_case2_1.07(0.53)_scale0.5.pth',
-                     'reg_dirlab_case3_1.36(0.81)_scale0.5.pth',
-                     'reg_dirlab_case4_1.56(0.99)_scale0.5.pth',
-                     'reg_dirlab_case5_1.71(1.35)_scale0.5.pth',
-                     'reg_dirlab_case6_1.78(1.07)_scale0.5.pth',
-                     'reg_dirlab_case7_1.59(0.94)_scale0.5.pth',
-                     'reg_dirlab_case8_1.63(1.23)_scale0.5.pth',
-                     'reg_dirlab_case9_1.53(0.78)_scale0.5.pth',
-                     'reg_dirlab_case10_1.52(1.16)_scale0.5.pth']
+                         '2023-11-25-18-10-16_case1_1.04_scale0.5.pth',
+                         # 1.07+-0.53 ncc 0.9927 jac 0.00000000 ssim 0.9012
+                         '2023-11-25-18-10-16_case2_1.04_scale0.5.pth',
+                         # 1.03+-0.51 ncc 0.9926 jac 0.00000000 ssim 0.8954
+                         '2023-11-25-18-10-16_case3_1.25_scale0.5.pth',
+                         # 1.25+-0.71 ncc 0.9931 jac 0.00000000 ssim 0.8966
+                         '2023-11-25-18-10-16_case4_1.41_scale0.5.pth',
+                         # 1.43+-0.92 ncc 0.9879 jac 0.00000000 ssim 0.8270
+                         '2023-11-25-18-10-16_case5_1.61_scale0.5.pth',
+                         # 1.65+-1.43 ncc 0.9880 jac 0.00000000 ssim 0.8570
+                         '2023-11-25-18-10-16_case6_1.75_scale0.5.pth',
+                         # 1.76+-0.91 ncc 0.9825 jac 0.00000000 ssim 0.7238
+                         '2023-11-25-18-10-16_case7_1.52_scale0.5.pth',
+                         # 1.54+-0.88 ncc 0.9836 jac 0.00000000 ssim 0.7541
+                         '2023-11-25-18-10-16_case8_1.91_scale0.5.pth',
+                         # 1.84+-1.47 ncc 0.9691 jac 0.00054933 ssim 0.6482
+                         '2023-11-25-18-10-16_case9_1.40_scale0.5.pth',
+                         # 1.45+-0.78 ncc 0.9840 jac 0.00000000 ssim 0.7924
+                         '2023-11-25-18-10-16_case10_1.41_scale0.5.pth']  # 1.46+-1.15 ncc 0.9813 jac 0.00000000 ssim 0.7870
+    ckpt_256_list_noreg = ['',
+                           'noreg/2023-11-26-13-50-57_case1_1.06_scale0.5.pth',
+                           # 1.06+-0.64 ncc 0.9917 jac 0.00162912 ssim 0.8956
+                           'noreg/2023-11-26-13-50-57_case2_1.18_scale0.5.pth',
+                           # 1.26+-0.76 ncc 0.9879 jac 0.00306258 ssim 0.8602
+                           'noreg/2023-11-26-13-50-57_case3_1.45_scale0.5.pth',
+                           # 1.43+-0.78 ncc 0.9862 jac 0.01028766 ssim 0.8602
+                           'noreg/2023-11-26-13-50-57_case4_1.85_scale0.5.pth',
+                           # 1.85+-1.09 ncc 0.9349 jac 0.01736633 ssim 0.7454
+                           'noreg/2023-11-26-13-50-57_case5_2.19_scale0.5.pth',
+                           # 2.27+-1.51 ncc 0.9765 jac 0.00394123 ssim 0.7998
+                           'noreg/2023-11-26-13-50-57_case6_1.98_scale0.5.pth',
+                           # 1.98+-1.26 ncc 0.9516 jac 0.01978437 ssim 0.6584
+                           'noreg/2023-11-26-13-50-57_case7_2.34_scale0.5.pth',
+                           # 2.37+-1.34 ncc 0.9766 jac 0.00267445 ssim 0.7183
+                           'noreg/2023-11-26-13-50-57_case8_2.76_scale0.5.pth',
+                           # diff: 2.57+-3.03 ncc 0.9226 jac 0.02013422 ssim 0.5883
+                           'noreg/2023-11-26-13-50-57_case9_1.86_scale0.5.pth',
+                           # 1.95+-1.03 ncc 0.9567 jac 0.01056264 ssim 0.7371
+                           'noreg/2023-11-26-13-50-57_case10_1.98_scale0.5.pth']  # 2.01+-1.82 ncc 0.9695 jac 0.00118729 ssim 0.7480
 
     mean_tre_list = []
     mean_std_list = []
@@ -520,7 +613,7 @@ if __name__ == '__main__':
     jac_list = []
     ssim_list = []
     for i in range(1, 11):
-        mean_tre,mean_std, ncc, jac, ssim = test(args, i, False, ckpt_128_list[i])
+        mean_tre,mean_std, ncc, jac, ssim = test(args, i, False, ckpt_64_list_noreg[i])
         mean_tre_list.append(mean_tre)
         mean_std_list.append(mean_std)
         ncc_list.append(ncc)

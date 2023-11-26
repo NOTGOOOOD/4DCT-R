@@ -24,7 +24,7 @@ class RegNet_single(nn.Module):
         Whether to add instance normalization after activation. The default is True.
     '''
 
-    def __init__(self, dim, n, scale=1, depth=5, initial_channels=64, normalization=True):
+    def __init__(self, dim, n, scale=1, depth=5, initial_channels=64, normalization=True, implict_tmp=True):
 
         super().__init__()
         assert dim in (2, 3)
@@ -35,6 +35,7 @@ class RegNet_single(nn.Module):
         self.unet = unet.UNet(in_channels=n, out_channels=dim * n, dim=dim, depth=depth,
                               initial_channels=initial_channels, normalization=normalization)
         self.spatial_transform = SpatialTransformer(self.dim)
+        self.implict_tmp = implict_tmp
         # print("unet: ", count_parameters(self.unet))
         # print("spatial_transform: ", count_parameters(self.spatial_transform))
 
@@ -82,8 +83,10 @@ class RegNet_single(nn.Module):
         # disp_t2i = scaled_disp_t2i
 
         warped_input_image = self.spatial_transform(input_image, disp_t2i)  # (n, 1, h, w) or (n, 1, d, h, w)
-        template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
-        # template = torch.unsqueeze(warped_input_image[5], 0)
+        if self.implict_tmp:
+            template = torch.mean(warped_input_image, 0, keepdim=True)  # (1, 1, h, w) or (1, 1, d, h, w)
+        else:
+            template = torch.unsqueeze(warped_input_image[5], 0)
 
         if self.scale < 1:
             scaled_template = torch.nn.functional.interpolate(template, size=scaled_image_shape,
