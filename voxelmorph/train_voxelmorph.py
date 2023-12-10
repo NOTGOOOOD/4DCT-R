@@ -194,7 +194,8 @@ def train():
         save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list, stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
         logging.info("save model:{}".format(modelname))
         mean_loss = np.mean(np.array(loss_total), 0)
-        mean_tre = test_dirlab(args, model, test_loader_dirlab, is_train=True)
+        if test_loader_dirlab:
+            mean_tre = test_dirlab(args, model, test_loader_dirlab, is_train=True)
 
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
@@ -224,6 +225,9 @@ if __name__ == "__main__":
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
     train_loader = build_dataloader_dirlab(args, mode='train')
-    test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
     train()

@@ -54,35 +54,34 @@ def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, spaci
     -------
 
     """
-    # crop
-    if crop_range is not None:
-        img_arr = sitk.GetArrayFromImage(sitk_img)
-        img_arr = img_arr[crop_range[2], crop_range[1], crop_range[0]]
-        img = sitk.GetImageFromArray(img_arr)
+    origin_spacing = list(sitk_img.GetSpacing()) # tuple -> list
+    # # crop
+    # if crop_range is not None:
+    #     img_arr = sitk.GetArrayFromImage(sitk_img)
+    #     img_arr = img_arr[crop_range[2], crop_range[1], crop_range[0]]
+    #     img = sitk.GetImageFromArray(img_arr)
+    #
+    # else:
+    #     img = sitk_img
 
-    else:
-        img = sitk_img
-
-    # resize and clamp HU[min,max]
-    file = sitk.GetArrayFromImage(img)
+    file = sitk.GetArrayFromImage(sitk_img)
     file = file.astype('float')
-
     img_tensor = torch.tensor(file)
-    if new_size is not None:
-        img_tensor = F.interpolate(img_tensor.unsqueeze(0).unsqueeze(0), size=new_size,
-                                       mode='trilinear',
-                                       align_corners=False)
 
+    # clamp HU[min,max]
     if clamp is not None:
         img_tensor = img_tensor.clamp_(min=clamp[0], max=clamp[1])
+    # crop
+    if crop_range is not None:
+        img_tensor = img_tensor[crop_range[2], crop_range[1], crop_range[0]]
 
     img = sitk.GetImageFromArray(np.array(img_tensor).squeeze())
 
-    # set spacing
-    if spacing is not None:
-        # img = img_resmaple(resample, ori_img_file=img)
-        img = array_to_sitk(img, spacing=spacing)
-        # img = resize_image(img, resample)
+    if spacing is None:
+        spacing = [1.,1.,1.]
+
+    # resample & resize
+    img = resample_image(img, origin_spacing=origin_spacing, out_spacing=spacing, restore=True, new_size=new_size)
 
     return img
 
@@ -151,7 +150,16 @@ def read_dcm_series(dcm_path):
 
     return image_sitk
 
-def array_to_sitk(sitk_img, origin=None, spacing=None, direction=None, is_vector=False, im_ref=None):
+def array_to_sitk(sitk_img, origin=None, spacing=None, direction=None, is_vector=False, im_ref=None, new_size=None):
+    sitk_img = sitk.GetArrayFromImage(sitk_img)
+    if new_size is not None:
+        img_tensor = torch.tensor(sitk_img.astype('float'))
+        img_tensor = F.interpolate(img_tensor.unsqueeze(0).unsqueeze(0), size=new_size,
+                                       mode='trilinear',
+                                       align_corners=False)
+        sitk_img = np.array(img_tensor).squeeze()
+
+    sitk_img = sitk.GetImageFromArray(sitk_img)
     if origin is None:
         origin = [0, 0, 0]
     if spacing is None:
@@ -172,9 +180,14 @@ def array_to_sitk(sitk_img, origin=None, spacing=None, direction=None, is_vector
         sitk_output.SetDirection(im_ref.GetDirection())
     return sitk_output
 
-def resample_image(itk_image, restore=False, out_spacing=[1.0, 1.0, 1.0], is_label=False):
+def resample_image(itk_image, origin_spacing=[1.0,1.0,1.0], restore=True, out_spacing=[1.0, 1.0, 1.0], is_label=False, new_size=None):
+    # 不需要插值，只设置spacing
+    if origin_spacing==out_spacing:
+        return array_to_sitk(itk_image, spacing=out_spacing, new_size=new_size)
+
+    # 重采样 & 插值
     clamp0, clamp1 = sitk.GetArrayFromImage(itk_image).min(), sitk.GetArrayFromImage(itk_image).max()
-    original_spacing = itk_image.GetSpacing()
+    original_spacing = origin_spacing
     original_size = itk_image.GetSize()
 
     out_size = [
@@ -182,8 +195,6 @@ def resample_image(itk_image, restore=False, out_spacing=[1.0, 1.0, 1.0], is_lab
         int(np.round(original_size[1] * (original_spacing[1] / out_spacing[1]))),
         int(np.round(original_size[2] * (original_spacing[2] / out_spacing[2])))
     ]
-    # # 上述也可以直接用下面这句简写
-    # out_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, out_spacing)]
 
     resample = sitk.ResampleImageFilter()
     resample.SetOutputSpacing(out_spacing)
@@ -197,8 +208,11 @@ def resample_image(itk_image, restore=False, out_spacing=[1.0, 1.0, 1.0], is_lab
         resample.SetInterpolator(sitk.sitkNearestNeighbor)
     else: # 如果是普通图像，就采用sitkBSpline插值法
         resample.SetInterpolator(sitk.sitkBSpline)
-
     data = resample.Execute(itk_image)
+
+    ori = data.GetOrigin()
+    direction = data.GetDirection()
+    spacing = data.GetSpacing()
 
     file = sitk.GetArrayFromImage(data)
     file = file.astype('float')
@@ -210,7 +224,7 @@ def resample_image(itk_image, restore=False, out_spacing=[1.0, 1.0, 1.0], is_lab
         img_tensor = F.interpolate(img_tensor.unsqueeze(0).unsqueeze(0), size=[original_size[-1],original_size[-2],original_size[-3]], mode='trilinear', align_corners=True)
 
     img = sitk.GetImageFromArray(np.array(img_tensor).squeeze())
-    data = array_to_sitk(img, spacing=out_spacing)
+    data = array_to_sitk(img, origin=ori, direction=direction, spacing=out_spacing, new_size=new_size)
 
     return data
 
@@ -308,6 +322,9 @@ def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resiz
     -------
 
     """
+    clamp = [None, 1250]
+    spacing = args.dirlab_cfg[case]['pixel_spacing']
+    crop_range = args.dirlab_cfg[case]['crop_range'][::-1]
     for num, file_name in enumerate(os.listdir(file_folder)):
 
         file_path = os.path.join(file_folder, file_name)
@@ -315,17 +332,22 @@ def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resiz
         if shape:
             file = file.reshape(shape)
 
-        img = sitk.GetImageFromArray(file)
+        file = file.astype('float')
+        img_tensor = torch.tensor(file)
 
-        img = crop_resampling_resize_clamp(img, resize,
-                                           args.dirlab_cfg[case]['crop_range'][::-1],
-                                           args.dirlab_cfg[case]['pixel_spacing'],
-                                           [None, 1250])
+        # clamp HU[min,max]
+        if clamp is not None:
+            img_tensor = img_tensor.clamp_(min=clamp[0], max=clamp[1])
+        # crop
+        if crop_range is not None:
+            img_tensor = img_tensor[crop_range[2], crop_range[1], crop_range[0]]
+
+        img = sitk.GetImageFromArray(np.array(img_tensor).squeeze())
+
+        img = array_to_sitk(img, spacing=spacing)
 
         case_name = 'dirlab_case%02d_T%02d.nii.gz' % (case, num)
         target_file_path = os.path.join(save_path, case_name)
-        if isotropic:
-            img = resample_image(img, out_spacing=[1.0, 1.0, 1.0],restore=True)
 
         sitk.WriteImage(img, target_file_path)
 
@@ -729,10 +751,8 @@ def aug(img_path, save_path):
     print('done !')
 
 
-def NLST_processing(fixed_path, moving_path, **cfg):
+def NLST_processing(fixed_path, moving_path, nlst_path, **cfg):
     print("NLST: ")
-    # nlst_path = r'/home/cqut/project/xxf/datasets/NLST_testdata/imagesTs'
-    nlst_path = r'E:\datasets\NLST\all'
 
     file_list = sorted([file_name for file_name in os.listdir(nlst_path) if file_name.lower().endswith('.gz')])
 
@@ -887,35 +907,34 @@ def construct_dirlab_train():
         dirlab_train(file_folder, m_path, f_path)
         print('case %02d done!' % case)
 
+def construct_nlst_data(fixed_path,moving_path):
+    make_dir(fixed_path)
+    make_dir(moving_path)
+    clamp = [-1000, 500]
+    crop = None
+    spacing = [1.,1.,1.]
+    resize = [160,128,160]
+    nlst_path = r'E:\datasets\NLST\test'
+    NLST_processing(fixed_path, moving_path, nlst_path=nlst_path, resize=resize, crop=crop, clamp=clamp,
+                    spacing=spacing)
+
 if __name__ == '__main__':
+    args = get_args()
     project_folder = get_project_path("4DCT").split("4DCT")[0]
-    # resize = [144, 192, 160]  # z y x
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
+    target_fixed_path = 'D:/xxf/nlst_test_160_1.0/fixed'
+    target_moving_path = 'D:/xxf/nlst_test_160_1.0/moving'
+    # #dirlab
+    # construct_dirlab_test()
 
-    # target_test_moving_path = '/home/cqut/project/xxf/test_ori/moving_'
-    # target_test_fixed_path = '/home/cqut/project/xxf/test_ori/fixed_'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-
-    # target_test_moving_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/moving'
-    # target_test_fixed_path = '/home/cqut/project/xxf/datasets/dirlab/nii_resample/fixed'
-    # make_dir(target_test_moving_path)
-    # make_dir(target_test_fixed_path)
-
-    args = get_args()
-    construct_dirlab_test()
+    # nlst
+    construct_nlst_data(fixed_path=target_fixed_path, moving_path=target_moving_path)
     # aug
     # do_augment()
 
-
     # # COPD数据集img转nii.gz
     # print("copd: ")
-    # target_fixed_path = r'E:\datasets\registration\copd_144_192_160\fixed'
-    # target_moving_path = r'E:\datasets\registration\copd_144_19xiaohongshu 2_160\moving'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-    #
     # clamp = [-200, 1000]
     # # crop = [slice(70, 470), slice(30, 470), slice(None)]
     # crop = None
@@ -1035,15 +1054,3 @@ if __name__ == '__main__':
     # learn2reg_lungct_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                             spacing=spacing)
     #
-    # # Learn2Reg NLST
-    # target_fixed_path = r'E:\datasets\registration\NLST_\fixed'
-    # target_moving_path = r'E:\datasets\registration\NLST_\moving'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-    #
-    # clamp = [-1000, 500]
-    # crop = None
-    # spacing = None
-    # resize = []
-    # NLST_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                 spacing=spacing)

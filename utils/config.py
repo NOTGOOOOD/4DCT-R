@@ -104,9 +104,9 @@ def get_args():
 
     # test时参数
     parser.add_argument("--test_dir", type=str, help="test data directory",
-                        dest="test_dir", default=r'C:\datasets\registration\test_ori')
+                        dest="test_dir", default='')
     parser.add_argument("--landmark_dir", type=str, help="landmark directory",
-                        dest="landmark_dir", default=r'D:\project\4DCT\data\dirlab')
+                        dest="landmark_dir", default='')
     parser.add_argument("--checkpoint_path", type=str, help="model weight folder",
                         dest="checkpoint_path", default="./Checkpoint")
     parser.add_argument("--checkpoint_name", type=str, help="model weight name",
