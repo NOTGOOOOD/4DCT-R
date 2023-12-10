@@ -428,6 +428,32 @@ def get_warp(args, disp, moving, prefix, suffix, spacing, is_save=False):
 
     return warped.squeeze()
 
+def plot():
+    fig = plt.figure(dpi=600)
+    diff_stats_gdir = torch.load(r'ckpt/128/reg_dirlab_case6_1.70_scale0.5.pth')['diff_stats']
+    diff_stats_ccenet = torch.load(r'D:\project\xxf\4DCT\tre.pth')['tre']
+    x_plot = range(0, 301)
+    ygdir_plot = [i[1] for i in diff_stats_gdir]
+    ygdir_plot.insert(0, 10.89)
+    ycce_plot = diff_stats_ccenet[1:301]
+    ycce_plot.insert(0, 10.89)
+
+    # from scipy.interpolate import make_interp_spline
+    # model = make_interp_spline(x_plot, ygdir_plot)
+    # xs = np.linspace(0, 300, 300)
+    # ys_gdir = model(xs)
+    # plt.plot(xs, ys_gdir)
+    # model = make_interp_spline(x_plot, ycce_plot)
+    # ys_cce = model(xs)
+    # plt.plot(xs, ys_cce)
+
+    plt.plot(x_plot, ygdir_plot)
+    plt.plot(x_plot, ycce_plot)
+    plt.xlabel('epoch')
+    plt.ylabel('TRE (mm)')
+    plt.title('pair-wise vs. group-wise')
+    plt.legend(['CycleRegNet', 'CMENet'])
+    plt.show()
 
 if __name__ == '__main__':
     config = dict(
@@ -439,17 +465,17 @@ if __name__ == '__main__':
         normalization=True,  # whether use normalization layer
         learning_rate=1e-2,
         smooth_reg=1e-3,
-        # cyclic_reg=1e-2,
-        cyclic_reg=0,
+        cyclic_reg=1e-2,
+        # cyclic_reg=0,
         ncc_window_size=5,
         load=None,
         load_optimizer=False,
         group_index_list=None,
         pair_disp_indexes=[0, 5],
-        pair_disp_calc_interval=3,
+        pair_disp_calc_interval=500,
         stop_std=0.0007,
         stop_query_len=100,
-        Imp_temp=False
+        Imp_temp=True
     )
     config = utils.structure.Struct(**config)
     project_path = get_project_path("4DCT")
@@ -464,13 +490,13 @@ if __name__ == '__main__':
                         filename=f'Log/log{log_index}.txt',
                         filemode='a',
                         format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
-    # for i in range(1, 11):
+    # for i in range(1, 6):
     #     ckpt = [file for file in os.listdir(args.checkpoint_path) if f'case{i}_' in file]
     #     for file in ckpt:
     #         test(args, case=i, is_save=False, state_file=file, logger=logging)
     #
-    for i in range(6, 11):
-        train(args,i)
+    # for i in range(6, 11):
+    train(args,6)
 
     # ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case8_' in file]
     # for i in ckpt:
@@ -613,7 +639,7 @@ if __name__ == '__main__':
     jac_list = []
     ssim_list = []
     for i in range(1, 11):
-        mean_tre,mean_std, ncc, jac, ssim = test(args, i, False, ckpt_64_list_noreg[i])
+        mean_tre,mean_std, ncc, jac, ssim = test(args, i, False, ckpt_128_list[i])
         mean_tre_list.append(mean_tre)
         mean_std_list.append(mean_std)
         ncc_list.append(ncc)
