@@ -181,8 +181,8 @@ def train_unet(model):
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
-
-        test_dirlab(args, model, test_loader_dirlab)
+        if test_loader_dirlab is not None:
+            test_dirlab(args, model, test_loader_dirlab)
 
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
         if stop_criterion.stop():
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_unet_lr{}".format(train_time, args.lr)
+    model_name = "{}_unet512_lr{}".format(train_time, args.lr)
 
     set_seed(42)
     make_dirs(args)
@@ -222,12 +222,15 @@ if __name__ == "__main__":
     # load data
     train_loader = build_dataloader_dirlab(args, "train")
     val_loader = build_dataloader_dirlab(args, mode="val")
-    test_loader_dirlab = build_dataloader_dirlab(args, mode="test")
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
     model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=True)
     model = model.to(device)
     print(count_parameters(model.unet))
 
-    # train_unet(model)
-    test_unet(model)
+    train_unet(model)
+    # test_unet(model)
 
