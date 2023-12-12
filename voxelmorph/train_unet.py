@@ -181,8 +181,8 @@ def train_unet(model):
         print(
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
-
-        test_dirlab(args, model, test_loader_dirlab)
+        if test_loader_dirlab is not None:
+            test_dirlab(args, model, test_loader_dirlab)
 
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
         if stop_criterion.stop():
@@ -193,7 +193,7 @@ def test_unet(model, prefix='2023-04-21-17-47-16'):
 
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=True, suffix='lapirn')
+        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=False, suffix='lapirn', calc_tre=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_unet_lr{}".format(train_time, args.lr)
+    model_name = "{}_unet512_lr{}".format(train_time, args.lr)
 
     set_seed(42)
     make_dirs(args)
@@ -222,7 +222,10 @@ if __name__ == "__main__":
     # load data
     train_loader = build_dataloader_dirlab(args, "train")
     val_loader = build_dataloader_dirlab(args, mode="val")
-    test_loader_dirlab = build_dataloader_dirlab(args, mode="test")
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
     model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=True)
     model = model.to(device)

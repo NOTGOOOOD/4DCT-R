@@ -111,7 +111,8 @@ def train_unet(model):
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        mean_tre = test_dirlab(args, model, test_loader_dirlab)
+        if test_loader_dirlab:
+            mean_tre = test_dirlab(args, model, test_loader_dirlab)
 
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
         if stop_criterion.stop():
@@ -124,7 +125,7 @@ def test_unet(model):
 
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=True, suffix='CCECorNet')
+        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=True, suffix='CCECorNet', calc_tre=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
@@ -149,10 +150,13 @@ if __name__ == "__main__":
     # load data
     train_loader = build_dataloader_dirlab(args, "train")
     val_loader = build_dataloader_dirlab(args, mode="val")
-    test_loader_dirlab = build_dataloader_dirlab(args, mode="test")
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
-    # model = ResUnetModel()
-    model = CCECoNet(dim=3)
+    model = ResUnetModel()
+    # model = CCECoNet(dim=3)
     # model = CCECoNetDual(dim=3)
     # enc_nf = [16, 32, 32, 32]
     # dec_nf = [32, 32, 32, 32, 32, 16, 16]

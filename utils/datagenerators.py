@@ -135,7 +135,7 @@ def build_dataloader_dirlab(args, mode='train', batch_size=1, num_w=0):
         val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
         return Data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_w)
     elif mode=="test":
-        if len(args.landmark_dir) > 1:
+        if len(args.landmark_dir) > 5:
             landmark_list = load_landmarks(args.landmark_dir)
         else:
             landmark_list = None
