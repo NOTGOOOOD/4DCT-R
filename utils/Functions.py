@@ -385,16 +385,34 @@ class Grid():
         return grid
 
 @torch.no_grad()
-def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logging=None, is_save=False, suffix=''):
+def test_dirlab(args, model, test_loader, norm=False, is_train=True, logging=None, is_save=False, suffix='', calc_tre=True):
     model.eval()
     losses = []
-    for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader_dirlab):
-        spacing = args.dirlab_cfg[batch+1]['pixel_spacing']
+    # for batch, (moving, fixed, landmarks, img_name) in enumerate(test_loader):
+    for batch, (data) in enumerate(test_loader):
+        landmarks = None
+        moving, fixed, img_name = data[0], data[1], data[2]
+        if calc_tre:
+            landmarks = data[2]
+            img_name = data[3]
+            spacing = args.dirlab_cfg[batch + 1]['pixel_spacing']
+            landmarks00 = landmarks['landmark_00'].squeeze().cuda()
+            landmarks50 = landmarks['landmark_50'].squeeze().cuda()
+            crop_range = args.dirlab_cfg[batch + 1]['crop_range']
+            # TRE
+            _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
+                [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
+                                        landmarks50 - torch.tensor(
+                                            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
+                                                                                                                  3).cuda(),
+                                        args.dirlab_cfg[batch + 1]['pixel_spacing'])
+            _mean, _std = _mean.item(), _std.item()
+        else:
+            _mean, _std = 0, 0
+            spacing = None
+
         moving_img = moving.to(args.device).float()
         fixed_img = fixed.to(args.device).float()
-        landmarks00 = landmarks['landmark_00'].squeeze().cuda()
-        landmarks50 = landmarks['landmark_50'].squeeze().cuda()
-
         pred = model(moving_img, fixed_img)
         flow = pred['flow']  # nibabel: b,c,w,h,d;simpleitk b,c,d,h,w
         warped_img = pred['warped_img']
@@ -404,16 +422,6 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
             F_X_Y_norm = transform_unit_flow_to_flow_cuda(flow.permute(0, 2, 3, 4, 1).clone())
             F_X_Y_norm = F_X_Y_norm.permute(0, 4, 1, 2, 3)
 
-        crop_range = args.dirlab_cfg[batch + 1]['crop_range']
-
-        # TRE
-        _mean, _std = landmark_loss(F_X_Y_norm[0], landmarks00 - torch.tensor(
-            [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1, 3).cuda(),
-                                    landmarks50 - torch.tensor(
-                                        [crop_range[2].start, crop_range[1].start, crop_range[0].start]).view(1,
-                                                                                                              3).cuda(),
-                                    args.dirlab_cfg[batch + 1]['pixel_spacing'])
-
         ncc = mtNCC(fixed_img.cpu().detach().numpy(), warped_img.cpu().detach().numpy())
 
         # loss_Jacobian = neg_Jdet_loss(y_pred[1].permute(0, 2, 3, 4, 1), grid)
@@ -422,10 +430,10 @@ def test_dirlab(args, model, test_loader_dirlab, norm=False, is_train=True, logg
         # SSIM
         ssim = SSIM(fixed_img.cpu().detach().numpy()[0, 0], warped_img.cpu().detach().numpy()[0, 0])
 
-        losses.append([_mean.item(), _std.item(), ncc.item(), ssim.item(), jac])
+        losses.append([_mean, _std, ncc.item(), ssim.item(), jac])
         if not is_train:
             print('case=%d after warped, TRE=%.2f+-%.2f Jac=%.6f ncc=%.6f ssim=%.6f' % (
-                batch + 1, _mean.item(), _std.item(), jac, ncc.item(), ssim.item()))
+                batch + 1, _mean, _std, jac, ncc.item(), ssim.item()))
 
         if is_save:
             # Save DVF
