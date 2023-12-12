@@ -344,7 +344,7 @@ def dirlab_processing(args, save_path, file_folder, datatype, shape, case, resiz
 
         img = sitk.GetImageFromArray(np.array(img_tensor).squeeze())
 
-        img = array_to_sitk(img, spacing=spacing)
+        img = array_to_sitk(img, spacing=spacing, new_size=resize)
 
         case_name = 'dirlab_case%02d_T%02d.nii.gz' % (case, num)
         target_file_path = os.path.join(save_path, case_name)
@@ -886,8 +886,9 @@ def do_augment():
 
 
 def construct_dirlab_train():
-    target_path = r'D:\xxf\dirlab_flip'
+    target_path = r'D:\xxf\dirlab_train_240'
     make_dir(target_path)
+    resize = [96,160,224]
     for item in dirlab_case_cfg.items():
         case = item[0]
         shape = item[1]
@@ -896,7 +897,7 @@ def construct_dirlab_train():
 
         # crop, resample,resize
         img_path = f'D:/project/xxf/datasets/dirlab/img/Case{case}Pack/Images'
-        dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=None)
+        dirlab_processing(args, save_path, img_path, np.int16, shape, case, resize=resize)
 
         # make a train set
         m_path = os.path.join(target_path, 'moving')
@@ -926,10 +927,11 @@ if __name__ == '__main__':
     target_fixed_path = 'D:/xxf/nlst_test_160_1.0/fixed'
     target_moving_path = 'D:/xxf/nlst_test_160_1.0/moving'
     # #dirlab
+    construct_dirlab_train()
     # construct_dirlab_test()
 
     # nlst
-    construct_nlst_data(fixed_path=target_fixed_path, moving_path=target_moving_path)
+    # construct_nlst_data(fixed_path=target_fixed_path, moving_path=target_moving_path)
     # aug
     # do_augment()
 
