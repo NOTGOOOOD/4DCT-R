@@ -78,7 +78,7 @@ def crop_resampling_resize_clamp(sitk_img, new_size=None, crop_range=None, spaci
     img = sitk.GetImageFromArray(np.array(img_tensor).squeeze())
 
     if spacing is None:
-        spacing = [1.,1.,1.]
+        spacing = origin_spacing
 
     # resample & resize
     img = resample_image(img, origin_spacing=origin_spacing, out_spacing=spacing, restore=True, new_size=new_size)
@@ -553,9 +553,6 @@ def emp10_processing(fixed_path, moving_path, **cfg):
         img = crop_resampling_resize_clamp(img_nii, cfg['resize'], cfg['crop']
                                            , cfg['spacing'],
                                            cfg['clamp'])
-        # if target_path == fixed_path:
-        #
-
         # save
         make_dir(target_path)
         case = file_name.split('_')[0]
@@ -566,7 +563,21 @@ def emp10_processing(fixed_path, moving_path, **cfg):
         print('case{} done'.format(case))
 
 
-def popi_processing(fixed_path, moving_path, **cfg):
+def popi_processing(fixed_path, moving_path):
+    # crop_range x y z
+    crop_range = {
+        1:[slice(60,448), slice(30,380), slice(None)],
+        2: [slice(60,430), slice(45,380), slice(None)],
+        3: [slice(80,420), slice(120,380), slice(None)],
+        4: [slice(60,440), slice(80,380), slice(None)],
+        5: [slice(120,390), slice(100,340), slice(None)],
+        6: [slice(90,400), slice(110,340), slice(None)],
+        7: [slice(None), slice(None), slice(None)],
+                  }
+    clamp = [-1000,500]
+    spacing = None
+    resize = [160,224,224]  # z y x
+
     print("popi: ")
     for case in range(1, 7):
         popi_path = f'E:/datasets/creatis/case{case}/Images/'
@@ -582,14 +593,9 @@ def popi_processing(fixed_path, moving_path, **cfg):
             # dcm slice -> 3D nii.gz
             sitk_img = read_dcm_series(os.path.join(popi_path, T))
 
-            if case == 5 or case == 6:
-                img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
-                                                   [slice(100, 400), slice(120, 360), slice(None)], cfg['spacing'],
-                                                   [None, 500])
-            else:
-                img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
-                                                   [slice(70, 460), slice(40, 380), slice(None)], cfg['spacing'],
-                                                   [None, 500])
+
+            img = crop_resampling_resize_clamp(sitk_img, new_size=resize,crop_range=crop_range[case],
+                                               spacing=spacing,clamp=clamp)
 
             # save
             make_dir(target_path)
@@ -622,9 +628,7 @@ def popi_processing(fixed_path, moving_path, **cfg):
 
         img_path = os.path.join(mhd_path, T)
         sitk_img = sitk.ReadImage(img_path)
-        img = crop_resampling_resize_clamp(sitk_img, cfg['resize'],
-                                           [slice(70, 460), slice(25, 350), slice(None)], cfg['spacing'],
-                                           [None, 500])
+        img = crop_resampling_resize_clamp(sitk_img, new_size=resize,crop_range=crop_range[case], spacing=spacing,clamp=clamp)
 
         # save
         make_dir(target_path)
@@ -919,17 +923,34 @@ def construct_nlst_data(fixed_path,moving_path):
     NLST_processing(fixed_path, moving_path, nlst_path=nlst_path, resize=resize, crop=crop, clamp=clamp,
                     spacing=spacing)
 
+def construct_emp10(fixed_path,moving_path):
+    # emp10
+    clamp = [-1000, 500]  # before -900 500
+    crop = None
+    spacing = None
+    resize=[192,192,192]
+    emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
+                     spacing=spacing)
+
 if __name__ == '__main__':
     args = get_args()
     project_folder = get_project_path("4DCT").split("4DCT")[0]
     # target_fixed_path = '/home/cqut/project/xxf/train_144/fixed'
     # target_moving_path = '/home/cqut/project/xxf/train_144/moving'
-    target_fixed_path = 'D:/xxf/nlst_test_160_1.0/fixed'
-    target_moving_path = 'D:/xxf/nlst_test_160_1.0/moving'
+    target_fixed_path = 'D:/xxf/POPI10/fixed'
+    target_moving_path = 'D:/xxf/POPI10/moving'
+    make_dir(target_moving_path)
+    make_dir(target_fixed_path)
+    # emp10
+    # construct_emp10(target_fixed_path, target_moving_path)
+
     # #dirlab
-    construct_dirlab_train()
+    # construct_dirlab_train()
     # construct_dirlab_test()
 
+    # creatis-popi
+    popi_processing(target_fixed_path, target_moving_path)
+    print()
     # nlst
     # construct_nlst_data(fixed_path=target_fixed_path, moving_path=target_moving_path)
     # aug
@@ -965,26 +986,7 @@ if __name__ == '__main__':
     # learn2reg_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
     #                      spacing=spacing)
     #
-    # # emp10
-    # target_fixed_path = r'E:\datasets\registration\emp_144_192_160\fixed'
-    # target_moving_path = r'E:\datasets\registration\emp_144_192_160\moving'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
     #
-    # clamp = [None, 500]  # before -900 500
-    # crop = None
-    # spacing = [1, 1, 1]
-    # emp10_processing(target_fixed_path, target_moving_path, resize=resize, crop=crop, clamp=clamp,
-    #                  spacing=spacing)
-    #
-    # # creatis-popi
-    # spacing = [1, 1, 1]
-    # target_fixed_path = r'E:\datasets\registration\popi_144_192_160\fixed'
-    # target_moving_path = r'E:\datasets\registration\popi_144_192_160\moving'
-    # make_dir(target_moving_path)
-    # make_dir(target_fixed_path)
-    # popi_processing(target_fixed_path, target_moving_path, resize=resize,
-    #                 spacing=spacing)
 
     ## TCIA
 
