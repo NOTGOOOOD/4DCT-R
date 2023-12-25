@@ -11,7 +11,7 @@ import torch.utils.data as Data
 
 from utils.config import get_args
 from utils.losses import NCC, neg_Jdet_loss, Grad3d, Grad
-from utils.datagenerators import Dataset, DirLabDataset
+from utils.datagenerators import Dataset, DirLabDataset, build_dataloader_dirlab
 from utils.metric import landmark_loss, jacobian_determinant, SSIM, NCC as mtNCC
 from utils.utilize import save_model, load_landmarks, set_seed, count_parameters
 from utils.scheduler import StopCriterion
@@ -262,7 +262,8 @@ def main():
 
         # test
         # if epoch % 5 == 0:
-        test_dirlab(args, model)
+        if test_loader_dirlab is not None:
+            test_dirlab(args, model)
 
         if stop_criterion.stop():
             break
@@ -293,45 +294,16 @@ if __name__ == '__main__':
 
     device = torch.device('cuda:{}'.format(0) if torch.cuda.is_available() else 'cpu')
 
-    # train
-    train_fixed_folder = os.path.join(args.train_dir, 'fixed')
-    train_moving_folder = os.path.join(args.train_dir, 'moving')
-    f_train_list = sorted(
-        [os.path.join(train_fixed_folder, file_name) for file_name in os.listdir(train_fixed_folder) if
-         file_name.lower().endswith('.gz')])
-    m_train_list = sorted(
-        [os.path.join(train_moving_folder, file_name) for file_name in os.listdir(train_moving_folder) if
-         file_name.lower().endswith('.gz')])
-    train_dataset = Dataset(moving_files=m_train_list, fixed_files=f_train_list)
-    train_loader = Data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=0)
-
-    # val
-    val_fixed_folder = os.path.join(args.val_dir, 'fixed')
-    val_moving_folder = os.path.join(args.val_dir, 'moving')
-    f_val_list = sorted([os.path.join(val_fixed_folder, file_name) for file_name in os.listdir(val_fixed_folder) if
-                         file_name.lower().endswith('.gz')])
-    m_val_list = sorted([os.path.join(val_moving_folder, file_name) for file_name in os.listdir(val_moving_folder) if
-                         file_name.lower().endswith('.gz')])
-    val_dataset = Dataset(moving_files=m_val_list, fixed_files=f_val_list)
-    val_loader = Data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0)
-
-    # test
-    landmark_list = load_landmarks(args.landmark_dir)
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
-    test_dataset = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                 landmark_files=landmark_list)
-    test_loader = Data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    train_loader = build_dataloader_dirlab(args, mode='train')
+    val_loader = build_dataloader_dirlab(args, mode="val")
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
     model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_TM_".format(train_time)
+    model_name = "{}_TM_popi_".format(train_time)
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
     make_dirs()

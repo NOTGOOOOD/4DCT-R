@@ -213,7 +213,7 @@ if __name__ == "__main__":
     set_seed(42)
     model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_ccesingle_lr{}".format(train_time, args.lr)
+    model_name = "{}_ccesingle_lr{}_popi".format(train_time, args.lr)
     if not os.path.isdir(model_dir):
         os.mkdir(model_dir)
 

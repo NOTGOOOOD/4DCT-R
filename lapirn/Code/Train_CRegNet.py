@@ -137,8 +137,8 @@ def train_lvl1():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
-            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-            loss = loss_multiNCC
+            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            # loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -181,12 +181,11 @@ def train_lvl1():
         if step > iteration_lvl1:
             break
 
-
 def train_lvl2():
     print("Training lvl2...")
     device = args.device
-    model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                             grid=grid_class,).to(device)
+    # model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
+    #                          grid=grid_class,).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True, range_flow=range_flow,
                              grid=grid_class, model_lvl0=None).to(device)
 
@@ -240,8 +239,8 @@ def train_lvl2():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y_4x)
 
-            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-            loss = loss_multiNCC
+            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            # loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -294,12 +293,11 @@ def train_lvl2():
         if step > iteration_lvl2:
             break
 
-
 def train_lvl3():
     print("Training lvl3...")
     device = args.device
-    model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
-                             grid=grid_class, ).to(device)
+    # model_lvl0 = CRegNet_lv0(2, 3, start_channel, is_train=True, range_flow=range_flow,
+    #                          grid=grid_class, ).to(device)
     model_lvl1 = CRegNet_lv1(2, 3, start_channel, is_train=True,
                              range_flow=range_flow, grid=grid_class,model_lvl0=None).to(device)
     model_lvl2 = CRegNet_lv2(2, 3, start_channel, is_train=True,
@@ -322,7 +320,6 @@ def train_lvl3():
 
     model = CRegNet_lv3(2, 3, start_channel, is_train=True,
                         range_flow=range_flow, model_lvl2=model_lvl2, grid=grid_class).to(device)
-
 
     print(count_parameters(model) - count_parameters(model_lvl2))
     loss_similarity = multi_resolution_NCC(win=9, scale=3)
@@ -366,8 +363,8 @@ def train_lvl3():
                                                                      loss_smooth, F_X_Y,
                                                                      X_Y, Y)
 
-            # loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
-            loss = loss_multiNCC
+            loss = loss_multiNCC + antifold * loss_Jacobian + smooth * loss_regulation
+            # loss = loss_multiNCC
             optimizer.zero_grad()  # clear gradients for this training step
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
@@ -390,7 +387,6 @@ def train_lvl3():
             #     save_image(X_Y, Y, args.output_dir, m_name)
             #     m_name = 'l3_' + str(step) + 'fixed_' + moving[1][0]
             #     save_image(Y_4x, Y, args.output_dir, m_name)
-
         # validation
         val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss = validation_ccregnet(args, model, loss_similarity,
                                                                                        grid_class, 1)
@@ -417,8 +413,8 @@ def train_lvl3():
             logging.info("save model:{}".format(modelname))
             save_model(modelname, model, stop_criterion.total_loss_list, stop_criterion.ncc_loss_list,
                        stop_criterion.jac_loss_list, stop_criterion.train_loss_list, optimizer)
-
-        test_dirlab(args, model, test_loader_dirlab, norm=True)
+        if test_loader_dirlab is not None:
+            test_dirlab(args, model, test_loader_dirlab, norm=True)
 
         if stop_criterion.stop():
             break
@@ -429,7 +425,6 @@ def train_lvl3():
         step += 1
         if step > iteration_lvl3:
             break
-
 
 def train_lvl0():
     print("Training lvl0...")
@@ -540,13 +535,16 @@ if __name__ == "__main__":
 
     train_loader = build_dataloader_dirlab(args, mode='train')
     val_loader = build_dataloader_dirlab(args, mode='val')
-    test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    if len(args.test_dir) > 1:
+        test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
+    else:
+        test_loader_dirlab = None
 
     make_dirs()
     log_index = len([file for file in os.listdir(args.log_dir) if file.endswith('.txt')])
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_lap_noreg_".format(train_time)
+    model_name = "{}_lap_popi_".format(train_time)
 
     logging.basicConfig(level=logging.INFO,
                         filename=f'Log/log{log_index}.txt',
