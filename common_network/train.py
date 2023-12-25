@@ -111,7 +111,7 @@ def train_unet(model):
             "\n one epoch pass. train loss %.4f . val ncc loss %.4f . val mse loss %.4f . val_jac_loss %.6f . val_total loss %.4f" % (
                 mean_loss, val_ncc_loss, val_mse_loss, val_jac_loss, val_total_loss))
 
-        if test_loader_dirlab:
+        if test_loader_dirlab is not None:
             mean_tre = test_dirlab(args, model, test_loader_dirlab)
 
         stop_criterion.add(val_ncc_loss, val_jac_loss, val_total_loss, train_loss=mean_loss)
@@ -125,7 +125,7 @@ def test_unet(model):
 
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=True, suffix='CCECorNet', calc_tre=False)
+        test_dirlab(args, model, test_loader_dirlab, is_train=False, is_save=False, suffix='CCECorNet', calc_tre=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     args = get_args()
     model_dir = args.checkpoint_path
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_ccesingle_lr{}_".format(train_time, args.lr)
+    model_name = "{}_ccesingle_lr{}_popi".format(train_time, args.lr)
     set_seed(42)
     make_dirs(args)
     device = args.device

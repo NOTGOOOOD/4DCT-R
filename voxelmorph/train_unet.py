@@ -212,7 +212,7 @@ if __name__ == "__main__":
     model_dir = args.checkpoint_path
 
     train_time = time.strftime("%Y-%m-%d-%H-%M-%S")
-    model_name = "{}_unet512_lr{}".format(train_time, args.lr)
+    model_name = "{}_unet256_lr_popi{}".format(train_time, args.lr)
 
     set_seed(42)
     make_dirs(args)
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     else:
         test_loader_dirlab = None
 
-    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=True)
+    model = regnet.RegNet_pairwise(3, scale=0.5, depth=5, initial_channels=args.initial_channels, normalization=False, flag_512=False)
     model = model.to(device)
     print(count_parameters(model.unet))
 

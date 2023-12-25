@@ -4,20 +4,20 @@ import torch
 import torch.utils.data as Data
 
 from utils.Functions import transform_unit_flow_to_flow, Grid
-from CRegNet import CRegNet_lv1, \
-    CRegNet_lv2, CRegNet_lv3, CRegNet_lv0
+# from CRegNet import CRegNet_lv1, \
+#     CRegNet_lv2, CRegNet_lv3, CRegNet_lv0
 
 # from CCENet_single import CCRegNet_planB_lv1 as CRegNet_lv1, CCRegNet_planB_lv2 as CRegNet_lv2, \
 #     CCRegNet_planB_lvl3 as CRegNet_lv3
 
-# from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0,Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
-#     Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
+from LapIRN import Miccai2020_LDR_laplacian_unit_disp_add_lvl0 as CRegNet_lv0,Miccai2020_LDR_laplacian_unit_disp_add_lvl1 as CRegNet_lv1,\
+    Miccai2020_LDR_laplacian_unit_disp_add_lvl2 as CRegNet_lv2, Miccai2020_LDR_laplacian_unit_disp_add_lvl3 as CRegNet_lv3
 
 from utils.utilize import load_landmarks, save_image, count_parameters
 from utils.config import get_args
 from utils.metric import MSE, landmark_loss, SSIM, NCC, jacobian_determinant
 from utils.losses import neg_Jdet_loss
-from utils.datagenerators import DirLabDataset, PatientDataset
+from utils.datagenerators import DirLabDataset, PatientDataset, build_dataloader_dirlab
 from utils.Functions import test_dirlab
 
 
@@ -177,37 +177,7 @@ if __name__ == '__main__':
     if not os.path.isdir(args.output_dir):
         os.mkdir(args.output_dir)
 
-    landmark_list = load_landmarks(args.landmark_dir)
-
-    pa_fixed_folder = r'D:\xxf\test_ori\fixed'
-    pa_moving_folder = r'D:\xxf\test_ori\moving'
-
-    # pa_fixed_folder = r'E:\datasets\registration\patient\fixed'
-    # pa_moving_folder = r'E:\datasets\registration\patient\moving'
-
-    f_patient_file_list = sorted(
-        [os.path.join(pa_fixed_folder, file_name) for file_name in os.listdir(pa_fixed_folder) if
-         file_name.lower().endswith('.gz')])
-    m_patient_file_list = sorted(
-        [os.path.join(pa_moving_folder, file_name) for file_name in os.listdir(pa_moving_folder) if
-         file_name.lower().endswith('.gz')])
-
-    test_dataset_patient = PatientDataset(moving_files=m_patient_file_list, fixed_files=f_patient_file_list)
-
-    test_loader_patient = Data.DataLoader(test_dataset_patient, batch_size=args.batch_size, shuffle=False,
-                                          num_workers=0)
-
-    dir_fixed_folder = os.path.join(args.test_dir, 'fixed')
-    dir_moving_folder = os.path.join(args.test_dir, 'moving')
-    f_dir_file_list = sorted([os.path.join(dir_fixed_folder, file_name) for file_name in os.listdir(dir_fixed_folder) if
-                              file_name.lower().endswith('.gz')])
-    m_dir_file_list = sorted(
-        [os.path.join(dir_moving_folder, file_name) for file_name in os.listdir(dir_moving_folder) if
-         file_name.lower().endswith('.gz')])
-
-    test_dataset_dirlab = DirLabDataset(moving_files=m_dir_file_list, fixed_files=f_dir_file_list,
-                                        landmark_files=landmark_list)
-    test_loader_dirlab = Data.DataLoader(test_dataset_dirlab, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    test_loader_dirlab = build_dataloader_dirlab(args, mode='test')
 
     prefix = '2023-04-26-13-17-59' # CCENet
 
@@ -249,7 +219,7 @@ if __name__ == '__main__':
     # lv4=(479196956448.0, 1406094.0)
     if args.checkpoint_name is not None:
         model.load_state_dict(torch.load(os.path.join(model_dir, args.checkpoint_name))['model'])
-        test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False, is_save=True, suffix='cce_nocor')
+        test_dirlab(args, model, test_loader_dirlab, norm=True, is_train=False, is_save=False, suffix='cce_nocor',calc_tre=False)
         # test_patient(args, os.path.join(model_dir, args.checkpoint_name), True)
     else:
         checkpoint_list = sorted([os.path.join(model_dir, file) for file in os.listdir(model_dir) if prefix in file])
