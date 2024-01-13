@@ -237,17 +237,10 @@ def train(args, case=1):
                 disp_i2t = res['disp_i2t'][config.pair_disp_indexes]
             else:
                 disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
-            if config.Imp_temp:
-                mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                              grid_tuple, landmark_00_converted, landmark_disp,
-                                              args.dirlab_cfg[case]['pixel_spacing'])
-            else:
-                disp = res['disp_t2i']
-                mean, std = landmark_loss(disp[0].detach().cpu(), torch.tensor(landmark_00_converted).flip(1).cpu(),
-                                        torch.tensor(landmark_50_converted).flip(1).cpu(),
-                                        args.dirlab_cfg[case]['pixel_spacing'])
-                mean = mean.item()
-                std = std.item()
+
+            mean, std, diff, compse_disp = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                          grid_tuple, landmark_00_converted, landmark_disp,
+                                          args.dirlab_cfg[case]['pixel_spacing'])
 
             diff_stats.append([i, mean, std])
             # save_warp(args, np.expand_dims(compse_disp[0, 1], 0), input_image[0].unsqueeze(0), 'case1', 'gdir', spacing=args.dirlab_cfg[case]['pixel_spacing'])
@@ -258,18 +251,10 @@ def train(args, case=1):
             save_path = os.path.join(states_folder, states_file)
             save_model(save_path,regnet,total_loss=total_loss.item(),simi_loss=simi_loss.item(),reg_loss=smooth_loss_item,train_loss=cyclic_loss_item,optimizer=None)
 
-    if config.Imp_temp:
-        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
-        mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                                grid_tuple, landmark_00_converted, landmark_disp,
-                                                args.dirlab_cfg[case]['pixel_spacing'])
-    else:
-        disp, warped = res['disp_t2i'], res['template'].squeeze().cpu().detach().numpy()
-        mean, std = landmark_loss(disp[0].detach().cpu(), torch.tensor(landmark_00_converted).flip(1).cpu(),
-                                torch.tensor(landmark_50_converted).flip(1).cpu(),
-                                args.dirlab_cfg[case]['pixel_spacing'])
-        mean = mean.item()
-        std = std.item()
+    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
+    mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                            grid_tuple, landmark_00_converted, landmark_disp,
+                                            args.dirlab_cfg[case]['pixel_spacing'])
 
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
@@ -364,22 +349,12 @@ def test(args, case=1, is_save=False, state_file='', logger=None):
     else:
         disp_i2t = calcdisp.inverse_disp(res['disp_t2i'][config.pair_disp_indexes])
 
-    if config.Imp_temp:
-        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],is_save=False)
-        mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
-                                                grid_tuple, landmark_00_converted, landmark_disp,
-                                                args.dirlab_cfg[case]['pixel_spacing'])
-        disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],
-                                     is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
-    else:
-        disp, warped = res['disp_t2i'], res['template'].squeeze().cpu().detach().numpy()
-        mean, std = landmark_loss(disp[0].detach().cpu(), torch.tensor(landmark_00_converted).flip(1).cpu(),
-                                torch.tensor(landmark_50_converted).flip(1).cpu(),
-                                args.dirlab_cfg[case]['pixel_spacing'])
-        mean = mean.item()
-        std = std.item()
 
-
+    mean, std, diff, _ = calc_tre(calcdisp, disp_i2t, res['disp_t2i'][config.pair_disp_indexes],
+                                            grid_tuple, landmark_00_converted, landmark_disp,
+                                            args.dirlab_cfg[case]['pixel_spacing'])
+    disp, warped = get_flow50_00(args, res, input_image[0:1], spacing=args.dirlab_cfg[case]['pixel_spacing'],
+                                 is_save=is_save, prefix=f'case{case}', suffix=f'scale{config.scale}_tre{mean:.2f}')
     ncc = mtNCC(warped, input_image[5:6].squeeze().cpu().detach().numpy())
     jac = jacobian_determinant(disp[0].cpu().detach().numpy())
     ssim = SSIM(warped, input_image[5][0].cpu().detach().numpy())
@@ -459,11 +434,11 @@ if __name__ == '__main__':
     config = dict(
         dim=3,  # dimension of the input image
         scale=0.5,
-        initial_channels=16,  # 4 8 16 32
+        initial_channels=32,  # 4 8 16 32
         depth=4,
         max_num_iteration=300,
         normalization=True,  # whether use normalization layer
-        learning_rate=1e-2,
+        learning_rate=1e-4,
         smooth_reg=1e-3,
         cyclic_reg=1e-2,
         # cyclic_reg=0,
@@ -472,13 +447,13 @@ if __name__ == '__main__':
         load_optimizer=False,
         group_index_list=None,
         pair_disp_indexes=[0, 5],
-        pair_disp_calc_interval=500,
+        pair_disp_calc_interval=20,
         stop_std=0.0007,
         stop_query_len=100,
         Imp_temp=True
     )
     config = utils.structure.Struct(**config)
-    project_path = get_project_path("4DCT")
+    project_path = get_project_path("4DCT-R")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     spatial_transform = SpatialTransformer(3)
     set_seed(48)
@@ -495,8 +470,8 @@ if __name__ == '__main__':
     #     for file in ckpt:
     #         test(args, case=i, is_save=False, state_file=file, logger=logging)
     #
-    # for i in range(6, 11):
-    train(args,6)
+    for i in range(1, 11):
+        train(args,i)
 
     # ckpt = [file for file in os.listdir(args.checkpoint_path) if 'case8_' in file]
     # for i in ckpt:
